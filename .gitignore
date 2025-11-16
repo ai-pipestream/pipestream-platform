@@ -1,0 +1,20 @@
+# Gradle files
+.gradle/
+build/
+!gradle-wrapper.jar
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Generated files
+bin/
+out/

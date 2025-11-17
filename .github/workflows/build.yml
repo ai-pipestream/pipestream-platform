@@ -78,7 +78,23 @@ jobs:
     - name: Build artifacts
       run: ./gradlew clean build shadowJar --no-daemon
 
-    - name: Publish to GitHub Packages
-      run: ./gradlew publish --no-daemon
+    - name: Configure GPG (if available)
       env:
+        GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      if: env.GPG_PRIVATE_KEY != ''
+      run: |
+        echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+
+    - name: Publish snapshots to Maven Central
+      env:
+        MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+        MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+        GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+      run: ./gradlew publishAllPublicationsToCentralPortalSnapshots --no-daemon --stacktrace
+
+    - name: Publish snapshots to GitHub Packages
+      env:
+        GITHUB_ACTOR: ${{ github.actor }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: ./gradlew publish -PskipCentral=true --no-daemon --stacktrace

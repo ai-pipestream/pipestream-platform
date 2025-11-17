@@ -181,6 +181,7 @@ tasks {
         // Relocate packages to avoid conflicts
         relocate 'org.apache.tika', 'ai.pipestream.shaded.tika'
         relocate 'com.google.protobuf', 'ai.pipestream.shaded.protobuf'
+        relocate 'com.google.common', 'ai.pipestream.shaded.guava'
 
         // Preserve important manifest entries
         manifest {

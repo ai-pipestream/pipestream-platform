@@ -92,8 +92,10 @@ jobs:
             VERSION="${{ inputs.manual_version }}"
           else
             # Get current version from axion-release
-            CURRENT_VERSION=$(./gradlew currentVersion -q --no-daemon | tail -1)
-            echo "Current version: $CURRENT_VERSION"
+            # axion-release often prints lines like: "Project version: 0.1.1-SNAPSHOT"
+            # Extract the raw semver (with optional -SNAPSHOT) from the output safely
+            CURRENT_VERSION=$(./gradlew currentVersion -q --no-daemon | tail -1 | sed -E 's/.*([0-9]+\.[0-9]+\.[0-9]+(-SNAPSHOT)?).*/\1/')
+            echo "Resolved current version string: $CURRENT_VERSION"
 
             # Parse version components (remove -SNAPSHOT if present)
             CLEAN_VERSION=$(echo "$CURRENT_VERSION" | sed 's/-SNAPSHOT//')

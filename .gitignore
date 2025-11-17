@@ -18,3 +18,7 @@ Thumbs.db
 # Generated files
 bin/
 out/
+.gradle
+build
+target/
+.claude

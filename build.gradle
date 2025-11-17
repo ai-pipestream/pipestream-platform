@@ -1,0 +1,129 @@
+plugins {
+    id 'java-library'
+    id 'com.gradleup.shadow' version '9.2.2'
+    id 'maven-publish'
+    id 'pl.allegro.tech.build.axion-release' version '1.21.0'
+}
+
+group = 'ai.pipestream'
+
+// Configure axion-release plugin for semantic versioning
+scmVersion {
+    tag {
+        prefix = 'v'
+    }
+    checks {
+        uncommittedChanges = false
+        aheadOfRemote = false
+        snapshotDependencies = false
+    }
+}
+
+version = scmVersion.version
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+    // Apache Snapshots repository for Tika 4.0 nightlies
+    maven {
+        name = 'ApacheSnapshots'
+        url = uri('https://repository.apache.org/snapshots/')
+        mavenContent {
+            snapshotsOnly()
+        }
+    }
+}
+
+dependencies {
+    implementation(libs.tika.core)
+    implementation(libs.tika.parsers.standard)
+    // Extended parsers for better content extraction
+    implementation(libs.tika.parser.scientific)
+    // OCR support for images and scanned documents (requires tesseract)
+    // Note: OCR module is already included in tika-parsers-standard-package
+    // Adding it explicitly here ensures it's available even if not using the full standard package
+    implementation(libs.tika.parser.ocr)
+}
+
+tasks {
+    shadowJar {
+        archiveClassifier.set('')
+
+        // Merge service provider files (META-INF/services/*)
+        mergeServiceFiles()
+
+        // Handle duplicate entries by excluding them instead of failing
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+        // Exclude signature files that commonly cause ZIP conflicts
+        exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+
+        // Allow large ZIP entries if needed
+        zip64 true
+
+        // Relocate packages to avoid conflicts
+        relocate 'org.apache.tika', 'ai.pipestream.shaded.tika'
+
+        // Preserve important manifest entries
+        manifest {
+            attributes(
+                'Implementation-Title': 'Tika 4 Shaded',
+                'Implementation-Version': project.version,
+                'Implementation-Vendor': 'ai.pipestream',
+                'Built-By': System.getProperty('user.name'),
+                'Built-JDK': System.getProperty('java.version'),
+                'Created-By': "Gradle ${gradle.gradleVersion}"
+            )
+        }
+
+        // Minimize the JAR by removing unused classes (optional, can be enabled if needed)
+        // minimize()
+    }
+
+    build {
+        dependsOn shadowJar
+    }
+
+}
+
+// Ensure Java 21 compatibility for all JavaCompile tasks
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+}
+
+publishing {
+    publications {
+        create('maven', MavenPublication) {
+            artifact tasks.shadowJar
+
+            pom {
+                name.set('Tika 4 Shaded')
+                description.set('Shaded version of Apache Tika 4.0 snapshot with core, standard parsers, scientific parser, and OCR parser')
+                url.set('https://github.com/ai-pipestream/tika4-shaded')
+
+                licenses {
+                    license {
+                        name.set('MIT License')
+                        url.set('https://opensource.org/licenses/MIT')
+                    }
+                }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            name = 'GitHubPackages'
+            url = uri('https://maven.pkg.github.com/ai-pipestream/tika4-shaded')
+            credentials {
+                username = System.getenv('GITHUB_ACTOR')
+                password = System.getenv('GITHUB_TOKEN')
+            }
+        }
+    }
+}

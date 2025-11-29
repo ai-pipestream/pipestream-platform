@@ -7,11 +7,18 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * High-priority ConfigSource that provides Protobuf serializer/deserializer configuration
+ * ConfigSource that provides Protobuf serializer/deserializer configuration
  * for detected Kafka channels.
  *
- * This runs with ordinal 275 (higher than application.properties at 250) to ensure
- * our protobuf config takes precedence over defaults.
+ * Ordinal is set to 200 (lower than application.properties at 250) to allow
+ * users to override these defaults in their application.properties.
+ *
+ * Priority chain (higher = wins):
+ * - System properties: 400
+ * - Environment variables: 300
+ * - application.properties: 250
+ * - This ConfigSource: 200 (can be overridden)
+ * - Default values: ~100
  */
 public class ProtobufChannelConfigSource implements ConfigSource {
 
@@ -120,9 +127,8 @@ public class ProtobufChannelConfigSource implements ConfigSource {
 
     @Override
     public int getOrdinal() {
-        // Very high priority (500) - higher than system properties (400), application.properties (250)
-        // This ensures our protobuf config takes precedence over SmallRye defaults
-        // Users can still override via a custom ConfigSource with ordinal > 500
-        return 500;
+        // Lower than application.properties (250) so users can easily override
+        // Still higher than most default configs to ensure Protobuf serializers are used
+        return 200;
     }
 }

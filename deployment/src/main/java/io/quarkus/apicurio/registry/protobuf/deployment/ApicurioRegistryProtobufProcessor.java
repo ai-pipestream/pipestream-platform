@@ -1,6 +1,7 @@
 package io.quarkus.apicurio.registry.protobuf.deployment;
 
 import io.quarkus.apicurio.registry.protobuf.ApicurioRegistryProtobufRecorder;
+import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -36,10 +37,15 @@ class ApicurioRegistryProtobufProcessor {
     private static final DotName MESSAGE_LITE = DotName.createSimple("com.google.protobuf.MessageLite");
     private static final DotName GENERATED_MESSAGE = DotName.createSimple("com.google.protobuf.GeneratedMessage");
 
-    // Reactive Messaging annotations
+    // Standard Reactive Messaging annotations
     private static final DotName INCOMING = DotName.createSimple("org.eclipse.microprofile.reactive.messaging.Incoming");
     private static final DotName OUTGOING = DotName.createSimple("org.eclipse.microprofile.reactive.messaging.Outgoing");
     private static final DotName CHANNEL = DotName.createSimple("org.eclipse.microprofile.reactive.messaging.Channel");
+
+    // Our custom Protobuf annotations
+    private static final DotName PROTOBUF_INCOMING = DotName.createSimple("io.quarkus.apicurio.registry.protobuf.ProtobufIncoming");
+    private static final DotName PROTOBUF_OUTGOING = DotName.createSimple("io.quarkus.apicurio.registry.protobuf.ProtobufOutgoing");
+    private static final DotName PROTOBUF_CHANNEL = DotName.createSimple("io.quarkus.apicurio.registry.protobuf.ProtobufChannel");
 
     @BuildStep
     FeatureBuildItem feature() {
@@ -52,12 +58,74 @@ class ApicurioRegistryProtobufProcessor {
     }
 
     /**
+     * Transform @ProtobufIncoming, @ProtobufOutgoing, and @ProtobufChannel annotations
+     * into standard SmallRye Reactive Messaging annotations.
+     * <p>
+     * This allows users to use our simplified annotations while SmallRye sees the standard ones.
+     */
+    @BuildStep
+    AnnotationsTransformerBuildItem transformProtobufAnnotations() {
+        return new AnnotationsTransformerBuildItem(new AnnotationTransformation() {
+            @Override
+            public boolean supports(AnnotationTarget.Kind kind) {
+                return kind == AnnotationTarget.Kind.METHOD
+                        || kind == AnnotationTarget.Kind.FIELD
+                        || kind == AnnotationTarget.Kind.METHOD_PARAMETER;
+            }
+
+            @Override
+            public void apply(TransformationContext ctx) {
+                // Check for our custom annotations
+                AnnotationInstance protobufIncoming = ctx.annotations().stream()
+                        .filter(a -> a.name().equals(PROTOBUF_INCOMING))
+                        .findFirst().orElse(null);
+                AnnotationInstance protobufOutgoing = ctx.annotations().stream()
+                        .filter(a -> a.name().equals(PROTOBUF_OUTGOING))
+                        .findFirst().orElse(null);
+                AnnotationInstance protobufChannel = ctx.annotations().stream()
+                        .filter(a -> a.name().equals(PROTOBUF_CHANNEL))
+                        .findFirst().orElse(null);
+
+                // Transform @ProtobufIncoming -> @Incoming
+                if (protobufIncoming != null) {
+                    String channelName = protobufIncoming.value().asString();
+                    ctx.remove(ann -> ann.name().equals(PROTOBUF_INCOMING));
+                    ctx.add(AnnotationInstance.create(INCOMING, ctx.declaration(),
+                            List.of(AnnotationValue.createStringValue("value", channelName))));
+                    LOGGER.debugf("Transformed @ProtobufIncoming to @Incoming for channel: %s", channelName);
+                }
+
+                // Transform @ProtobufOutgoing -> @Outgoing
+                if (protobufOutgoing != null) {
+                    String channelName = protobufOutgoing.value().asString();
+                    ctx.remove(ann -> ann.name().equals(PROTOBUF_OUTGOING));
+                    ctx.add(AnnotationInstance.create(OUTGOING, ctx.declaration(),
+                            List.of(AnnotationValue.createStringValue("value", channelName))));
+                    LOGGER.debugf("Transformed @ProtobufOutgoing to @Outgoing for channel: %s", channelName);
+                }
+
+                // Transform @ProtobufChannel -> @Channel
+                if (protobufChannel != null) {
+                    String channelName = protobufChannel.value().asString();
+                    ctx.remove(ann -> ann.name().equals(PROTOBUF_CHANNEL));
+                    ctx.add(AnnotationInstance.create(CHANNEL, ctx.declaration(),
+                            List.of(AnnotationValue.createStringValue("value", channelName))));
+                    LOGGER.debugf("Transformed @ProtobufChannel to @Channel for channel: %s", channelName);
+                }
+            }
+        });
+    }
+
+    /**
      * Auto-detect Kafka channels using Protobuf types and configure serializer/deserializer.
-     * This scans for @Incoming/@Outgoing/@Channel annotations and checks if the message type
-     * extends MessageLite (Protobuf base class).
-     *
+     * <p>
+     * This scans for:
+     * - @ProtobufIncoming/@ProtobufOutgoing/@ProtobufChannel (our annotations - always configured)
+     * - @Incoming/@Outgoing/@Channel with Protobuf message types (backward compatible auto-detection)
+     * <p>
      * Uses STATIC_INIT to configure the high-priority ConfigSource before config is read.
      */
+    @SuppressWarnings("PointlessNullCheck")
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
     void autoConfigureProtobufChannels(
@@ -69,7 +137,31 @@ class ApicurioRegistryProtobufProcessor {
         Set<String> configuredIncoming = new HashSet<>();
         Set<String> configuredOutgoing = new HashSet<>();
 
-        // Scan @Incoming methods
+        // === Scan our custom @ProtobufIncoming annotations (always configure) ===
+        for (AnnotationInstance annotation : index.getAnnotations(PROTOBUF_INCOMING)) {
+            String channelName = annotation.value().asString();
+            if (configuredIncoming.add(channelName)) {
+                LOGGER.debugf("Configuring @ProtobufIncoming channel: %s", channelName);
+            }
+        }
+
+        // === Scan our custom @ProtobufOutgoing annotations (always configure) ===
+        for (AnnotationInstance annotation : index.getAnnotations(PROTOBUF_OUTGOING)) {
+            String channelName = annotation.value().asString();
+            if (configuredOutgoing.add(channelName)) {
+                LOGGER.debugf("Configuring @ProtobufOutgoing channel: %s", channelName);
+            }
+        }
+
+        // === Scan our custom @ProtobufChannel annotations (always configure as outgoing) ===
+        for (AnnotationInstance annotation : index.getAnnotations(PROTOBUF_CHANNEL)) {
+            String channelName = annotation.value().asString();
+            if (configuredOutgoing.add(channelName)) {
+                LOGGER.debugf("Configuring @ProtobufChannel channel: %s", channelName);
+            }
+        }
+
+        // === Backward compatibility: Scan standard @Incoming with Protobuf types ===
         for (AnnotationInstance annotation : index.getAnnotations(INCOMING)) {
             if (annotation.target().kind() == AnnotationTarget.Kind.METHOD) {
                 MethodInfo method = annotation.target().asMethod();
@@ -79,7 +171,7 @@ class ApicurioRegistryProtobufProcessor {
                 for (MethodParameterInfo param : method.parameters()) {
                     if (isProtobufType(index, param.type())) {
                         if (configuredIncoming.add(channelName)) {
-                            LOGGER.debugf("Auto-configuring Protobuf deserializer for incoming channel: %s", channelName);
+                            LOGGER.debugf("Auto-detected Protobuf type for @Incoming channel: %s", channelName);
                         }
                         break;
                     }
@@ -87,7 +179,7 @@ class ApicurioRegistryProtobufProcessor {
             }
         }
 
-        // Scan @Outgoing methods
+        // === Backward compatibility: Scan standard @Outgoing with Protobuf types ===
         for (AnnotationInstance annotation : index.getAnnotations(OUTGOING)) {
             if (annotation.target().kind() == AnnotationTarget.Kind.METHOD) {
                 MethodInfo method = annotation.target().asMethod();
@@ -96,13 +188,13 @@ class ApicurioRegistryProtobufProcessor {
                 // Check return type for Protobuf types
                 if (isProtobufType(index, method.returnType())) {
                     if (configuredOutgoing.add(channelName)) {
-                        LOGGER.debugf("Auto-configuring Protobuf serializer for outgoing channel: %s", channelName);
+                        LOGGER.debugf("Auto-detected Protobuf type for @Outgoing channel: %s", channelName);
                     }
                 }
             }
         }
 
-        // Scan @Channel injection points (Emitter<ProtobufType>)
+        // === Backward compatibility: Scan standard @Channel with Protobuf Emitter types ===
         for (AnnotationInstance annotation : index.getAnnotations(CHANNEL)) {
             String channelName = annotation.value().asString();
             AnnotationTarget target = annotation.target();
@@ -112,7 +204,7 @@ class ApicurioRegistryProtobufProcessor {
                 Type messageType = extractEmitterType(fieldType);
                 if (messageType != null && isProtobufType(index, messageType)) {
                     if (configuredOutgoing.add(channelName)) {
-                        LOGGER.debugf("Auto-configuring Protobuf serializer for @Channel Emitter: %s", channelName);
+                        LOGGER.debugf("Auto-detected Protobuf type for @Channel Emitter: %s", channelName);
                     }
                 }
             } else if (target.kind() == AnnotationTarget.Kind.METHOD_PARAMETER) {
@@ -120,13 +212,13 @@ class ApicurioRegistryProtobufProcessor {
                 Type messageType = extractEmitterType(param.type());
                 if (messageType != null && isProtobufType(index, messageType)) {
                     if (configuredOutgoing.add(channelName)) {
-                        LOGGER.debugf("Auto-configuring Protobuf serializer for @Channel parameter: %s", channelName);
+                        LOGGER.debugf("Auto-detected Protobuf type for @Channel parameter: %s", channelName);
                     }
                 }
             }
         }
 
-        LOGGER.infof("Auto-configured %d incoming and %d outgoing Protobuf channels",
+        LOGGER.infof("Configured %d incoming and %d outgoing Protobuf channels",
                 configuredIncoming.size(), configuredOutgoing.size());
 
         // Inject connector defaults via BuildItem (needed for DevServices to see at build time)
@@ -160,7 +252,7 @@ class ApicurioRegistryProtobufProcessor {
             ParameterizedType paramType = type.asParameterizedType();
             List<Type> args = paramType.arguments();
             if (!args.isEmpty()) {
-                return isProtobufType(index, args.get(0));
+                return isProtobufType(index, args.getFirst());
             }
             return false;
         }
@@ -214,7 +306,7 @@ class ApicurioRegistryProtobufProcessor {
             ParameterizedType paramType = type.asParameterizedType();
             List<Type> args = paramType.arguments();
             if (!args.isEmpty()) {
-                return args.get(0);
+                return args.getFirst();
             }
         }
         return null;

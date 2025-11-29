@@ -10,6 +10,7 @@ import java.util.UUID;
 
 /**
  * Producer that sends TestRecord protobuf messages to Kafka.
+ * Uses standard @Channel - the extension auto-detects Protobuf types.
  */
 @ApplicationScoped
 public class TestRecordProducer {

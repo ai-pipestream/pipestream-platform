@@ -10,8 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Consumer that receives protobuf messages from Kafka.
- * With derive.class=true, the deserializer derives the class from the schema
- * and returns the actual TestRecord type.
+ * Uses standard @Incoming - the extension auto-detects Protobuf types.
  */
 @ApplicationScoped
 public class TestRecordConsumer {

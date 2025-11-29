@@ -16,6 +16,9 @@ dependencies {
     // Testcontainers for DevServices
     implementation 'org.testcontainers:testcontainers'
 
+    // Quarkus DevServices common utilities (for Compose Dev Services support)
+    implementation 'io.quarkus:quarkus-devservices-common'
+
     // Runtime module
     implementation project(':runtime')
 

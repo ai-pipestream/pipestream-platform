@@ -42,7 +42,7 @@ This section demonstrates the standard imperative approach using `Emitter` and v
 ### 1. Add the dependency
 
 ```gradle
-implementation 'io.quarkus:quarkus-apicurio-registry-protobuf:0.0.1-SNAPSHOT'
+implementation 'ai.pipestream:quarkus-apicurio-registry-protobuf:0.0.1-SNAPSHOT'
 ```
 
 ### 2. Define your Protobuf message

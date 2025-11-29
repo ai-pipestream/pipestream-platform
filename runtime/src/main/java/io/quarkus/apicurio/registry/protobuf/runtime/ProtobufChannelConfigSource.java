@@ -50,8 +50,8 @@ public class ProtobufChannelConfigSource implements ConfigSource {
     private static final String UUID_DESERIALIZER = "org.apache.kafka.common.serialization.UUIDDeserializer";
 
     // These are set at static init time by the recorder
-    private static volatile Map<String, String> incomingChannels = new HashMap<>();
-    private static volatile Map<String, String> outgoingChannels = new HashMap<>();
+    private static final Map<String, String> incomingChannels = new HashMap<>();
+    private static final Map<String, String> outgoingChannels = new HashMap<>();
     private static volatile boolean enabled = false;
 
     private final Map<String, String> properties = new HashMap<>();

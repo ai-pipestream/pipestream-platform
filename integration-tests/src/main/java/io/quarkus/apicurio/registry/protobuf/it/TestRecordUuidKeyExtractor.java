@@ -26,10 +26,10 @@ import java.util.UUID;
  *     @Inject
  *     &#64;Channel("test-out")
  *     Emitter<TestRecord> rawEmitter;
- *
+ * <p>
  *     // Create emitter with default key extractor
  *     ProtobufEmitter<TestRecord> emitter = factory.wrap(rawEmitter, "test-out", keyExtractor);
- *
+ * <p>
  *     // Messages automatically use the id field as the partition key
  *     emitter.send(testRecord);
  * }
@@ -38,6 +38,7 @@ import java.util.UUID;
  * <b>Note:</b> In a real application, this class would typically be defined
  * in {@code pipeline-commons} and reused across services.
  */
+@SuppressWarnings("JavadocDeclaration")
 @ApplicationScoped
 public class TestRecordUuidKeyExtractor implements UuidKeyExtractor<TestRecord> {
 

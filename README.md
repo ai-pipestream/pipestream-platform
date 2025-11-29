@@ -448,6 +448,91 @@ mp.messaging.connector.smallrye-kafka.apicurio.registry.artifact-resolver-strate
 | `quarkus.apicurio-registry.protobuf.devservices.image-name` | `apicurio/apicurio-registry:3.1.4` | Container image |
 | `quarkus.apicurio-registry.protobuf.devservices.port` | Random | Fixed port (optional) |
 
+### Compose Dev Services
+
+This extension supports [Quarkus Compose Dev Services](https://quarkus.io/guides/compose-dev-services), allowing you to define Apicurio Registry in your own Docker Compose file instead of having the extension start one automatically.
+
+#### How It Works
+
+When you run in dev or test mode, the extension checks for Apicurio Registry in this order:
+
+1. **Existing shared container** - Looks for a dev service container already running with the appropriate label
+2. **Compose Dev Services** - Looks for a container with an image containing `apicurio` on port `8080` in your compose file
+3. **Auto-start** - Only if neither is found, starts its own Testcontainers-managed Apicurio Registry
+
+#### Using Compose Dev Services
+
+Create a `compose-devservices.yaml` (or `docker-compose-devservices.yaml`) in your project root:
+
+```yaml
+services:
+  apicurio-registry:
+    image: apicurio/apicurio-registry:3.1.4
+    ports:
+      - "8080"                                          # (1)
+    environment:
+      QUARKUS_PROFILE: prod
+    labels:
+      # Optional: map port to Quarkus config property
+      io.quarkus.devservices.compose.config_map.port.8080: mp.messaging.connector.smallrye-kafka.apicurio.registry.url  # (2)
+```
+
+1. **Expose port 8080** - The extension detects Apicurio by looking for containers exposing port 8080
+2. **Config mapping (optional)** - Automatically maps the container's URL to your Quarkus config
+
+#### Benefits of Compose Dev Services
+
+| Feature | Auto DevServices | Compose Dev Services |
+|---------|------------------|----------------------|
+| **Zero config** | ✓ | Requires compose file |
+| **Custom networking** | Limited | Full control |
+| **Multiple services** | One per extension | Define your entire stack |
+| **Persistent data** | Container restart = data loss | Use volumes for persistence |
+| **Custom images** | Via config property | Direct in compose file |
+| **Shared across projects** | Via service labels | Via `project-name` |
+
+#### Example: Full Development Stack
+
+```yaml
+# compose-devservices.yaml
+services:
+  kafka:
+    image: quay.io/strimzi/kafka:latest-kafka-3.6.0
+    command:
+      - "sh"
+      - "-c"
+      - "./bin/kafka-storage.sh format --standalone -t $$(./bin/kafka-storage.sh random-uuid) -c ./config/server.properties && ./bin/kafka-server-start.sh ./config/server.properties"
+    ports:
+      - "9092"
+    environment:
+      LOG_DIR: "/tmp/logs"
+
+  apicurio-registry:
+    image: apicurio/apicurio-registry:3.1.4
+    ports:
+      - "8080"
+    environment:
+      QUARKUS_PROFILE: prod
+```
+
+When you run `./gradlew quarkusDev`, Quarkus will:
+1. Start your compose services
+2. Detect Kafka and Apicurio Registry from the compose project
+3. Auto-configure your application to use them
+4. Skip starting its own Testcontainers
+
+#### Ignoring Compose Services
+
+If you have an Apicurio Registry in your compose file but want the extension to start its own, add the ignore label:
+
+```yaml
+services:
+  apicurio-registry:
+    image: apicurio/apicurio-registry:3.1.4
+    labels:
+      io.quarkus.devservices.compose.ignore: "true"     # Extension will start its own
+```
+
 ## Running in Production
 
 When running outside dev/test mode, you need to provide Kafka and Apicurio Registry:

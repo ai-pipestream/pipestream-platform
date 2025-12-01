@@ -90,6 +90,8 @@ public class DevServicesApicurioRegistryProtobufProcessor {
      *
      * @param launchMode                the launch mode
      * @param dockerStatusBuildItem     the Docker status
+     * @param composeProjectBuildItem   the Compose project information used to discover services defined via docker-compose
+     * @param devServicesSharedNetworkBuildItem a list of shared network build items indicating whether Dev Services use a shared Docker network
      * @param config                    the build time configuration
      * @param consoleInstalledBuildItem the console installed build item
      * @param closeBuildItem            the shutdown build item

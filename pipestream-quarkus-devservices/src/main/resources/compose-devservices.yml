@@ -124,6 +124,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    labels:
+      quarkus-dev-service-apicurio-registry: shared
     healthcheck:
       # Try multiple known health endpoints to accommodate image differences
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || curl -sf http://localhost:8080/q/health || curl -sf http://localhost:8080/q/health/ready"]
@@ -145,6 +147,8 @@ services:
     depends_on:
       apicurio-registry:
         condition: service_healthy
+    labels:
+      io.quarkus.devservices.compose.wait_for.ports.disable: "true"
 
   # OpenSearch 3
   opensearch:
@@ -193,6 +197,8 @@ services:
     depends_on:
       opensearch:
         condition: service_healthy
+    labels:
+      io.quarkus.devservices.compose.wait_for.ports.disable: "true"
 
   # MinIO for S3-compatible object storage
   minio:
@@ -231,6 +237,8 @@ services:
     depends_on:
       - kafka
       - apicurio-registry
+    labels:
+      io.quarkus.devservices.compose.wait_for.ports.disable: "true"
 
   # Grafana LGTM (Grafana + OTel Collector + Prometheus + Tempo + Loki)
   lgtm:

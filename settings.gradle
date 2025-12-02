@@ -1,0 +1,16 @@
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    plugins {
+        id 'io.quarkus.extension' version '3.17.5'
+        id 'com.google.protobuf' version '0.9.4'
+    }
+}
+
+rootProject.name = 'pipestream-service-registration-extension-parent'
+
+include ':runtime'
+include ':deployment'
+include ':integration-tests'

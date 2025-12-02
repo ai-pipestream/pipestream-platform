@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package ai.pipestream.platform.registration.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_outer_classname = "PlatformRegistrationProto";
+option java_package = "ai.pipestream.platform.registration.v1";
+
+// Simple registration service - just the basics!
+service PlatformRegistrationService {
+  // Register a service with streaming status updates
+  rpc RegisterService(RegisterServiceRequest) returns (stream RegisterServiceResponse);
+  
+  // Unregister a service
+  rpc UnregisterService(UnregisterServiceRequest) returns (UnregisterServiceResponse);
+  
+  // Update health status
+  rpc UpdateHealth(HealthUpdateRequest) returns (HealthUpdateResponse);
+}
+
+// Simple registration request
+message RegisterServiceRequest {
+  string service_name = 1;
+  string host = 2;
+  int32 port = 3;
+  string version = 4;
+  map<string, string> metadata = 5;
+}
+
+// Registration response with streaming updates
+message RegisterServiceResponse {
+  string service_id = 1;
+  RegistrationStatus status = 2;
+  string message = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// Unregister request
+message UnregisterServiceRequest {
+  string service_id = 1;
+}
+
+// Unregister response
+message UnregisterServiceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Health update request
+message HealthUpdateRequest {
+  string service_id = 1;
+  HealthStatus status = 2;
+  string message = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// Health update response
+message HealthUpdateResponse {
+  bool acknowledged = 1;
+}
+
+// Registration status enum
+enum RegistrationStatus {
+  REGISTRATION_STATUS_UNSPECIFIED = 0;
+  REGISTRATION_STATUS_PENDING = 1;
+  REGISTRATION_STATUS_REGISTERED = 2;
+  REGISTRATION_STATUS_FAILED = 3;
+}
+
+// Health status enum
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTH_STATUS_UP = 1;
+  HEALTH_STATUS_DOWN = 2;
+  HEALTH_STATUS_UNKNOWN = 3;
+}

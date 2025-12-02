@@ -1,0 +1,64 @@
+plugins {
+    id 'java-library'
+    id 'io.quarkus.extension'
+    id 'com.google.protobuf'
+}
+
+quarkusExtension {
+    deploymentModule = ':deployment'
+}
+
+dependencies {
+    // Quarkus
+    api enforcedPlatform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    api 'io.quarkus:quarkus-arc'
+    api 'io.quarkus:quarkus-grpc'
+    api 'io.quarkus:quarkus-smallrye-health'
+    
+    // gRPC and Protobuf
+    api "io.grpc:grpc-protobuf:${grpcVersion}"
+    api "io.grpc:grpc-stub:${grpcVersion}"
+    api "io.grpc:grpc-netty-shaded:${grpcVersion}"
+    api "com.google.protobuf:protobuf-java:${protobufVersion}"
+    api "com.google.protobuf:protobuf-java-util:${protobufVersion}"
+    
+    // Mutiny for reactive
+    api 'io.smallrye.reactive:mutiny:2.6.2'
+    
+    // Annotation processor
+    annotationProcessor enforcedPlatform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+    
+    // gRPC annotation processor
+    api "javax.annotation:javax.annotation-api:1.3.2"
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:${protobufVersion}"
+    }
+    plugins {
+        grpc {
+            artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
+        }
+    }
+    generateProtoTasks {
+        all()*.plugins {
+            grpc {}
+        }
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs 'build/generated/source/proto/main/grpc'
+            srcDirs 'build/generated/source/proto/main/java'
+        }
+    }
+}
+
+// Make sure proto generation happens before compile
+tasks.named('compileJava') {
+    dependsOn 'generateProto'
+}

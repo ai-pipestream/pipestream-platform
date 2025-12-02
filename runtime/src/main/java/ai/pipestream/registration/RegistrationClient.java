@@ -1,0 +1,176 @@
+package ai.pipestream.registration;
+
+import ai.pipestream.platform.registration.v1.*;
+import ai.pipestream.registration.config.RegistrationConfig;
+import ai.pipestream.registration.model.ServiceInfo;
+import com.google.protobuf.Timestamp;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.stub.StreamObserver;
+import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.subscription.MultiEmitter;
+import jakarta.annotation.PreDestroy;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
+
+import java.time.Instant;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * gRPC client wrapper for the platform-registration-service.
+ */
+@ApplicationScoped
+public class RegistrationClient {
+
+    private static final Logger LOG = Logger.getLogger(RegistrationClient.class);
+
+    private final RegistrationConfig config;
+    private volatile ManagedChannel channel;
+    private volatile PlatformRegistrationServiceGrpc.PlatformRegistrationServiceStub asyncStub;
+    private volatile PlatformRegistrationServiceGrpc.PlatformRegistrationServiceBlockingStub blockingStub;
+
+    @Inject
+    public RegistrationClient(RegistrationConfig config) {
+        this.config = config;
+    }
+
+    private void ensureChannel() {
+        if (channel == null) {
+            synchronized (this) {
+                if (channel == null) {
+                    String host = config.registrationService().host();
+                    int port = config.registrationService().port();
+                    
+                    LOG.infof("Creating gRPC channel to registration service at %s:%d", host, port);
+                    
+                    channel = ManagedChannelBuilder
+                            .forAddress(host, port)
+                            .usePlaintext()
+                            .build();
+                    
+                    asyncStub = PlatformRegistrationServiceGrpc.newStub(channel);
+                    blockingStub = PlatformRegistrationServiceGrpc.newBlockingStub(channel);
+                }
+            }
+        }
+    }
+
+    /**
+     * Register a service and receive streaming status updates.
+     *
+     * @param serviceInfo The service information to register
+     * @return Multi of registration responses
+     */
+    public Multi<RegisterServiceResponse> registerService(ServiceInfo serviceInfo) {
+        ensureChannel();
+
+        RegisterServiceRequest request = RegisterServiceRequest.newBuilder()
+                .setServiceName(serviceInfo.getServiceName())
+                .setHost(serviceInfo.getHost())
+                .setPort(serviceInfo.getPort())
+                .setVersion(serviceInfo.getVersion() != null ? serviceInfo.getVersion() : "")
+                .putAllMetadata(serviceInfo.getMetadata())
+                .build();
+
+        LOG.infof("Registering service: %s", serviceInfo.getServiceName());
+
+        return Multi.createFrom().emitter(emitter -> {
+            asyncStub.registerService(request, new StreamObserver<RegisterServiceResponse>() {
+                @Override
+                public void onNext(RegisterServiceResponse response) {
+                    LOG.debugf("Received registration response: status=%s, message=%s", 
+                            response.getStatus(), response.getMessage());
+                    emitter.emit(response);
+                }
+
+                @Override
+                public void onError(Throwable t) {
+                    LOG.errorf(t, "Registration failed for service: %s", serviceInfo.getServiceName());
+                    emitter.fail(t);
+                }
+
+                @Override
+                public void onCompleted() {
+                    LOG.infof("Registration stream completed for service: %s", serviceInfo.getServiceName());
+                    emitter.complete();
+                }
+            });
+        });
+    }
+
+    /**
+     * Unregister a service.
+     *
+     * @param serviceId The service ID to unregister
+     * @return Uni of the unregister response
+     */
+    public Uni<UnregisterServiceResponse> unregisterService(String serviceId) {
+        ensureChannel();
+
+        return Uni.createFrom().item(() -> {
+            UnregisterServiceRequest request = UnregisterServiceRequest.newBuilder()
+                    .setServiceId(serviceId)
+                    .build();
+
+            LOG.infof("Unregistering service: %s", serviceId);
+            
+            UnregisterServiceResponse response = blockingStub
+                    .withDeadlineAfter(config.registrationService().timeout().toMillis(), TimeUnit.MILLISECONDS)
+                    .unregisterService(request);
+            
+            LOG.infof("Unregister response: success=%s, message=%s", response.getSuccess(), response.getMessage());
+            return response;
+        });
+    }
+
+    /**
+     * Update health status for a registered service.
+     *
+     * @param serviceId The service ID
+     * @param status The health status
+     * @param message Optional message
+     * @return Uni of the health update response
+     */
+    public Uni<HealthUpdateResponse> updateHealth(String serviceId, HealthStatus status, String message) {
+        ensureChannel();
+
+        return Uni.createFrom().item(() -> {
+            Instant now = Instant.now();
+            Timestamp timestamp = Timestamp.newBuilder()
+                    .setSeconds(now.getEpochSecond())
+                    .setNanos(now.getNano())
+                    .build();
+
+            HealthUpdateRequest request = HealthUpdateRequest.newBuilder()
+                    .setServiceId(serviceId)
+                    .setStatus(status)
+                    .setMessage(message != null ? message : "")
+                    .setTimestamp(timestamp)
+                    .build();
+
+            LOG.tracef("Updating health for service %s: status=%s", serviceId, status);
+            
+            HealthUpdateResponse response = blockingStub
+                    .withDeadlineAfter(config.registrationService().timeout().toMillis(), TimeUnit.MILLISECONDS)
+                    .updateHealth(request);
+            
+            return response;
+        });
+    }
+
+    @PreDestroy
+    void shutdown() {
+        if (channel != null) {
+            LOG.info("Shutting down registration client channel");
+            try {
+                channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                LOG.warn("Interrupted while shutting down channel");
+                channel.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+}

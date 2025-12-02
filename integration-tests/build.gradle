@@ -1,0 +1,17 @@
+plugins {
+    id 'java'
+}
+
+dependencies {
+    testImplementation enforcedPlatform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    
+    testImplementation project(':runtime')
+    
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.5'
+    testImplementation 'org.mockito:mockito-core:5.14.2'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.14.2'
+}
+
+test {
+    useJUnitPlatform()
+}

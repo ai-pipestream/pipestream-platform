@@ -1,0 +1,18 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    // Quarkus deployment
+    api enforcedPlatform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    api 'io.quarkus:quarkus-arc-deployment'
+    api 'io.quarkus:quarkus-grpc-deployment'
+    api 'io.quarkus:quarkus-smallrye-health-deployment'
+    
+    // Runtime dependency
+    api project(':runtime')
+    
+    // Annotation processor
+    annotationProcessor enforcedPlatform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+}

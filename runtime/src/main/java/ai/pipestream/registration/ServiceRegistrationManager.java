@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class ServiceRegistrationManager {
 
     private static final Logger LOG = Logger.getLogger(ServiceRegistrationManager.class);
+    private static final double DEFAULT_RETRY_JITTER = 0.2;
 
     private final RegistrationClient registrationClient;
     private final ServiceMetadataCollector metadataCollector;
@@ -96,7 +97,7 @@ public class ServiceRegistrationManager {
                 .onFailure().invoke(t -> LOG.warnf(t, "Registration attempt failed"))
                 .onFailure().retry()
                     .withBackOff(initialDelay, maxDelay)
-                    .withJitter(0.2)
+                    .withJitter(DEFAULT_RETRY_JITTER)
                     .atMost(maxAttempts)
                 .subscribe().with(
                         response -> LOG.debugf("Registration update received: %s", response.getStatus()),

@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 public class RegistrationClient {
 
     private static final Logger LOG = Logger.getLogger(RegistrationClient.class);
+    private static final int SHUTDOWN_TIMEOUT_SECONDS = 5;
 
     private final RegistrationConfig config;
     private volatile ManagedChannel channel;
@@ -136,7 +137,7 @@ public class RegistrationClient {
     public Uni<HealthUpdateResponse> updateHealth(String serviceId, HealthStatus status, String message) {
         ensureChannel();
 
-        return Uni.createFrom().item(() -> {
+        return Uni.createFrom().deferred(() -> Uni.createFrom().item(() -> {
             Instant now = Instant.now();
             Timestamp timestamp = Timestamp.newBuilder()
                     .setSeconds(now.getEpochSecond())
@@ -157,7 +158,7 @@ public class RegistrationClient {
                     .updateHealth(request);
             
             return response;
-        });
+        }));
     }
 
     @PreDestroy
@@ -165,7 +166,7 @@ public class RegistrationClient {
         if (channel != null) {
             LOG.info("Shutting down registration client channel");
             try {
-                channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+                channel.shutdown().awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 LOG.warn("Interrupted while shutting down channel");
                 channel.shutdownNow();

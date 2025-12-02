@@ -69,6 +69,8 @@ public class ServiceMetadataCollector {
         return config.serviceName().orElse(applicationName);
     }
 
+    private static final int DEFAULT_HTTP_PORT = 8080;
+
     private String resolveVersion() {
         return config.version().orElse(applicationVersion);
     }
@@ -76,7 +78,7 @@ public class ServiceMetadataCollector {
     private int resolvePort() {
         // Use configured port if specified, otherwise use HTTP port
         int configuredPort = config.port();
-        if (configuredPort != 8080) {
+        if (configuredPort != DEFAULT_HTTP_PORT) {
             return configuredPort;
         }
         return httpPort;

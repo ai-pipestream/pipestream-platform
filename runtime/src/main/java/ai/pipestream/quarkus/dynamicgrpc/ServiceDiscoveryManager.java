@@ -19,8 +19,14 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Manages dynamic definition of Stork services backed by Consul discovery
- * and provides access to discovered ServiceInstance lists.
+ * Manages dynamic definition of SmallRye Stork services backed by Consul discovery
+ * and provides access to discovered {@link io.smallrye.stork.api.ServiceInstance} lists.
+ * <p>
+ * This component is used by {@link DynamicGrpcClientFactory} to ensure that a logical service
+ * name is known to Stork and to obtain service instances discovered from Consul. It supports
+ * per-service overrides of the Consul application name via the
+ * {@code quarkus.dynamic-grpc.consul.application-name.<service>} configuration key.
+ * </p>
  */
 @ApplicationScoped
 public class ServiceDiscoveryManager {
@@ -33,15 +39,27 @@ public class ServiceDiscoveryManager {
 
     private static final Logger LOG = Logger.getLogger(ServiceDiscoveryManager.class);
 
+    /**
+     * Consul agent host used for service discovery.
+     */
     @ConfigProperty(name = "quarkus.dynamic-grpc.consul.host", defaultValue = "localhost")
     String consulHost;
 
+    /**
+     * Consul agent port used for service discovery.
+     */
     @ConfigProperty(name = "quarkus.dynamic-grpc.consul.port", defaultValue = "8500")
     String consulPort;
 
+    /**
+     * Stork refresh period for pulling Consul updates (format supported by Stork, e.g. {@code 10s}).
+     */
     @ConfigProperty(name = "quarkus.dynamic-grpc.consul.refresh-period", defaultValue = "10s")
     String consulRefreshPeriod;
 
+    /**
+     * Whether Consul health checks should be taken into account by discovery.
+     */
     @ConfigProperty(name = "quarkus.dynamic-grpc.consul.use-health-checks", defaultValue = "false")
     boolean consulUseHealthChecks;
 
@@ -56,12 +74,17 @@ public class ServiceDiscoveryManager {
     }
 
     /**
-     * Ensures a service is defined in Stork under the given storkServiceName but discovers
-     * Consul instances registered under consulApplicationName.
+     * Ensures a service is defined in Stork under the given {@code storkServiceName} but discovers
+     * Consul instances that are registered under {@code consulApplicationName}.
+     * <p>
+     * If the configuration key {@code quarkus.dynamic-grpc.consul.application-name.<storkServiceName>}
+     * is present, it overrides {@code consulApplicationName} for discovery. Subsequent calls are
+     * idempotent and will not re-define an already known Stork service.
+     * </p>
      *
-     * @param storkServiceName      the logical service name as it will be known to Stork
-     * @param consulApplicationName the Consul service name to query for instances
-     * @return a Uni that completes when the service is defined
+     * @param storkServiceName the logical service name as it will be known to Stork
+     * @param consulApplicationName the Consul service name to query for instances when no override is provided
+     * @return a Uni that completes when the service is defined or already present; fails if definition cannot be registered
      */
     public Uni<Void> ensureServiceDefinedFor(String storkServiceName, String consulApplicationName) {
         Optional<Service> existingService = Stork.getInstance().getServiceOptional(storkServiceName);
@@ -102,10 +125,10 @@ public class ServiceDiscoveryManager {
     }
 
     /**
-     * Gets service instances for a given service name.
+     * Gets service instances for a given service name from Stork.
      *
-     * @param serviceName the service name to look up
-     * @return a Uni containing the list of service instances
+     * @param serviceName the service name to look up (must have been defined in Stork)
+     * @return a Uni emitting the list of service instances; fails if the service is unknown or an error occurs
      */
     public Uni<List<ServiceInstance>> getServiceInstances(String serviceName) {
         try {

@@ -1,9 +1,6 @@
 package ai.pipestream.quarkus.dynamicgrpc;
 
-import io.grpc.Channel;
-import io.grpc.EquivalentAddressGroup;
-import io.grpc.NameResolver;
-import io.grpc.NameResolverProvider;
+import io.grpc.*;
 import io.quarkus.grpc.MutinyStub;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.stork.Stork;
@@ -48,6 +45,7 @@ public class DynamicGrpcClientFactory implements GrpcClientFactory {
     @Override
     public <T extends MutinyStub> Uni<T> getClient(String serviceName, Function<Channel, T> stubCreator) {
         validateServiceName(serviceName);
+        //noinspection FunctionalExpressionCanBeFolded
         return getChannel(serviceName).map(stubCreator::apply);
     }
 
@@ -202,7 +200,9 @@ public class DynamicGrpcClientFactory implements GrpcClientFactory {
                         List<EquivalentAddressGroup> addresses = instances.stream()
                                 .map(i -> new EquivalentAddressGroup(new InetSocketAddress(i.getHost(), i.getPort())))
                                 .collect(Collectors.toList());
-                        listener.onResult(ResolutionResult.newBuilder().setAddresses(addresses).build());
+                        listener.onResult(ResolutionResult.newBuilder()
+                                .setAddressesOrError(StatusOr.fromValue(addresses))
+                                .build());
                     }
                 }).subscribe().asCompletionStage();
             } catch (Exception e) {

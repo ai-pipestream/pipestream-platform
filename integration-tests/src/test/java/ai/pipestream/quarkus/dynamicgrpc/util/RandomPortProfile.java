@@ -13,6 +13,12 @@ import java.util.Map;
  */
 public class RandomPortProfile implements QuarkusTestProfile {
     @Override
+    /**
+     * Provides configuration overrides to instruct Quarkus to bind the gRPC server
+     * to port {@code 0} (let the OS choose an available random port).
+     *
+     * @return a singleton map with the {@code quarkus.grpc.server.port} override
+     */
     public Map<String, String> getConfigOverrides() {
         return Map.of("quarkus.grpc.server.port", "0");
     }

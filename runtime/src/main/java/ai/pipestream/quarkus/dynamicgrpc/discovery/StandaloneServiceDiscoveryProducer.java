@@ -35,7 +35,11 @@ public class StandaloneServiceDiscoveryProducer {
     /**
      * Produces a default ServiceDiscovery implementation for standalone usage.
      *
-     * @return ServiceDiscovery implementation
+     * When the dynamic-grpc runtime is used outside of a full Quarkus application (or when no other
+     * ServiceDiscovery bean is provided), this method supplies a Consul-backed discovery
+     * implementation using {@link DynamicConsulServiceDiscovery}.
+     *
+     * @return a default ServiceDiscovery implementation suitable for standalone environments
      */
     @Produces
     @DefaultBean

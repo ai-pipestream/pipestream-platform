@@ -19,6 +19,12 @@ public class ConsulTestResource implements QuarkusTestResourceLifecycleManager {
     private static final DockerImageName CONSUL_IMAGE = DockerImageName.parse("consul:1.15");
     private static ConsulContainer consulContainer;
 
+    /**
+     * Starts a Consul TestContainers instance and exposes configuration overrides
+     * for the tests to connect to it.
+     *
+     * @return a map of configuration properties including consul host, port, refresh period, and health check usage
+     */
     @Override
     public Map<String, String> start() {
         // Start Consul container with random mapped port
@@ -42,6 +48,9 @@ public class ConsulTestResource implements QuarkusTestResourceLifecycleManager {
         return config;
     }
 
+    /**
+     * Stops the Consul container if it was started.
+     */
     @Override
     public void stop() {
         if (consulContainer != null) {
@@ -50,14 +59,19 @@ public class ConsulTestResource implements QuarkusTestResourceLifecycleManager {
     }
 
     /**
-     * Get the Consul container instance for registering services in tests.
+     * Returns the Consul container instance for tests that need direct access
+     * (e.g., for registering services).
+     *
+     * @return the running ConsulContainer, or {@code null} if not started
      */
     public static ConsulContainer getConsulContainer() {
         return consulContainer;
     }
 
     /**
-     * Get Consul HTTP endpoint for direct API calls.
+     * Returns the Consul HTTP endpoint for direct API calls.
+     *
+     * @return the base HTTP URL of Consul (e.g., http://localhost:8500), or {@code null} if container not started
      */
     public static String getConsulHttpEndpoint() {
         if (consulContainer != null) {

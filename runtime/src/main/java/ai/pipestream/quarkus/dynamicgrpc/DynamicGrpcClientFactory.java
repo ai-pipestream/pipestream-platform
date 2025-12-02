@@ -127,11 +127,23 @@ public class DynamicGrpcClientFactory implements GrpcClientFactory {
             return 5;
         }
 
+        /**
+         * Creates a new resolver for the given target URI using the configured service name.
+         *
+         * @param targetUri the target URI passed by gRPC
+         * @param args      resolver arguments provided by gRPC
+         * @return a NameResolver backed by SmallRye Stork
+         */
         @Override
         public NameResolver newNameResolver(URI targetUri, NameResolver.Args args) {
             return new StorkNameResolver(serviceName);
         }
 
+        /**
+         * Returns the default URI scheme used by this provider.
+         *
+         * @return the {@code stork} scheme
+         */
         @Override
         public String getDefaultScheme() {
             return "stork";
@@ -154,6 +166,11 @@ public class DynamicGrpcClientFactory implements GrpcClientFactory {
             this.serviceName = serviceName;
         }
 
+        /**
+         * The logical authority equals the service name being resolved.
+         *
+         * @return the service name authority
+         */
         @Override
         public String getServiceAuthority() {
             return serviceName;
@@ -170,6 +187,10 @@ public class DynamicGrpcClientFactory implements GrpcClientFactory {
             resolve();
         }
 
+        /**
+         * Performs a resolution round by querying Stork for current instances and reporting results
+         * to the registered listener.
+         */
         private void resolve() {
             try {
                 Service service = Stork.getInstance().getService(serviceName);

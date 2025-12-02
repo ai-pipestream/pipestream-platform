@@ -1,11 +1,14 @@
 package ai.pipestream.quarkus.dynamicgrpc.base;
 
 import com.ecwid.consul.v1.ConsulClient;
+import org.jboss.logging.Logger;
 
 /**
  * Helper class for registering gRPC services in Consul for testing.
  */
 public class ConsulServiceRegistration {
+
+    private static final Logger LOG = Logger.getLogger(ConsulServiceRegistration.class);
 
     private final ConsulClient consulClient;
 
@@ -25,7 +28,7 @@ public class ConsulServiceRegistration {
         service.setTags(java.util.List.of("grpc"));
 
         consulClient.agentServiceRegister(service);
-        System.out.println("Registered service: " + serviceName + " at " + host + ":" + port);
+        LOG.infof("Registered service: %s at %s:%d", serviceName, host, port);
     }
 
     /**
@@ -33,7 +36,7 @@ public class ConsulServiceRegistration {
      */
     public void deregisterService(String serviceId) {
         consulClient.agentServiceDeregister(serviceId);
-        System.out.println("Deregistered service: " + serviceId);
+        LOG.infof("Deregistered service: %s", serviceId);
     }
 
     /**

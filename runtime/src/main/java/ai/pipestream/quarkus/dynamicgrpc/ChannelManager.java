@@ -64,6 +64,10 @@ public class ChannelManager {
     private Cache<String, Channel> channelCache;
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
+    /**
+     * Initializes the channel cache and logs effective settings.
+     * Invoked automatically by CDI when the application starts.
+     */
     @PostConstruct
     void init() {
         this.channelCache = Caffeine.newBuilder()
@@ -77,6 +81,13 @@ public class ChannelManager {
                 channelIdleTtlMinutes, channelMaxSize);
     }
 
+    /**
+     * Handles cache eviction by gracefully shutting down removed channels.
+     *
+     * @param serviceName logical service name used as cache key
+     * @param channel     the channel instance being removed
+     * @param cause       reason for eviction
+     */
     private void onChannelRemoved(String serviceName, Channel channel, RemovalCause cause) {
         if (channel == null) return;
 
@@ -228,6 +239,10 @@ public class ChannelManager {
         return Math.toIntExact(channelCache.estimatedSize());
     }
 
+    /**
+     * Shuts down all channels during application shutdown.
+     * Invoked automatically by CDI before the bean is destroyed.
+     */
     @PreDestroy
     void cleanup() {
         shuttingDown.set(true);

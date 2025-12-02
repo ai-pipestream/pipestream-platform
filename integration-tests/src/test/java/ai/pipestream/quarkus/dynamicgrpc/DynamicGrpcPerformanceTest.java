@@ -9,6 +9,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.jboss.logging.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -23,6 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @QuarkusTest
 @WithTestResource(ConsulTestResource.class)
 public class DynamicGrpcPerformanceTest {
+
+    private static final Logger LOG = Logger.getLogger(DynamicGrpcPerformanceTest.class);
 
     @Inject
     GrpcClientFactory clientFactory;
@@ -71,8 +74,7 @@ public class DynamicGrpcPerformanceTest {
 
         double firstCallTimeMs = firstCallTime / 1_000_000.0;
 
-        System.out.printf("First call: %.2fms, Avg cached: %.2fms%n",
-            firstCallTimeMs, avgCachedTimeMs);
+        LOG.infof("First call: %.2fms, Avg cached: %.2fms", firstCallTimeMs, avgCachedTimeMs);
 
         // Cached calls should be faster or equal
         assertThat(avgCachedTimeMs).isLessThanOrEqualTo(firstCallTimeMs);
@@ -107,7 +109,7 @@ public class DynamicGrpcPerformanceTest {
                         channels.add(channel);
                     }
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    LOG.error("Failed to obtain channel in concurrent test", e);
                 }
             });
             threads.add(thread);

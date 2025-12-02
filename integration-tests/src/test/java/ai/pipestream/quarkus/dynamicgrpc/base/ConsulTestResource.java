@@ -3,6 +3,7 @@ package ai.pipestream.quarkus.dynamicgrpc.base;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import org.testcontainers.consul.ConsulContainer;
 import org.testcontainers.utility.DockerImageName;
+import org.jboss.logging.Logger;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -12,6 +13,8 @@ import java.util.Map;
  * Uses random ports to avoid conflicts.
  */
 public class ConsulTestResource implements QuarkusTestResourceLifecycleManager {
+
+    private static final Logger LOG = Logger.getLogger(ConsulTestResource.class);
 
     private static final DockerImageName CONSUL_IMAGE = DockerImageName.parse("consul:1.15");
     private static ConsulContainer consulContainer;
@@ -34,7 +37,7 @@ public class ConsulTestResource implements QuarkusTestResourceLifecycleManager {
         config.put("quarkus.dynamic-grpc.consul.refresh-period", "2s");
         config.put("quarkus.dynamic-grpc.consul.use-health-checks", "false");
 
-        System.out.println("Consul container started at " + consulHost + ":" + consulPort);
+        LOG.infof("Consul container started at %s:%d", consulHost, consulPort);
 
         return config;
     }

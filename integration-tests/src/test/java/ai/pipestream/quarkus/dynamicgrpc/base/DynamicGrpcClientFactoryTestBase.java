@@ -9,6 +9,7 @@ import io.grpc.ServerBuilder;
 import io.quarkus.test.common.WithTestResource;
 import io.smallrye.mutiny.Uni;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @WithTestResource(ConsulTestResource.class)
 public abstract class DynamicGrpcClientFactoryTestBase {
+
+    private static final Logger LOG = Logger.getLogger(DynamicGrpcClientFactoryTestBase.class);
 
     protected static Server testGrpcServer;
     protected static int testGrpcPort;
@@ -52,7 +55,7 @@ public abstract class DynamicGrpcClientFactoryTestBase {
             .build()
             .start();
 
-        System.out.println("Test gRPC server started on port: " + testGrpcPort);
+        LOG.infof("Test gRPC server started on port: %d", testGrpcPort);
     }
 
     /**
@@ -72,7 +75,7 @@ public abstract class DynamicGrpcClientFactoryTestBase {
             testGrpcPort
         );
 
-        System.out.println("Registered " + TEST_SERVICE_NAME + " in Consul at 127.0.0.1:" + testGrpcPort);
+        LOG.infof("Registered %s in Consul at 127.0.0.1:%d", TEST_SERVICE_NAME, testGrpcPort);
     }
 
     @AfterAll

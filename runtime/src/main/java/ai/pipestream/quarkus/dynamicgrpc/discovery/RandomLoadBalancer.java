@@ -20,6 +20,14 @@ public class RandomLoadBalancer implements LoadBalancer {
 
     private final Random random = new Random();
 
+    /**
+     * Selects a service instance at random from the provided collection.
+     * If only one instance is available, that instance is returned.
+     *
+     * @param instances the available instances to pick from (must not be null or empty)
+     * @return the randomly selected instance
+     * @throws IllegalArgumentException if {@code instances} is null or empty
+     */
     @Override
     public ServiceInstance selectServiceInstance(Collection<ServiceInstance> instances) {
         if (instances == null || instances.isEmpty()) {

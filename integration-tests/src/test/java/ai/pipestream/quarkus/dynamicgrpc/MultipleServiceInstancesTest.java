@@ -12,6 +12,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @WithTestResource(ConsulTestResource.class)
 public class MultipleServiceInstancesTest {
 
-    //TODO: logging for reals avoid system out
+    private static final Logger LOG = Logger.getLogger(MultipleServiceInstancesTest.class);
 
     @Inject
     GrpcClientFactory clientFactory;
@@ -66,7 +67,7 @@ public class MultipleServiceInstancesTest {
                 .start();
 
             servers.add(server);
-            System.out.println("Started greeter instance " + (i + 1) + " on port: " + port);
+            LOG.infof("Started greeter instance %d on port: %d", (i + 1), port);
         }
     }
 
@@ -193,7 +194,7 @@ public class MultipleServiceInstancesTest {
                 ports.getFirst()
             );
         } catch (IOException e) {
-            e.printStackTrace();
+            LOG.error("Failed to restart greeter instance", e);
         }
     }
 

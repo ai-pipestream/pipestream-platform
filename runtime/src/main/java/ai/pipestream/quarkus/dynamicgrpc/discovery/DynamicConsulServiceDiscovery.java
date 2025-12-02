@@ -56,6 +56,10 @@ public class DynamicConsulServiceDiscovery implements ServiceDiscovery {
 
     private final LoadBalancer loadBalancer = new RandomLoadBalancer();
 
+    /**
+     * Initializes the Consul client using the configured host and port.
+     * Invoked automatically by CDI when the bean is constructed.
+     */
     @PostConstruct
     void init() {
         LOG.infof("Creating ConsulClient for service discovery on %s:%d", consulHost, consulPort);
@@ -68,6 +72,9 @@ public class DynamicConsulServiceDiscovery implements ServiceDiscovery {
         LOG.infof("ConsulClient connected to %s:%d", consulHost, consulPort);
     }
 
+    /**
+     * Closes the Consul client before the bean is destroyed.
+     */
     @PreDestroy
     void cleanup() {
         if (consulClient != null) {
@@ -76,6 +83,13 @@ public class DynamicConsulServiceDiscovery implements ServiceDiscovery {
         }
     }
 
+    /**
+     * Discovers a single healthy instance for the given service name using Consul, selecting the
+     * instance via a {@link io.smallrye.stork.api.LoadBalancer}.
+     *
+     * @param serviceName the logical service name registered in Consul
+     * @return a Uni emitting the selected service instance or failing if none found
+     */
     @Override
     public Uni<io.smallrye.stork.api.ServiceInstance> discoverService(String serviceName) {
         LOG.debugf("Discovering service %s dynamically from Consul", serviceName);
@@ -112,6 +126,12 @@ public class DynamicConsulServiceDiscovery implements ServiceDiscovery {
                 });
     }
 
+    /**
+     * Discovers all healthy instances for the given service name from Consul.
+     *
+     * @param serviceName the logical service name registered in Consul
+     * @return a Uni emitting a list of available instances (possibly empty)
+     */
     @Override
     public Uni<List<io.smallrye.stork.api.ServiceInstance>> discoverAllInstances(String serviceName) {
         LOG.debugf("Discovering all instances for service %s from Consul", serviceName);
@@ -134,6 +154,13 @@ public class DynamicConsulServiceDiscovery implements ServiceDiscovery {
                 });
     }
 
+    /**
+     * Queries Consul for healthy nodes of the given service name.
+     *
+     * @param serviceName the logical Consul service name
+     * @return a Uni emitting the raw Consul ServiceEntry list (possibly empty)
+     * @throws ServiceDiscoveryException if the Consul client is not initialized
+     */
     private Uni<List<ServiceEntry>> findHealthyInstances(String serviceName) {
         if (consulClient == null) {
             throw new ServiceDiscoveryException("ConsulClient not initialized. Check configuration.");

@@ -1,6 +1,5 @@
 package ai.pipestream.quarkus.dynamicgrpc;
 
-import ai.pipestream.quarkus.dynamicgrpc.GrpcClientFactory;
 import ai.pipestream.quarkus.dynamicgrpc.base.ConsulServiceRegistration;
 import ai.pipestream.quarkus.dynamicgrpc.base.ConsulTestResource;
 import ai.pipestream.quarkus.dynamicgrpc.it.proto.HelloReply;
@@ -13,11 +12,8 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
+import org.jboss.logging.Logger;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -33,6 +29,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @QuarkusTest
 @WithTestResource(ConsulTestResource.class)
 public class ChannelLifecycleTest {
+
+    private static final Logger LOG = Logger.getLogger(ChannelLifecycleTest.class);
 
     @Inject
     GrpcClientFactory clientFactory;
@@ -58,7 +56,7 @@ public class ChannelLifecycleTest {
             .build()
             .start();
 
-        System.out.println("Started lifecycle test server on port: " + lifecyclePort);
+        LOG.infof("Started lifecycle test server on port: %d", lifecyclePort);
     }
 
     @AfterAll
@@ -86,7 +84,7 @@ public class ChannelLifecycleTest {
             .await().atMost(Duration.ofSeconds(5));
 
         String stats1 = clientFactory.getCacheStats();
-        System.out.println("After 1 call: " + stats1);
+        LOG.infof("After 1 call: %s", stats1);
 
         // Next 10 calls - should all be hits
         for (int i = 0; i < 10; i++) {
@@ -95,7 +93,7 @@ public class ChannelLifecycleTest {
         }
 
         String stats2 = clientFactory.getCacheStats();
-        System.out.println("After 11 calls: " + stats2);
+        LOG.infof("After 11 calls: %s", stats2);
 
         assertThat(stats2).containsIgnoringCase("hit");
 
@@ -243,7 +241,7 @@ public class ChannelLifecycleTest {
         assertThat(stats).isNotNull();
         assertThat(stats).isNotEmpty();
 
-        System.out.println("Cache stats: " + stats);
+        LOG.infof("Cache stats: %s", stats);
 
         // Stats should mention hits (case-insensitive)
         assertThat(stats.toLowerCase()).containsAnyOf("hit", "cache", "request");
@@ -268,7 +266,7 @@ public class ChannelLifecycleTest {
                     clientFactory.getChannel(serviceName)
                         .await().atMost(Duration.ofSeconds(5));
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    LOG.error("Concurrent channel creation failed", e);
                 }
             });
             threads[i].start();

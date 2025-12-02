@@ -13,6 +13,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +40,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @QuarkusTest
 @WithTestResource(ConsulTestResource.class)
 public class StressTest {
+
+    private static final Logger LOG = Logger.getLogger(StressTest.class);
 
     @Inject
     GrpcClientFactory clientFactory;
@@ -69,7 +72,7 @@ public class StressTest {
                 .start();
 
             stressServers.add(server);
-            System.out.println("Started stress test server " + i + " on port: " + port);
+            LOG.infof("Started stress test server %d on port: %d", i, port);
         }
     }
 
@@ -130,7 +133,7 @@ public class StressTest {
                     }
                 } catch (Exception e) {
                     failureCount.incrementAndGet();
-                    System.err.println("Request " + requestNum + " failed: " + e.getMessage());
+                    LOG.errorf(e, "Request %d failed", requestNum);
                 } finally {
                     latch.countDown();
                 }
@@ -143,7 +146,7 @@ public class StressTest {
 
         assertThat(completed).isTrue();
         assertThat(successCount.get()).isGreaterThanOrEqualTo(95); // At least 95% success rate
-        System.out.printf("Stress test: %d successes, %d failures out of 100 requests%n",
+        LOG.infof("Stress test: %d successes, %d failures out of 100 requests",
             successCount.get(), failureCount.get());
 
         // Cleanup
@@ -207,7 +210,7 @@ public class StressTest {
 
         assertThat(completed).isTrue();
         assertThat(successCount.get()).isGreaterThanOrEqualTo(490); // 98% success rate
-        System.out.printf("Sustained load: %d successes, %d failures in %dms%n",
+        LOG.infof("Sustained load: %d successes, %d failures in %dms",
             successCount.get(), failureCount.get(), duration);
 
         consulRegistration.deregisterService(serviceName + "-instance");
@@ -251,7 +254,7 @@ public class StressTest {
                         successCount.incrementAndGet();
                     }
                 } catch (Exception e) {
-                    System.err.println("Failed on service " + serviceName + ": " + e.getMessage());
+                    LOG.errorf(e, "Failed on service %s", serviceName);
                 }
             }
         }
@@ -300,7 +303,7 @@ public class StressTest {
         int finalChannelCount = clientFactory.getActiveServiceCount();
         assertThat(finalChannelCount).isLessThanOrEqualTo(initialChannelCount + 1);
 
-        System.out.printf("Memory stability: %d channels after 1000 requests%n", finalChannelCount);
+        LOG.infof("Memory stability: %d channels after 1000 requests", finalChannelCount);
 
         consulRegistration.deregisterService(serviceName + "-instance");
     }

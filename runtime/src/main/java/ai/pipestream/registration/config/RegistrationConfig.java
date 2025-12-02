@@ -55,12 +55,6 @@ public interface RegistrationConfig {
     RegistrationServiceConfig registrationService();
 
     /**
-     * Configuration for health checking.
-     */
-    @WithName("health-check")
-    HealthCheckConfig healthCheck();
-
-    /**
      * Configuration for retry behavior.
      */
     RetryConfig retry();
@@ -86,23 +80,6 @@ public interface RegistrationConfig {
          */
         @WithDefault("10s")
         Duration timeout();
-    }
-
-    /**
-     * Health check configuration.
-     */
-    interface HealthCheckConfig {
-        /**
-         * Whether health reporting is enabled.
-         */
-        @WithDefault("true")
-        boolean enabled();
-
-        /**
-         * Interval between health status updates.
-         */
-        @WithDefault("30s")
-        Duration interval();
     }
 
     /**

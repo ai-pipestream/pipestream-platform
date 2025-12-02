@@ -1,0 +1,551 @@
+syntax = "proto3";
+
+package ai.pipestream.data.v1;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_outer_classname = "PipelineCoreTypesV1Proto";
+option java_package = "ai.pipestream.data.v1";
+
+// Core document container for the pipeline processing system.
+//
+// PipeDoc is the primary data structure flowing through the pipeline. It contains standardized
+// search metadata, binary content (blobs), and flexible structured data for custom use cases.
+message PipeDoc {
+  // Unique identifier for this document across the entire system.
+  string doc_id = 1;
+  // Standardized search engine metadata for OOTB indexing and querying.
+  //
+  // This is intentionally less flexible to maintain a common API layer that all
+  // out-of-the-box indexing steps can rely on.
+  SearchMetadata search_metadata = 2;
+  // Binary content container for document parsing.
+  //
+  // Useful for storing files that need parsing (images, PDFs, videos, etc.).
+  BlobBag blob_bag = 3;
+  // Customer-provided structured data in any protobuf format.
+  //
+  // Types registered in the schema registry with JARs in the classpath will deserialize
+  // to their actual type. Unknown types fall back to dynamic messages. All data here
+  // will be indexed into the search engine unless configured otherwise.
+  google.protobuf.Any structured_data = 4;
+  // Immutable parsed metadata from document parsers (Tika, Docling, etc.).
+  //
+  // This field is append-only - parsers can add new entries but should never modify
+  // or delete existing ones. Keys are parser-specific identifiers (e.g., "tika", "docling").
+  // The actual parsed data is stored in ParsedMetadata.data as an Any type containing
+  // parser-specific protobuf messages (e.g., TikaResponse, DoclingResponse).
+  map<string, ParsedMetadata> parsed_metadata = 5;
+}
+
+// Wrapper for parser output metadata.
+//
+// Contains metadata about a parser's execution and the actual parsed data.
+// The data field uses google.protobuf.Any to support any parser-specific protobuf type.
+message ParsedMetadata {
+  // Name of the parser that produced this data (e.g., "tika", "docling").
+  string parser_name = 1;
+  // Version of the parser (e.g., "4.0.0", "1.2.3").
+  string parser_version = 2;
+  // Timestamp when parsing occurred.
+  google.protobuf.Timestamp parsed_at = 3;
+  // Parser-specific output data.
+  //
+  // Contains parser-specific protobuf messages such as TikaResponse, DoclingResponse, etc.
+  // Types registered in the schema registry will deserialize to their actual type.
+  google.protobuf.Any data = 4;
+}
+
+// Standardized search engine metadata for OOTB indexing.
+//
+// Provides a common data layout for search API queries. This structure maintains
+// consistency across different document types while supporting enhanced search features
+// like semantic chunking, document outlines, and link extraction.
+message SearchMetadata {
+  // Document title or heading.
+  optional string title = 1;
+  // Full text content of the document.
+  optional string body = 2;
+  // Extracted keywords for search and categorization.
+  optional Keywords keywords = 3;
+  // Document type classification (e.g., "PDF", "HTML", "DOCX").
+  optional string document_type = 4;
+  // Original source URI where the document was obtained.
+  optional string source_uri = 5;
+  // MIME type of the source document.
+  optional string source_mime_type = 6;
+  // Timestamp when the document was originally created.
+  optional google.protobuf.Timestamp creation_date = 7;
+  // Timestamp when the document was last modified at source.
+  optional google.protobuf.Timestamp last_modified_date = 8;
+  // Timestamp when the document was processed by the pipeline.
+  optional google.protobuf.Timestamp processed_date = 9;
+  // Language code of the document content (e.g., "en", "es", "fr").
+  optional string language = 10;
+  // Document author or creator.
+  optional string author = 11;
+  // Category or classification label for the document.
+  optional string category = 12;
+  // Key-value tags for flexible categorization.
+  optional Tags tags = 13;
+  // Length of the document content in bytes or characters.
+  optional int32 content_length = 14;
+  // Relevance score for search ranking purposes.
+  optional double relevance_score = 15;
+  // Additional custom fields not covered by standard schema.
+  optional google.protobuf.Struct custom_fields = 16;
+  // Generic key-value metadata for extensibility.
+  map<string, string> metadata = 17;
+  // Results from semantic chunking and embedding processes.
+  //
+  // Supports multiple processing configurations applied to the same document.
+  repeated SemanticProcessingResult semantic_results = 18;
+  // Digital Object Identifier for academic papers and publications.
+  optional string doi = 19;
+  // Neutral document outline for navigation and chunking.
+  //
+  // Supports EPUB TOC, HTML headings, Markdown headings, LaTeX sections, PDF outlines, etc.
+  optional DocOutline doc_outline = 20;
+  // Links discovered within the document.
+  //
+  // Useful for analyzing document relationships and external references.
+  repeated LinkReference discovered_links = 21;
+  // Path portion of source_uri for categorization.
+  //
+  // Example: "/docs/legal/NY/file.pdf" from "https://example.com/docs/legal/NY/file.pdf"
+  optional string source_path = 22;
+  // Split path segments from source_path.
+  //
+  // Example: ["docs", "legal", "NY", "file.pdf"]
+  repeated string source_path_segments = 23;
+  // Last segment of source_path.
+  //
+  // Example: "file.pdf" from "/docs/legal/NY/file.pdf"
+  optional string source_slug = 24;
+}
+
+// Collection of keywords extracted from a document.
+message Keywords {
+  // List of keyword strings for search and categorization.
+  repeated string keyword = 1;
+}
+
+// Key-value tag collection for flexible document categorization.
+message Tags {
+  // Tag data as key-value pairs for custom metadata.
+  map<string, string> tag_data = 1;
+}
+
+// Format-neutral document outline representation.
+//
+// Populated from various sources: EPUB nav/TOC, HTML headings, Markdown headings,
+// LaTeX sectioning, PDF outlines, etc. Provides consistent structure for navigation.
+message DocOutline {
+  // Sections in preorder traversal order.
+  repeated Section sections = 1;
+}
+
+// Single section within a document outline.
+//
+// Represents a heading, chapter, section, or other structural element.
+message Section {
+  // Stable identifier if present in source document.
+  optional string id = 1;
+  // Section title or heading text.
+  optional string title = 2;
+  // Nesting depth where 0 is top level.
+  int32 depth = 3;
+  // Heading level (HTML h1=1, Markdown #=1, 0 if unknown).
+  int32 heading_level = 4;
+  // Relative link or fragment identifier if applicable.
+  optional string href = 5;
+  // Parent section identifier for hierarchical navigation.
+  optional string parent_id = 6;
+  // Preorder position index within the document.
+  int32 order_index = 7;
+  // Classification tags (e.g., "chapter", "appendix", "figure", "table", "nav").
+  repeated string tags = 8;
+  // Relative font size (0.0-1.0) if inferred from styling.
+  optional float font_size_rel = 9;
+  // Starting page number if known (PDF/EPUB).
+  optional int32 page_start = 10;
+  // Ending page number if known (PDF/EPUB).
+  optional int32 page_end = 11;
+}
+
+// Reference to a link discovered within a document.
+//
+// Used for analyzing document relationships and external references.
+message LinkReference {
+  // Href or absolute URL when resolvable.
+  string url = 1;
+  // Anchor text or link label.
+  optional string text = 2;
+  // rel attribute if present (e.g., "nofollow", "canonical").
+  optional string rel = 3;
+  // MIME type attribute or inferred type.
+  optional string type = 4;
+  // Whether the link points to a different host than source_uri.
+  optional bool is_external = 5;
+}
+
+// Container for one or more binary blobs.
+//
+// Supports either a single blob or multiple blobs for flexible content storage.
+message BlobBag {
+  // Either a single blob or multiple blobs.
+  oneof blob_data {
+    // Single blob content.
+    Blob blob = 1;
+    // Multiple blob contents.
+    Blobs blobs = 2;
+  }
+}
+
+// Collection of multiple blobs.
+message Blobs {
+  // List of blob objects.
+  repeated Blob blob = 1;
+}
+
+// Reference to a file stored in S3 or external storage.
+//
+// Maps to the virtual filesystem's drive and object key structure.
+message FileStorageReference {
+  // Drive name mapping to S3 bucket name.
+  string drive_name = 1;
+  // Object path/key within the bucket.
+  string object_key = 2;
+  // S3 version ID if versioning is enabled.
+  optional string version_id = 3;
+}
+
+// Binary blob with flexible storage options.
+//
+// Supports both inline data storage (for small files or sensitive data) and
+// external S3 storage references. Metadata is always stored in the database.
+message Blob {
+  // Unique identifier for this blob.
+  string blob_id = 1;
+  // Drive/bucket identifier where this blob belongs.
+  string drive_id = 2;
+  // Blob content stored either inline or externally.
+  oneof content {
+    // Inline binary data for small files or sensitive content.
+    bytes data = 3;
+    // Reference to external S3 storage for large files.
+    FileStorageReference storage_ref = 4;
+  }
+  // MIME type of the blob content.
+  optional string mime_type = 5;
+  // Original filename if available.
+  optional string filename = 6;
+  // Character encoding for text-based blobs.
+  optional string encoding = 7;
+  // Size of the blob content in bytes.
+  int64 size_bytes = 8;
+  // Checksum value for integrity verification.
+  optional string checksum = 9;
+  // Type of checksum algorithm used.
+  ChecksumType checksum_type = 10;
+  // Additional blob metadata stored in the database.
+  optional google.protobuf.Struct metadata = 11;
+}
+
+// Checksum algorithm types for blob integrity verification.
+enum ChecksumType {
+  // Unspecified checksum type.
+  CHECKSUM_TYPE_UNSPECIFIED = 0;
+  // MD5 checksum.
+  CHECKSUM_TYPE_MD5 = 1;
+  // SHA-1 checksum.
+  CHECKSUM_TYPE_SHA1 = 2;
+  // SHA-256 checksum.
+  CHECKSUM_TYPE_SHA256 = 3;
+  // SHA-512 checksum.
+  CHECKSUM_TYPE_SHA512 = 4;
+}
+
+// Metadata for tracking stream processing history and context.
+//
+// Contains execution records, tracing information, and error tracking for a stream.
+message StreamMetadata {
+  // Source identifier for validation and tracking.
+  string source_id = 2;
+  // Timestamp when the stream was created.
+  google.protobuf.Timestamp created_at = 3;
+  // Timestamp when the stream was last processed.
+  google.protobuf.Timestamp last_processed_at = 4;
+  // Distributed tracing identifier.
+  string trace_id = 5;
+  // Complete execution history of all processing steps.
+  repeated StepExecutionRecord history = 6;
+  // Critical stream-level errors if any occurred.
+  optional ErrorData stream_error = 7;
+  // Stream-level context parameters for processing.
+  map<string, string> context_params = 8;
+}
+
+// TCP-like packet header for node-to-node document processing.
+//
+// Contains the document payload, routing information, processing history,
+// and configuration for the current processing step.
+message PipeStream {
+  // Unique identifier for this processing stream.
+  string stream_id = 1;
+  // Stream metadata including history and tracing.
+  StreamMetadata metadata = 2;
+  // The document being processed.
+  PipeDoc document = 3;
+  // Cluster where processing is occurring.
+  string cluster_id = 4;
+  // Current node processing this stream.
+  string current_node_id = 5;
+  // Number of processing hops taken.
+  int64 hop_count = 6;
+  // Ordered list of node IDs traversed during processing.
+  repeated string processing_path = 7;
+  // Configuration for the current node's processing step.
+  NodeProcessingConfig node_processing_config = 8;
+}
+
+// Processing intent for a document.
+enum Intent {
+  // Unspecified intent.
+  INTENT_UNSPECIFIED = 0;
+  // Add new document to the index.
+  INTENT_ADD = 1;
+  // Update existing document in the index.
+  INTENT_UPDATE = 2;
+}
+
+// Field mapping configuration for protobuf transformation.
+//
+// Defines how to transform data between processing steps using various mapping strategies.
+message ProcessingMapping {
+  // Unique identifier for this mapping.
+  string mapping_id = 1;
+  // Source field paths to map from.
+  //
+  // For AGGREGATE, multiple paths are used. For other types, only the first is used.
+  repeated string source_field_paths = 2;
+  // Target field paths to map to.
+  //
+  // For SPLIT, multiple paths are used. For other types, only the first is used.
+  repeated string target_field_paths = 3;
+  // Type of mapping operation to perform.
+  MappingType mapping_type = 4;
+  // Configuration specific to the mapping type.
+  //
+  // Only one should be set, corresponding to mapping_type. DIRECT mappings require no config.
+  oneof mapping_config {
+    // Configuration for TRANSFORM mappings.
+    TransformConfig transform_config = 5;
+    // Configuration for AGGREGATE mappings.
+    AggregateConfig aggregate_config = 6;
+    // Configuration for SPLIT mappings.
+    SplitConfig split_config = 7;
+  }
+}
+
+// Type of field mapping operation.
+enum MappingType {
+  // Unspecified mapping type.
+  MAPPING_TYPE_UNSPECIFIED = 0;
+  // Direct field-to-field copy.
+  MAPPING_TYPE_DIRECT = 1;
+  // Apply transformation function to field.
+  MAPPING_TYPE_TRANSFORM = 2;
+  // Combine multiple source fields into one target.
+  MAPPING_TYPE_AGGREGATE = 3;
+  // Split one source field into multiple targets.
+  MAPPING_TYPE_SPLIT = 4;
+}
+
+// Configuration for field transformation mappings.
+message TransformConfig {
+  // Name of the transformation rule to apply.
+  //
+  // Examples: "uppercase", "trim", "substring", "date_format"
+  string rule_name = 1;
+  // Optional parameters for the transformation rule.
+  //
+  // Example: for "substring", params could be {"start": 0, "end": 10}
+  optional google.protobuf.Struct params = 2;
+}
+
+// Configuration for field aggregation mappings.
+message AggregateConfig {
+  // Type of aggregation operation.
+  enum AggregationType {
+    // Unspecified aggregation type.
+    AGGREGATION_TYPE_UNSPECIFIED = 0;
+    // Concatenate string values.
+    AGGREGATION_TYPE_CONCATENATE = 1;
+    // Sum numerical values.
+    AGGREGATION_TYPE_SUM = 2;
+  }
+  // Type of aggregation to perform.
+  AggregationType aggregation_type = 1;
+  // Delimiter for concatenating strings.
+  //
+  // Example: " " to join with a space.
+  optional string delimiter = 2;
+}
+
+// Configuration for field splitting mappings.
+message SplitConfig {
+  // Delimiter to use for splitting a string.
+  string delimiter = 1;
+}
+
+// Node-specific processing configuration.
+//
+// Defines pre/post mappings and custom configuration for a processing node.
+message NodeProcessingConfig {
+  // Node identifier for this configuration.
+  string node_id = 1;
+  // Field mappings applied before node processing.
+  repeated ProcessingMapping pre_mappings = 2;
+  // Field mappings applied after node processing.
+  repeated ProcessingMapping post_mappings = 3;
+  // Processing intent for this record.
+  Intent intent = 4;
+  // Node-specific custom configuration.
+  google.protobuf.Any node_config = 5;
+}
+
+// Vector embedding for a document or document segment.
+//
+// Typically represents embeddings for whole documents or large non-chunk segments.
+message Embedding {
+  // Model identifier that generated this embedding.
+  optional string model_id = 1;
+  // Vector representation as floating-point values.
+  repeated float vector = 2;
+}
+
+// Text content and vector embedding for a single chunk.
+message ChunkEmbedding {
+  // Actual text content of the chunk.
+  string text_content = 1;
+  // Vector embedding for this chunk's text.
+  repeated float vector = 2;
+  // Unique identifier for this chunk.
+  optional string chunk_id = 3;
+  // Character offset where chunk starts in original document.
+  optional int32 original_char_start_offset = 4;
+  // Character offset where chunk ends in original document.
+  optional int32 original_char_end_offset = 5;
+  // Identifier for a group of related chunks.
+  optional string chunk_group_id = 6;
+  // Identifier for the chunking configuration used.
+  optional string chunk_config_id = 7;
+}
+
+// Single semantic chunk with its text and embedding.
+message SemanticChunk {
+  // Unique identifier for this chunk within its parent result.
+  string chunk_id = 1;
+  // Sequential number of this chunk within its parent result.
+  int64 chunk_number = 2;
+  // Text and embedding information for this chunk.
+  ChunkEmbedding embedding_info = 3;
+  // Chunk-specific metadata (e.g., page number, section).
+  map<string, google.protobuf.Value> metadata = 4;
+}
+
+// Complete result of semantic chunking and embedding process.
+//
+// Represents one specific processing configuration applied to a PipeDoc field.
+// A PipeDoc can contain multiple such results from different configurations.
+message SemanticProcessingResult {
+  // Unique identifier for this result set.
+  string result_id = 1;
+  // Name of the PipeDoc field that was processed.
+  //
+  // Examples: "body", "title", "abstract"
+  string source_field_name = 2;
+  // Identifier for the chunking configuration used.
+  //
+  // Examples: "sentence_splitter_v1", "token_chunker_512_overlap_50"
+  string chunk_config_id = 3;
+  // Identifier for the embedding model/configuration used.
+  //
+  // Examples: "ada_002_v1", "minilm_l6_v1"
+  string embedding_config_id = 4;
+  // Generated name for this result set.
+  //
+  // Used as field name prefix in search indexes or for UI display/selection.
+  // Examples: "body_chunks_ada_002", "title_sentences_minilm"
+  optional string result_set_name = 5;
+  // List of semantic chunks with embeddings from this configuration.
+  repeated SemanticChunk chunks = 6;
+  // Processing run metadata (e.g., model version, execution time).
+  map<string, google.protobuf.Value> metadata = 7;
+}
+
+// Execution record for a single pipeline processing step.
+//
+// Tracks the execution details, timing, status, and any errors for a step.
+message StepExecutionRecord {
+  // Sequential hop number for this step in the processing stream.
+  int64 hop_number = 1;
+  // Name of the pipeline step configuration that was executed.
+  string step_name = 2;
+  // Identifier of the service instance/pod that executed the step.
+  optional string service_instance_id = 3;
+  // Timestamp when step processing began.
+  google.protobuf.Timestamp start_time = 4;
+  // Timestamp when step processing ended.
+  google.protobuf.Timestamp end_time = 5;
+  // Execution outcome status.
+  //
+  // Expected values: "SUCCESS", "FAILURE", "SKIPPED", "RETRYING", "DISPATCH_FAILURE"
+  string status = 6;
+  // Logs from the processor for this step's execution.
+  repeated string processor_logs = 7;
+  // Error information if status is "FAILURE".
+  optional ErrorData error_info = 8;
+  // Target step name if status is "DISPATCH_FAILURE".
+  optional string attempted_target_step_name = 9;
+}
+
+// Error information for a failed processing step.
+//
+// Captures error details, timing, and input state for debugging and reproducibility.
+message ErrorData {
+  // Human-readable error description.
+  string error_message = 1;
+  // Machine-readable error code.
+  //
+  // Examples: "CONFIG_VALIDATION_ERROR", "TIMEOUT_ERROR", "PARSE_ERROR"
+  optional string error_code = 2;
+  // Technical details such as stack trace snippets.
+  optional string technical_details = 3;
+  // Name of the step where the error originated or was detected.
+  string originating_step_name = 4;
+  // Target step name if error occurred during routing/dispatch.
+  optional string attempted_target_step_name = 5;
+  // Input state at the time of failure for reproducibility.
+  optional FailedStepInputState input_state_at_failure = 6;
+  // Timestamp when the error occurred or was logged.
+  google.protobuf.Timestamp timestamp = 7;
+}
+
+// Snapshot of input state when a processing step failed.
+//
+// Used for debugging and reproducing failures by capturing the exact state.
+message FailedStepInputState {
+  // PipeDoc state before the failed step was attempted.
+  optional PipeDoc doc_state = 1;
+  // Blob state before the failed step was attempted.
+  optional Blob blob_state = 2;
+  // Custom JSON configuration provided to the failed step.
+  optional google.protobuf.Struct custom_config_struct = 3;
+  // Configuration parameters provided to the failed step.
+  map<string, string> config_params = 4;
+}

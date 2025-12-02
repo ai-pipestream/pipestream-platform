@@ -81,8 +81,9 @@ public class RegistrationClient {
             asyncStub.registerService(request, new StreamObserver<RegisterServiceResponse>() {
                 @Override
                 public void onNext(RegisterServiceResponse response) {
-                    LOG.debugf("Received registration response: status=%s, message=%s", 
-                            response.getStatus(), response.getMessage());
+                    var event = response.getEvent();
+                    LOG.debugf("Received registration event: type=%s, message=%s",
+                            event.getEventType(), event.getMessage());
                     emitter.emit(response);
                 }
 
@@ -104,61 +105,30 @@ public class RegistrationClient {
     /**
      * Unregister a service.
      *
-     * @param serviceId The service ID to unregister
+     * @param serviceName The service name
+     * @param host The service host
+     * @param port The service port
      * @return Uni of the unregister response
      */
-    public Uni<UnregisterServiceResponse> unregisterService(String serviceId) {
+    public Uni<UnregisterServiceResponse> unregisterService(String serviceName, String host, int port) {
         ensureChannel();
 
         return Uni.createFrom().item(() -> {
             UnregisterServiceRequest request = UnregisterServiceRequest.newBuilder()
-                    .setServiceId(serviceId)
+                    .setServiceName(serviceName)
+                    .setHost(host)
+                    .setPort(port)
                     .build();
 
-            LOG.infof("Unregistering service: %s", serviceId);
-            
+            LOG.infof("Unregistering service: %s at %s:%d", serviceName, host, port);
+
             UnregisterServiceResponse response = blockingStub
                     .withDeadlineAfter(config.registrationService().timeout().toMillis(), TimeUnit.MILLISECONDS)
                     .unregisterService(request);
-            
+
             LOG.infof("Unregister response: success=%s, message=%s", response.getSuccess(), response.getMessage());
             return response;
         });
-    }
-
-    /**
-     * Update health status for a registered service.
-     *
-     * @param serviceId The service ID
-     * @param status The health status
-     * @param message Optional message
-     * @return Uni of the health update response
-     */
-    public Uni<HealthUpdateResponse> updateHealth(String serviceId, HealthStatus status, String message) {
-        ensureChannel();
-
-        return Uni.createFrom().deferred(() -> Uni.createFrom().item(() -> {
-            Instant now = Instant.now();
-            Timestamp timestamp = Timestamp.newBuilder()
-                    .setSeconds(now.getEpochSecond())
-                    .setNanos(now.getNano())
-                    .build();
-
-            HealthUpdateRequest request = HealthUpdateRequest.newBuilder()
-                    .setServiceId(serviceId)
-                    .setStatus(status)
-                    .setMessage(message != null ? message : "")
-                    .setTimestamp(timestamp)
-                    .build();
-
-            LOG.tracef("Updating health for service %s: status=%s", serviceId, status);
-            
-            HealthUpdateResponse response = blockingStub
-                    .withDeadlineAfter(config.registrationService().timeout().toMillis(), TimeUnit.MILLISECONDS)
-                    .updateHealth(request);
-            
-            return response;
-        }));
     }
 
     @PreDestroy

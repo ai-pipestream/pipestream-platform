@@ -1,0 +1,5 @@
+version: v2
+deps:
+  - buf.build/pipestreamai/registration
+  - buf.build/pipestreamai/pipeline-module
+  - buf.build/pipestreamai/common

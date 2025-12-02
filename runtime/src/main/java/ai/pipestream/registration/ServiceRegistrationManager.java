@@ -1,7 +1,7 @@
 package ai.pipestream.registration;
 
 import ai.pipestream.platform.registration.v1.RegisterServiceResponse;
-import ai.pipestream.platform.registration.v1.RegistrationStatus;
+import ai.pipestream.platform.registration.v1.EventType;
 import ai.pipestream.registration.config.RegistrationConfig;
 import ai.pipestream.registration.model.RegistrationState;
 import ai.pipestream.registration.model.ServiceInfo;
@@ -20,9 +20,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Manages the service registration lifecycle.
- * 
- * <p>Automatically registers the service on startup, reports health periodically,
- * and deregisters gracefully on shutdown.
+ *
+ * <p>Automatically registers the service on startup and deregisters gracefully on shutdown.
+ * Health checking is handled by Consul via standard gRPC health checks.
  */
 @ApplicationScoped
 public class ServiceRegistrationManager {
@@ -32,7 +32,6 @@ public class ServiceRegistrationManager {
 
     private final RegistrationClient registrationClient;
     private final ServiceMetadataCollector metadataCollector;
-    private final HealthReporter healthReporter;
     private final RegistrationConfig config;
 
     private final AtomicReference<String> serviceId = new AtomicReference<>();
@@ -42,11 +41,9 @@ public class ServiceRegistrationManager {
     @Inject
     public ServiceRegistrationManager(RegistrationClient registrationClient,
                                        ServiceMetadataCollector metadataCollector,
-                                       HealthReporter healthReporter,
                                        RegistrationConfig config) {
         this.registrationClient = registrationClient;
         this.metadataCollector = metadataCollector;
-        this.healthReporter = healthReporter;
         this.config = config;
     }
 
@@ -66,14 +63,11 @@ public class ServiceRegistrationManager {
         }
 
         LOG.info("Shutting down service registration");
-        
+
         // Cancel any ongoing registration
         if (registrationSubscription != null) {
             registrationSubscription.cancel();
         }
-
-        // Stop health reporting
-        healthReporter.stopHealthReporting();
 
         // Deregister the service
         String currentServiceId = serviceId.get();
@@ -100,7 +94,7 @@ public class ServiceRegistrationManager {
                     .withJitter(DEFAULT_RETRY_JITTER)
                     .atMost(maxAttempts)
                 .subscribe().with(
-                        response -> LOG.debugf("Registration update received: %s", response.getStatus()),
+                        response -> LOG.debugf("Registration update received: %s", response.getEvent().getEventType()),
                         failure -> {
                             LOG.errorf(failure, "Registration failed after %d attempts", maxAttempts);
                             state.set(RegistrationState.FAILED);
@@ -110,37 +104,34 @@ public class ServiceRegistrationManager {
     }
 
     private void handleRegistrationResponse(RegisterServiceResponse response) {
-        LOG.infof("Registration response: status=%s, serviceId=%s, message=%s",
-                response.getStatus(), response.getServiceId(), response.getMessage());
+        var event = response.getEvent();
+        LOG.infof("Registration event: type=%s, message=%s", event.getEventType(), event.getMessage());
 
-        if (response.getStatus() == RegistrationStatus.REGISTRATION_STATUS_REGISTERED) {
-            String newServiceId = response.getServiceId();
+        if (event.getEventType() == EventType.EVENT_TYPE_COMPLETED) {
+            String newServiceId = event.getServiceId();
             serviceId.set(newServiceId);
             state.set(RegistrationState.REGISTERED);
-            
             LOG.infof("Service registered successfully with ID: %s", newServiceId);
-            
-            // Start health reporting
-            healthReporter.startHealthReporting(newServiceId);
-        } else if (response.getStatus() == RegistrationStatus.REGISTRATION_STATUS_FAILED) {
-            LOG.errorf("Registration failed: %s", response.getMessage());
+        } else if (event.getEventType() == EventType.EVENT_TYPE_FAILED) {
+            LOG.errorf("Registration failed: %s", event.getErrorDetail());
             state.set(RegistrationState.FAILED);
         }
     }
 
     private void deregister(String serviceId) {
         state.set(RegistrationState.DEREGISTERING);
-        
+
         try {
-            LOG.infof("Deregistering service: %s", serviceId);
-            
-            registrationClient.unregisterService(serviceId)
+            ServiceInfo info = metadataCollector.collect();
+            LOG.infof("Deregistering service: %s at %s:%d", info.getServiceName(), info.getHost(), info.getPort());
+
+            registrationClient.unregisterService(info.getServiceName(), info.getHost(), info.getPort())
                     .await().atMost(Duration.ofSeconds(10));
-            
+
             state.set(RegistrationState.DEREGISTERED);
             LOG.info("Service deregistered successfully");
         } catch (Exception e) {
-            LOG.warnf(e, "Failed to deregister service: %s", serviceId);
+            LOG.warnf(e, "Failed to deregister service");
             // Still mark as deregistered since we're shutting down anyway
             state.set(RegistrationState.DEREGISTERED);
         }

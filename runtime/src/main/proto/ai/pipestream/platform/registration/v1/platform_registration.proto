@@ -2,77 +2,603 @@ syntax = "proto3";
 
 package ai.pipestream.platform.registration.v1;
 
+import "ai/pipestream/data/module/v1/module_service.proto";
 import "google/protobuf/timestamp.proto";
 
 option java_multiple_files = true;
 option java_outer_classname = "PlatformRegistrationProto";
 option java_package = "ai.pipestream.platform.registration.v1";
 
-// Simple registration service - just the basics!
+// Unified registration service for all platform services and modules.
+//
+// Provides centralized service discovery via Consul with health monitoring,
+// module schema management via Apicurio Registry, and real-time event streaming
+// for registration lifecycle tracking.
 service PlatformRegistrationService {
-  // Register a service with streaming status updates
+  // Register a service with streaming status updates.
+  //
+  // Returns a stream of RegistrationEvent messages tracking progress through
+  // validation, Consul registration, health check configuration, and completion.
   rpc RegisterService(RegisterServiceRequest) returns (stream RegisterServiceResponse);
-  
-  // Unregister a service
+
+  // Register a module (document processor) with streaming status updates.
+  //
+  // Extends service registration by adding schema validation, Apicurio registration,
+  // and module-specific metadata handling.
+  rpc RegisterModule(RegisterModuleRequest) returns (stream RegisterModuleResponse);
+
+  // Unregister a service from Consul and the platform registry.
   rpc UnregisterService(UnregisterServiceRequest) returns (UnregisterServiceResponse);
-  
-  // Update health status
+
+  // Unregister a module from Consul and the platform registry.
+  rpc UnregisterModule(UnregisterModuleRequest) returns (UnregisterModuleResponse);
+
+  // List all registered services with health status and metadata.
+  rpc ListServices(ListServicesRequest) returns (ListServicesResponse);
+
+  // List all registered modules with schema and capability information.
+  rpc ListModules(ListModulesRequest) returns (ListModulesResponse);
+
+  // Get specific service details by name or Consul service ID.
+  rpc GetService(GetServiceRequest) returns (GetServiceResponse);
+
+  // Get specific module details by name or Consul service ID.
+  rpc GetModule(GetModuleRequest) returns (GetModuleResponse);
+
+  // Resolve service endpoint for dynamic routing.
+  //
+  // Returns the best available instance of a service based on health and load.
+  // Supports preference criteria like local instances or required capabilities.
+  rpc ResolveService(ResolveServiceRequest) returns (ResolveServiceResponse);
+
+  // Watch for real-time updates to the list of all healthy services.
+  //
+  // The server will send an initial list, and then send a new full
+  // list whenever any service is registered, unregistered, or changes
+  // its health status.
+  rpc WatchServices(WatchServicesRequest) returns (stream WatchServicesResponse);
+
+  // Watch for real-time updates to the list of all registered modules.
+  //
+  // The server will send an initial list, and then send a new full
+  // list whenever any module is registered, unregistered, or changes
+  // its health status.
+  rpc WatchModules(WatchModulesRequest) returns (stream WatchModulesResponse);
+
+  // Get module schema from Apicurio Registry.
+  //
+  // Retrieves either a specific version or the latest schema for a module.
+  // Returns JSON Schema used for validating module configuration.
+  rpc GetModuleSchema(GetModuleSchemaRequest) returns (GetModuleSchemaResponse);
+
+  // List all available schema versions for a module.
+  //
+  // Provides detailed version metadata from Apicurio Registry including
+  // creation timestamps and version-specific descriptions.
+  rpc GetModuleSchemaVersions(GetModuleSchemaVersionsRequest) returns (GetModuleSchemaVersionsResponse);
+
+  // Update health status for a registered service.
+  //
+  // Allows services to report their health status periodically without re-registering.
   rpc UpdateHealth(HealthUpdateRequest) returns (HealthUpdateResponse);
 }
 
-// Simple registration request
+// Request to register a service with the platform.
+//
+// Provides the information needed to register a service instance with Consul
+// and make it discoverable to other platform components.
 message RegisterServiceRequest {
+  // Logical service name (e.g., "mapping-service").
   string service_name = 1;
+  // Host where service is running.
   string host = 2;
+  // gRPC port where service accepts connections.
   int32 port = 3;
+  // Service version (e.g., "1.2.3").
   string version = 4;
+  // Additional metadata for service configuration.
   map<string, string> metadata = 5;
+  // Tags for discovery and filtering (e.g., "production", "us-east-1").
+  repeated string tags = 6;
+  // Service capabilities (e.g., "document-storage", "search").
+  repeated string capabilities = 7;
 }
 
-// Registration response with streaming updates
+// Request to register a module (document processor) with the platform.
+//
+// Extends service registration by including module-specific metadata,
+// schema information, and processing capabilities. Triggers schema
+// validation and Apicurio Registry registration.
+message RegisterModuleRequest {
+  // Module name (e.g., "tika-parser", "chunker").
+  string module_name = 1;
+  // Host where module is running.
+  string host = 2;
+  // gRPC port where module accepts connections.
+  int32 port = 3;
+  // Module version (e.g., "1.2.3").
+  string version = 4;
+  // Additional metadata for module configuration.
+  map<string, string> metadata = 5;
+  // Module-specific metadata including schema and capabilities.
+  //
+  // Contains input/output formats, document types supported, and schema definition.
+  ai.pipestream.data.module.v1.GetServiceRegistrationResponse service_registration_metadata = 6;
+}
+
+// Response for RegisterService RPC (streaming).
+//
+// Tracks registration progress through lifecycle stages including validation,
+// Consul registration, health check configuration, and completion.
 message RegisterServiceResponse {
-  string service_id = 1;
-  RegistrationStatus status = 2;
+  // Registration event data.
+  RegistrationEvent event = 1;
+}
+
+// Response for RegisterModule RPC (streaming).
+//
+// Tracks registration progress including schema validation and Apicurio registration.
+message RegisterModuleResponse {
+  // Registration event data.
+  RegistrationEvent event = 1;
+}
+
+// Streaming registration event tracking registration progress.
+//
+// Sent during RegisterService and RegisterModule RPCs to provide real-time
+// updates on registration lifecycle stages including validation, Consul
+// registration, health check configuration, schema registration, and completion.
+message RegistrationEvent {
+  // Type of event indicating the registration stage.
+  EventType event_type = 1;
+  // Timestamp when this event occurred.
+  google.protobuf.Timestamp timestamp = 2;
+  // Human-readable message describing the event.
   string message = 3;
-  google.protobuf.Timestamp timestamp = 4;
+  // Event-specific data providing additional context.
+  oneof event_data {
+    // Consul service ID when successfully registered.
+    string service_id = 4;
+    // Error details if registration failed.
+    string error_detail = 5;
+    // Additional event metadata as key-value pairs.
+    EventMetadata metadata = 6;
+  }
 }
 
-// Unregister request
+// Event metadata wrapper for key-value pairs.
+//
+// Required because maps cannot be used directly in oneofs.
+message EventMetadata {
+  // Metadata values as key-value pairs.
+  map<string, string> values = 1;
+}
+
+// Registration event types tracking lifecycle stages.
+//
+// Represents the progression of service or module registration from initial
+// validation through Consul registration, health checks, schema validation,
+// and final completion or failure.
+enum EventType {
+  // Unspecified event type.
+  EVENT_TYPE_UNSPECIFIED = 0;
+  // Registration process started.
+  EVENT_TYPE_STARTED = 1;
+  // Input validated successfully.
+  EVENT_TYPE_VALIDATED = 2;
+  // Successfully registered with Consul.
+  EVENT_TYPE_CONSUL_REGISTERED = 3;
+  // Health check configured in Consul.
+  EVENT_TYPE_HEALTH_CHECK_CONFIGURED = 4;
+  // Service reported healthy to Consul.
+  EVENT_TYPE_CONSUL_HEALTHY = 5;
+  // Registration completed successfully.
+  EVENT_TYPE_COMPLETED = 6;
+  // Registration failed at any stage.
+  EVENT_TYPE_FAILED = 7;
+  // Module metadata fetched from module callback (modules only).
+  EVENT_TYPE_METADATA_RETRIEVED = 8;
+  // Schema validated or synthesized (modules only).
+  EVENT_TYPE_SCHEMA_VALIDATED = 9;
+  // Registration persisted to database.
+  EVENT_TYPE_DATABASE_SAVED = 10;
+  // Schema registered in Apicurio Registry (modules only).
+  EVENT_TYPE_APICURIO_REGISTERED = 11;
+}
+
+// Request to unregister a service.
+//
+// Uses natural key (service_name + host + port) to identify the specific
+// instance to unregister from Consul and the platform registry.
 message UnregisterServiceRequest {
-  string service_id = 1;
+  // Service name.
+  string service_name = 1;
+  // Host where instance is running.
+  string host = 2;
+  // Port where instance accepts connections.
+  int32 port = 3;
 }
 
-// Unregister response
+// Request to unregister a module.
+//
+// Uses natural key (module_name + host + port) to identify the specific
+// instance to unregister from Consul and the platform registry.
+message UnregisterModuleRequest {
+  // Module name.
+  string module_name = 1;
+  // Host where instance is running.
+  string host = 2;
+  // Port where instance accepts connections.
+  int32 port = 3;
+}
+
+// Response from service unregistration operation.
 message UnregisterServiceResponse {
+  // Whether unregistration succeeded.
   bool success = 1;
+  // Status or error message.
+  string message = 2;
+  // Timestamp when unregistration completed.
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+// Response from module unregistration operation.
+message UnregisterModuleResponse {
+  // Whether unregistration succeeded.
+  bool success = 1;
+  // Status or error message.
+  string message = 2;
+  // Timestamp when unregistration completed.
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+// Request to look up service details.
+//
+// Supports lookup by logical name (returns all instances) or by specific
+// Consul service ID (returns single instance).
+message GetServiceRequest {
+  // Lookup key for finding the service.
+  oneof lookup_key {
+    // Look up by logical name (returns all instances).
+    string service_name = 1;
+    // Look up by specific Consul service ID (returns single instance).
+    string service_id = 2;
+  }
+}
+
+// Request to look up module details.
+//
+// Supports lookup by logical name (returns all instances) or by specific
+// Consul service ID (returns single instance).
+message GetModuleRequest {
+  // Lookup key for finding the module.
+  oneof lookup_key {
+    // Look up by logical name (returns all instances).
+    string module_name = 1;
+    // Look up by specific Consul service ID (returns single instance).
+    string service_id = 2;
+  }
+}
+
+// Request to resolve service endpoint for dynamic routing.
+//
+// Finds the best available service instance based on health status, load,
+// and optional preference criteria like locality or required capabilities.
+message ResolveServiceRequest {
+  // Service name to resolve (e.g., "mapping-service").
+  string service_name = 1;
+  // Prefer instance on same host as caller.
+  bool prefer_local = 2;
+  // Only return instances with all of these tags.
+  repeated string required_tags = 3;
+  // Only return instances with all of these capabilities.
+  repeated string required_capabilities = 4;
+}
+
+// Response from service resolution containing the best available instance.
+//
+// Provides complete connection details for the selected instance along with
+// metadata explaining the selection decision.
+message ResolveServiceResponse {
+  // Whether a healthy instance was found.
+  bool found = 1;
+  // Service name that was resolved.
+  string service_name = 2;
+  // Host of the selected instance.
+  string host = 3;
+  // Port of the selected instance.
+  int32 port = 4;
+  // Consul service ID of the selected instance.
+  string service_id = 5;
+  // Additional metadata from the selected instance.
+  map<string, string> metadata = 6;
+  // Tags associated with the selected instance.
+  repeated string tags = 7;
+  // Capabilities of the selected instance.
+  repeated string capabilities = 8;
+  // Version of the selected instance.
+  string version = 9;
+  // Total number of instances found (including unhealthy).
+  int32 total_instances = 10;
+  // Number of healthy instances considered.
+  int32 healthy_instances = 11;
+  // Explanation of why this instance was selected.
+  string selection_reason = 12;
+  // Timestamp when resolution occurred.
+  google.protobuf.Timestamp resolved_at = 13;
+}
+
+// Complete details for a registered service instance.
+//
+// Includes connection information, metadata, health status, and registration timestamps.
+message GetServiceResponse {
+  // Logical service name.
+  string service_name = 1;
+  // Consul service ID for this specific instance.
+  string service_id = 2;
+  // Host where service is running.
+  string host = 3;
+  // Port where service accepts connections.
+  int32 port = 4;
+  // Service version.
+  string version = 5;
+  // Service metadata.
+  map<string, string> metadata = 6;
+  // Service tags for discovery.
+  repeated string tags = 7;
+  // Service capabilities.
+  repeated string capabilities = 8;
+  // Whether this instance is currently healthy.
+  bool is_healthy = 9;
+  // Timestamp when service was registered.
+  google.protobuf.Timestamp registered_at = 10;
+  // Timestamp of last health check.
+  google.protobuf.Timestamp last_health_check = 11;
+}
+
+// Complete details for a registered module instance.
+//
+// Extends service details with module-specific information including
+// input/output formats and document type support.
+message GetModuleResponse {
+  // Module name.
+  string module_name = 1;
+  // Consul service ID for this specific instance.
+  string service_id = 2;
+  // Host where module is running.
+  string host = 3;
+  // Port where module accepts connections.
+  int32 port = 4;
+  // Module version.
+  string version = 5;
+  // Module metadata.
+  map<string, string> metadata = 6;
+  // Input format expected by module (e.g., "PipeDoc", "text/plain").
+  string input_format = 7;
+  // Output format produced by module (e.g., "PipeDoc", "application/json").
+  string output_format = 8;
+  // Document types this module can process (e.g., "pdf", "docx", "image").
+  repeated string document_types = 9;
+  // Whether this instance is currently healthy.
+  bool is_healthy = 10;
+  // Timestamp when module was registered.
+  google.protobuf.Timestamp registered_at = 11;
+  // Timestamp of last health check.
+  google.protobuf.Timestamp last_health_check = 12;
+}
+
+// Request to list all registered services.
+message ListServicesRequest {}
+
+// Request to list all registered modules.
+message ListModulesRequest {}
+
+// Request to watch for service registration changes.
+message WatchServicesRequest {}
+
+// Request to watch for module registration changes.
+message WatchModulesRequest {}
+
+// Response containing list of all registered services.
+message ListServicesResponse {
+  // List of all registered service instances with their details.
+  repeated GetServiceResponse services = 1;
+  // Timestamp when this snapshot was captured.
+  google.protobuf.Timestamp as_of = 2;
+  // Total count of service instances.
+  int32 total_count = 3;
+}
+
+// Response for WatchServices RPC (streaming).
+message WatchServicesResponse {
+  // List of all registered service instances with their details.
+  repeated GetServiceResponse services = 1;
+  // Timestamp when this snapshot was captured.
+  google.protobuf.Timestamp as_of = 2;
+  // Total count of service instances.
+  int32 total_count = 3;
+}
+
+// Response containing list of all registered modules.
+message ListModulesResponse {
+  // List of all registered module instances with their details.
+  repeated GetModuleResponse modules = 1;
+  // Timestamp when this snapshot was captured.
+  google.protobuf.Timestamp as_of = 2;
+  // Total count of module instances.
+  int32 total_count = 3;
+}
+
+// Response for WatchModules RPC (streaming).
+message WatchModulesResponse {
+  // List of all registered module instances with their details.
+  repeated GetModuleResponse modules = 1;
+  // Timestamp when this snapshot was captured.
+  google.protobuf.Timestamp as_of = 2;
+  // Total count of module instances.
+  int32 total_count = 3;
+}
+
+// Event published to Kafka when a service is registered.
+//
+// Used for OpenSearch indexing and event tracking. Published after
+// successful Consul registration and health check configuration.
+message ServiceRegistered {
+  // Consul service ID.
+  string service_id = 1;
+  // Logical service name.
+  string service_name = 2;
+  // Host where service is running.
+  string host = 3;
+  // Port where service accepts connections.
+  int32 port = 4;
+  // Service version.
+  string version = 5;
+  // Timestamp when service was registered.
+  google.protobuf.Timestamp timestamp = 6;
+}
+
+// Event published to Kafka when a service is unregistered.
+//
+// Used for OpenSearch indexing and event tracking. Published after
+// successful removal from Consul.
+message ServiceUnregistered {
+  // Consul service ID that was unregistered.
+  string service_id = 1;
+  // Logical service name.
+  string service_name = 2;
+  // Timestamp when service was unregistered.
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+// Event published to Kafka when a module is registered.
+//
+// Used for OpenSearch indexing and event tracking. Published after
+// successful Consul registration, schema validation, and Apicurio registration.
+message ModuleRegistered {
+  // Consul service ID.
+  string service_id = 1;
+  // Module name.
+  string module_name = 2;
+  // Host where module is running.
+  string host = 3;
+  // Port where module accepts connections.
+  int32 port = 4;
+  // Module version.
+  string version = 5;
+  // Internal schema identifier.
+  string schema_id = 6;
+  // Apicurio Registry artifact ID for module schema.
+  string apicurio_artifact_id = 7;
+  // Timestamp when module was registered.
+  google.protobuf.Timestamp timestamp = 8;
+}
+
+// Event published to Kafka when a module is unregistered.
+//
+// Used for OpenSearch indexing and event tracking. Published after
+// successful removal from Consul.
+message ModuleUnregistered {
+  // Consul service ID that was unregistered.
+  string service_id = 1;
+  // Module name.
+  string module_name = 2;
+  // Timestamp when module was unregistered.
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+// Request to retrieve module configuration schema from Apicurio Registry.
+message GetModuleSchemaRequest {
+  // Module name (e.g., "chunker", "parser").
+  string module_name = 1;
+  // Specific version to retrieve. If omitted, returns latest from Apicurio.
+  optional string version = 2;
+}
+
+// Response containing module configuration schema.
+//
+// Provides JSON Schema definition used to validate module configuration
+// along with version information and available versions.
+message GetModuleSchemaResponse {
+  // Module name.
+  string module_name = 1;
+  // JSON Schema definition as string.
+  string schema_json = 2;
+  // Current schema version (e.g., "1.2.3").
+  string schema_version = 3;
+  // Apicurio Registry artifact ID.
+  string artifact_id = 4;
+  // Additional metadata (author, description, etc.).
+  map<string, string> metadata = 5;
+  // Timestamp when schema was last updated in Apicurio Registry.
+  google.protobuf.Timestamp updated_at = 6;
+  // All versions available in Apicurio Registry.
+  repeated string available_versions = 7;
+}
+
+// Request to list all schema versions for a module.
+message GetModuleSchemaVersionsRequest {
+  // Module name to get versions for.
+  string module_name = 1;
+}
+
+// Response containing all schema versions for a module.
+//
+// Provides detailed version history from Apicurio Registry including
+// creation timestamps and version-specific metadata.
+message GetModuleSchemaVersionsResponse {
+  // Module name.
+  string module_name = 1;
+  // Apicurio Registry artifact ID.
+  string artifact_id = 2;
+  // Detailed information for each version.
+  repeated ModuleSchemaVersion versions = 3;
+  // Latest version string for convenience.
+  string latest_version = 4;
+}
+
+// Metadata for a single schema version.
+message ModuleSchemaVersion {
+  // Version string (e.g., "1.2.3").
+  string version = 1;
+  // Timestamp when this version was created.
+  google.protobuf.Timestamp created_at = 2;
+  // Version-specific metadata.
+  map<string, string> metadata = 3;
+  // Optional version description or changelog.
+  optional string description = 4;
+}
+
+// Request to update health status for a registered service.
+message HealthUpdateRequest {
+  // Service name.
+  string service_name = 1;
+  // Host where service is running.
+  string host = 2;
+  // Port where service accepts connections.
+  int32 port = 3;
+  // Current health status.
+  HealthStatus status = 4;
+  // Timestamp of health check.
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+// Response from health update operation.
+message HealthUpdateResponse {
+  // Whether update succeeded.
+  bool success = 1;
+  // Status or error message.
   string message = 2;
 }
 
-// Health update request
-message HealthUpdateRequest {
-  string service_id = 1;
-  HealthStatus status = 2;
-  string message = 3;
-  google.protobuf.Timestamp timestamp = 4;
-}
-
-// Health update response
-message HealthUpdateResponse {
-  bool acknowledged = 1;
-}
-
-// Registration status enum
-enum RegistrationStatus {
-  REGISTRATION_STATUS_UNSPECIFIED = 0;
-  REGISTRATION_STATUS_PENDING = 1;
-  REGISTRATION_STATUS_REGISTERED = 2;
-  REGISTRATION_STATUS_FAILED = 3;
-}
-
-// Health status enum
+// Health status for a service.
 enum HealthStatus {
+  // Health status unknown.
   HEALTH_STATUS_UNSPECIFIED = 0;
-  HEALTH_STATUS_UP = 1;
-  HEALTH_STATUS_DOWN = 2;
-  HEALTH_STATUS_UNKNOWN = 3;
+  // Service is healthy and ready.
+  HEALTH_STATUS_HEALTHY = 1;
+  // Service is unhealthy.
+  HEALTH_STATUS_UNHEALTHY = 2;
+  // Service is starting up.
+  HEALTH_STATUS_STARTING = 3;
 }

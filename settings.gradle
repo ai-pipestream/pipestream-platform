@@ -9,7 +9,7 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'quarkus-dynamic-grpc-extension'
+rootProject.name = 'quarkus-dynamic-grpc'
 
 dependencyResolutionManagement {
     repositories {

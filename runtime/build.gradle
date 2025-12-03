@@ -1,38 +1,43 @@
 plugins {
     id 'java-library'
     id 'io.quarkus.extension'
+    id 'build.buf'
     id 'com.google.protobuf'
+}
+
+buf {
+    toolVersion = '1.47.2'
 }
 
 quarkusExtension {
     deploymentModule = ':deployment'
 }
 
-dependencies {
-    // Quarkus
-    api enforcedPlatform("io.quarkus:quarkus-bom:${quarkusVersion}")
-    api 'io.quarkus:quarkus-arc'
-    api 'io.quarkus:quarkus-grpc'
-    api 'io.quarkus:quarkus-smallrye-health'
-    
-    // gRPC and Protobuf
-    api "io.grpc:grpc-protobuf:${grpcVersion}"
-    api "io.grpc:grpc-stub:${grpcVersion}"
-    api "io.grpc:grpc-netty-shaded:${grpcVersion}"
-    api "com.google.protobuf:protobuf-java:${protobufVersion}"
-    api "com.google.protobuf:protobuf-java-util:${protobufVersion}"
-    
-    // Mutiny for reactive
-    api 'io.smallrye.reactive:mutiny:2.6.2'
-    
-    // Annotation processor
-    annotationProcessor enforcedPlatform("io.quarkus:quarkus-bom:${quarkusVersion}")
-    annotationProcessor 'io.quarkus:quarkus-extension-processor'
-    
-    // gRPC annotation processor
-    api "javax.annotation:javax.annotation-api:1.3.2"
+// 1. Define export path (build dir only, never src)
+def bufExportDir = file("$buildDir/generated/buf-protos")
+
+// 2. Clean export directory before sync (prevents orphaned files)
+tasks.register('cleanProtos', Delete) {
+    delete bufExportDir
 }
 
+// 3. Export protos from buf.build using plugin-managed buf binary
+tasks.register('syncProtos') {
+    dependsOn 'cleanProtos'
+    outputs.dir(bufExportDir)
+    doLast {
+        def bufExecutable = configurations.getByName('bufTool').singleFile
+        bufExecutable.setExecutable(true)
+        bufExportDir.mkdirs()
+        exec {
+            commandLine bufExecutable, 'export',
+                'buf.build/pipestreamai/registration',
+                '--output', bufExportDir.path
+        }
+    }
+}
+
+// 4. Configure protobuf plugin to generate from exported protos with Mutiny support
 protobuf {
     protoc {
         artifact = "com.google.protobuf:protoc:${protobufVersion}"
@@ -41,24 +46,52 @@ protobuf {
         grpc {
             artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
         }
+        mutiny {
+            artifact = "io.quarkus:quarkus-grpc-protoc-plugin:${quarkusVersion}"
+        }
     }
     generateProtoTasks {
         all()*.plugins {
             grpc {}
+            mutiny {}
         }
     }
 }
 
+// 5. Point protobuf plugin to exported protos
 sourceSets {
     main {
+        proto {
+            srcDir bufExportDir
+        }
         java {
             srcDirs 'build/generated/source/proto/main/grpc'
             srcDirs 'build/generated/source/proto/main/java'
+            srcDirs 'build/generated/source/proto/main/mutiny'
         }
     }
 }
 
-// Make sure proto generation happens before compile
-tasks.named('compileJava') {
-    dependsOn 'generateProto'
+// 6. Ensure syncProtos runs before proto extraction/generation
+tasks.named('extractProto').configure { dependsOn 'syncProtos' }
+tasks.named('extractIncludeProto').configure { dependsOn 'syncProtos' }
+tasks.named('generateProto').configure { dependsOn 'syncProtos' }
+tasks.named('compileJava').configure { dependsOn 'generateProto' }
+
+dependencies {
+    api enforcedPlatform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    api 'io.quarkus:quarkus-arc'
+    api 'io.quarkus:quarkus-grpc'
+    api 'io.quarkus:quarkus-smallrye-health'
+
+    // gRPC and Protobuf runtime
+    api "io.grpc:grpc-protobuf:${grpcVersion}"
+    api "io.grpc:grpc-stub:${grpcVersion}"
+    api "io.grpc:grpc-netty-shaded:${grpcVersion}"
+    api "com.google.protobuf:protobuf-java:${protobufVersion}"
+    api "com.google.protobuf:protobuf-java-util:${protobufVersion}"
+
+    annotationProcessor enforcedPlatform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+    api "javax.annotation:javax.annotation-api:1.3.2"
 }

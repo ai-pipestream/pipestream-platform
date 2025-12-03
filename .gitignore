@@ -41,3 +41,4 @@ Thumbs.db
 
 # Generated proto files are in build directory
 # (already covered by **/build/)
+bin

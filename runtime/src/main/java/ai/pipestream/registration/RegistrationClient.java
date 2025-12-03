@@ -3,23 +3,22 @@ package ai.pipestream.registration;
 import ai.pipestream.platform.registration.v1.*;
 import ai.pipestream.registration.config.RegistrationConfig;
 import ai.pipestream.registration.model.ServiceInfo;
-import com.google.protobuf.Timestamp;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.stub.StreamObserver;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
-import io.smallrye.mutiny.subscription.MultiEmitter;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
-import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
 /**
  * gRPC client wrapper for the platform-registration-service.
+ *
+ * Uses the unified Register/Unregister RPCs.
  */
 @ApplicationScoped
 public class RegistrationClient {
@@ -43,14 +42,14 @@ public class RegistrationClient {
                 if (channel == null) {
                     String host = config.registrationService().host();
                     int port = config.registrationService().port();
-                    
+
                     LOG.infof("Creating gRPC channel to registration service at %s:%d", host, port);
-                    
+
                     channel = ManagedChannelBuilder
                             .forAddress(host, port)
                             .usePlaintext()
                             .build();
-                    
+
                     asyncStub = PlatformRegistrationServiceGrpc.newStub(channel);
                     blockingStub = PlatformRegistrationServiceGrpc.newBlockingStub(channel);
                 }
@@ -59,28 +58,48 @@ public class RegistrationClient {
     }
 
     /**
-     * Register a service and receive streaming status updates.
+     * Register a service or module and receive streaming status updates.
      *
      * @param serviceInfo The service information to register
      * @return Multi of registration responses
      */
-    public Multi<RegisterServiceResponse> registerService(ServiceInfo serviceInfo) {
+    public Multi<RegisterResponse> register(ServiceInfo serviceInfo) {
         ensureChannel();
 
-        RegisterServiceRequest request = RegisterServiceRequest.newBuilder()
-                .setServiceName(serviceInfo.getServiceName())
-                .setHost(serviceInfo.getHost())
-                .setPort(serviceInfo.getPort())
-                .setVersion(serviceInfo.getVersion() != null ? serviceInfo.getVersion() : "")
-                .putAllMetadata(serviceInfo.getMetadata())
-                .build();
+        // Build connectivity
+        Connectivity.Builder connectivityBuilder = Connectivity.newBuilder()
+                .setAdvertisedHost(serviceInfo.getAdvertisedHost())
+                .setAdvertisedPort(serviceInfo.getAdvertisedPort())
+                .setTlsEnabled(serviceInfo.isTlsEnabled());
 
-        LOG.infof("Registering service: %s", serviceInfo.getServiceName());
+        if (serviceInfo.getInternalHost() != null) {
+            connectivityBuilder.setInternalHost(serviceInfo.getInternalHost());
+        }
+        if (serviceInfo.getInternalPort() != null) {
+            connectivityBuilder.setInternalPort(serviceInfo.getInternalPort());
+        }
+
+        // Build request
+        RegisterRequest.Builder requestBuilder = RegisterRequest.newBuilder()
+                .setName(serviceInfo.getName())
+                .setType(serviceInfo.getType())
+                .setConnectivity(connectivityBuilder.build())
+                .putAllMetadata(serviceInfo.getMetadata())
+                .addAllTags(serviceInfo.getTags())
+                .addAllCapabilities(serviceInfo.getCapabilities());
+
+        if (serviceInfo.getVersion() != null) {
+            requestBuilder.setVersion(serviceInfo.getVersion());
+        }
+
+        RegisterRequest request = requestBuilder.build();
+
+        LOG.infof("Registering %s: %s", serviceInfo.getType().name(), serviceInfo.getName());
 
         return Multi.createFrom().emitter(emitter -> {
-            asyncStub.registerService(request, new StreamObserver<RegisterServiceResponse>() {
+            asyncStub.register(request, new StreamObserver<RegisterResponse>() {
                 @Override
-                public void onNext(RegisterServiceResponse response) {
+                public void onNext(RegisterResponse response) {
                     var event = response.getEvent();
                     LOG.debugf("Received registration event: type=%s, message=%s",
                             event.getEventType(), event.getMessage());
@@ -89,13 +108,15 @@ public class RegistrationClient {
 
                 @Override
                 public void onError(Throwable t) {
-                    LOG.errorf(t, "Registration failed for service: %s", serviceInfo.getServiceName());
+                    LOG.errorf(t, "Registration failed for %s: %s",
+                            serviceInfo.getType().name(), serviceInfo.getName());
                     emitter.fail(t);
                 }
 
                 @Override
                 public void onCompleted() {
-                    LOG.infof("Registration stream completed for service: %s", serviceInfo.getServiceName());
+                    LOG.infof("Registration stream completed for %s: %s",
+                            serviceInfo.getType().name(), serviceInfo.getName());
                     emitter.complete();
                 }
             });
@@ -103,28 +124,28 @@ public class RegistrationClient {
     }
 
     /**
-     * Unregister a service.
+     * Unregister a service or module.
      *
-     * @param serviceName The service name
-     * @param host The service host
-     * @param port The service port
+     * @param name The service/module name
+     * @param host The host
+     * @param port The port
      * @return Uni of the unregister response
      */
-    public Uni<UnregisterServiceResponse> unregisterService(String serviceName, String host, int port) {
+    public Uni<UnregisterResponse> unregister(String name, String host, int port) {
         ensureChannel();
 
         return Uni.createFrom().item(() -> {
-            UnregisterServiceRequest request = UnregisterServiceRequest.newBuilder()
-                    .setServiceName(serviceName)
+            UnregisterRequest request = UnregisterRequest.newBuilder()
+                    .setName(name)
                     .setHost(host)
                     .setPort(port)
                     .build();
 
-            LOG.infof("Unregistering service: %s at %s:%d", serviceName, host, port);
+            LOG.infof("Unregistering: %s at %s:%d", name, host, port);
 
-            UnregisterServiceResponse response = blockingStub
+            UnregisterResponse response = blockingStub
                     .withDeadlineAfter(config.registrationService().timeout().toMillis(), TimeUnit.MILLISECONDS)
-                    .unregisterService(request);
+                    .unregister(request);
 
             LOG.infof("Unregister response: success=%s, message=%s", response.getSuccess(), response.getMessage());
             return response;

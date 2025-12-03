@@ -1,13 +1,12 @@
 package ai.pipestream.registration;
 
-import ai.pipestream.platform.registration.v1.RegisterServiceResponse;
+import ai.pipestream.platform.registration.v1.RegisterResponse;
 import ai.pipestream.platform.registration.v1.EventType;
 import ai.pipestream.registration.config.RegistrationConfig;
 import ai.pipestream.registration.model.RegistrationState;
 import ai.pipestream.registration.model.ServiceInfo;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
-import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.subscription.Cancellable;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -79,14 +78,14 @@ public class ServiceRegistrationManager {
     private void registerWithRetry() {
         state.set(RegistrationState.REGISTERING);
         ServiceInfo serviceInfo = metadataCollector.collect();
-        
+
         AtomicInteger attempts = new AtomicInteger(0);
         int maxAttempts = config.retry().maxAttempts();
         Duration initialDelay = config.retry().initialDelay();
         Duration maxDelay = config.retry().maxDelay();
         double multiplier = config.retry().multiplier();
 
-        registrationSubscription = registrationClient.registerService(serviceInfo)
+        registrationSubscription = registrationClient.register(serviceInfo)
                 .onItem().invoke(this::handleRegistrationResponse)
                 .onFailure().invoke(t -> LOG.warnf(t, "Registration attempt failed"))
                 .onFailure().retry()
@@ -103,7 +102,7 @@ public class ServiceRegistrationManager {
                 );
     }
 
-    private void handleRegistrationResponse(RegisterServiceResponse response) {
+    private void handleRegistrationResponse(RegisterResponse response) {
         var event = response.getEvent();
         LOG.infof("Registration event: type=%s, message=%s", event.getEventType(), event.getMessage());
 
@@ -123,9 +122,10 @@ public class ServiceRegistrationManager {
 
         try {
             ServiceInfo info = metadataCollector.collect();
-            LOG.infof("Deregistering service: %s at %s:%d", info.getServiceName(), info.getHost(), info.getPort());
+            LOG.infof("Deregistering: %s at %s:%d",
+                    info.getName(), info.getAdvertisedHost(), info.getAdvertisedPort());
 
-            registrationClient.unregisterService(info.getServiceName(), info.getHost(), info.getPort())
+            registrationClient.unregister(info.getName(), info.getAdvertisedHost(), info.getAdvertisedPort())
                     .await().atMost(Duration.ofSeconds(10));
 
             state.set(RegistrationState.DEREGISTERED);

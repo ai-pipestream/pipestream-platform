@@ -1,5 +1,6 @@
 package ai.pipestream.registration;
 
+import ai.pipestream.platform.registration.v1.ServiceType;
 import ai.pipestream.registration.config.RegistrationConfig;
 import ai.pipestream.registration.model.ServiceInfo;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -7,13 +8,14 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Collects service metadata for registration.
- * 
+ *
  * <p>Auto-discovers service name, version, and other metadata from
  * Quarkus configuration and runtime environment.
  */
@@ -47,18 +49,30 @@ public class ServiceMetadataCollector {
      * @return ServiceInfo containing all collected metadata
      */
     public ServiceInfo collect() {
-        String serviceName = resolveServiceName();
+        String name = resolveServiceName();
+        ServiceType type = resolveServiceType();
         String version = resolveVersion();
-        String host = config.host();
-        int port = resolvePort();
+        String advertisedHost = config.advertisedHost();
+        int advertisedPort = resolveAdvertisedPort();
+        String internalHost = config.internalHost().orElse(null);
+        Integer internalPort = config.internalPort().orElse(null);
+        boolean tlsEnabled = config.tlsEnabled();
         Map<String, String> metadata = collectMetadata();
+        List<String> tags = config.tags().orElse(Collections.emptyList());
+        List<String> capabilities = config.capabilities().orElse(Collections.emptyList());
 
         ServiceInfo serviceInfo = ServiceInfo.builder()
-                .serviceName(serviceName)
+                .name(name)
+                .type(type)
                 .version(version)
-                .host(host)
-                .port(port)
+                .advertisedHost(advertisedHost)
+                .advertisedPort(advertisedPort)
+                .internalHost(internalHost)
+                .internalPort(internalPort)
+                .tlsEnabled(tlsEnabled)
                 .metadata(metadata)
+                .tags(tags)
+                .capabilities(capabilities)
                 .build();
 
         LOG.infof("Collected service metadata: %s", serviceInfo);
@@ -69,19 +83,25 @@ public class ServiceMetadataCollector {
         return config.serviceName().orElse(applicationName);
     }
 
-    private static final int DEFAULT_HTTP_PORT = 8080;
+    private ServiceType resolveServiceType() {
+        String typeString = config.type().toUpperCase();
+        return switch (typeString) {
+            case "MODULE" -> ServiceType.SERVICE_TYPE_MODULE;
+            case "SERVICE" -> ServiceType.SERVICE_TYPE_SERVICE;
+            default -> {
+                LOG.warnf("Unknown service type '%s', defaulting to SERVICE", typeString);
+                yield ServiceType.SERVICE_TYPE_SERVICE;
+            }
+        };
+    }
 
     private String resolveVersion() {
         return config.version().orElse(applicationVersion);
     }
 
-    private int resolvePort() {
-        // Use configured port if specified, otherwise use HTTP port
-        int configuredPort = config.port();
-        if (configuredPort != DEFAULT_HTTP_PORT) {
-            return configuredPort;
-        }
-        return httpPort;
+    private int resolveAdvertisedPort() {
+        // Use configured advertised port if specified, otherwise use gRPC port
+        return config.advertisedPort().orElse(grpcPort);
     }
 
     private Map<String, String> collectMetadata() {

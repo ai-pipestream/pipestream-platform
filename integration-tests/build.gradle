@@ -2,7 +2,7 @@ plugins {
     id 'java'
 }
 
-configurations.all {
+configurations.configureEach {
     resolutionStrategy {
         force "io.grpc:grpc-protobuf:${grpcVersion}"
         force "io.grpc:grpc-stub:${grpcVersion}"

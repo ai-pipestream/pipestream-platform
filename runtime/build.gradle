@@ -6,15 +6,21 @@ plugins {
 }
 
 buf {
-    toolVersion = '1.47.2'
+    toolVersion = '1.61.0'
 }
 
 quarkusExtension {
     deploymentModule = ':deployment'
 }
 
+// Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution
+// This task attempts to resolve deployment:runtimeClasspath during parallel execution without an exclusive lock
+tasks.matching { it.name == 'validateExtension' }.configureEach {
+    enabled = false
+}
+
 // 1. Define export path (build dir only, never src)
-def bufExportDir = file("$buildDir/generated/buf-protos")
+def bufExportDir = layout.buildDirectory.dir("generated/buf-protos").get().asFile
 
 // 2. Clean export directory before sync (prevents orphaned files)
 tasks.register('cleanProtos', Delete) {
@@ -22,18 +28,16 @@ tasks.register('cleanProtos', Delete) {
 }
 
 // 3. Export protos from buf.build using plugin-managed buf binary
-tasks.register('syncProtos') {
+tasks.register('syncProtos', Exec) {
     dependsOn 'cleanProtos'
     outputs.dir(bufExportDir)
-    doLast {
-        def bufExecutable = configurations.getByName('bufTool').singleFile
+    doFirst {
+        def bufExecutable = configurations.named('bufTool').get().singleFile
         bufExecutable.setExecutable(true)
         bufExportDir.mkdirs()
-        exec {
-            commandLine bufExecutable, 'export',
-                'buf.build/pipestreamai/registration',
-                '--output', bufExportDir.path
-        }
+        commandLine bufExecutable, 'export',
+            'buf.build/pipestreamai/registration',
+            '--output', bufExportDir.path
     }
 }
 
@@ -62,24 +66,22 @@ dependencies {
     mutinyGen "io.quarkus:quarkus-grpc-protoc-plugin:${quarkusVersion}"
 }
 
-task copyMutinyLibs(type: Copy) {
+tasks.register('copyMutinyLibs', Copy) {
     from configurations.mutinyGen
-    into "$buildDir/generator-libs"
+    into layout.buildDirectory.dir("generator-libs")
 }
 
-task generateMutinyStubs {
+tasks.register('generateMutinyStubs', Exec) {
     dependsOn 'syncProtos', 'copyMutinyLibs'
-    
-    doLast {
+
+    doFirst {
         // Ensure the script is executable (fixes issue where chmod might hang or fail)
         file('../scripts/protoc-gen-mutiny').setExecutable(true)
-        file("$buildDir/generated/source/proto/main/mutiny").mkdirs()
-        file("$buildDir/generated/buf-test/grpc").mkdirs()
+        layout.buildDirectory.dir("generated/source/proto/main/mutiny").get().asFile.mkdirs()
+        layout.buildDirectory.dir("generated/buf-test/grpc").get().asFile.mkdirs()
 
-        def bufExecutable = configurations.getByName('bufTool').singleFile
-        exec {
-            commandLine bufExecutable, 'generate', 'buf.build/pipestreamai/registration', '--template', 'buf.gen.yaml'
-        }
+        def bufExecutable = configurations.named('bufTool').get().singleFile
+        commandLine bufExecutable, 'generate', 'buf.build/pipestreamai/registration', '--template', 'buf.gen.yaml'
     }
 }
 
@@ -90,7 +92,7 @@ tasks.named('compileJava').configure { dependsOn 'generateMutinyStubs' }
 sourceSets {
     main {
         proto {
-            srcDir bufExportDir
+            srcDir(bufExportDir)
         }
         java {
             srcDirs 'build/generated/source/proto/main/grpc'
@@ -106,7 +108,7 @@ tasks.named('extractIncludeProto').configure { dependsOn 'syncProtos' }
 tasks.named('generateProto').configure { dependsOn 'syncProtos' }
 tasks.named('compileJava').configure { dependsOn 'generateProto' }
 
-configurations.all {
+configurations.configureEach {
     resolutionStrategy {
         force "io.grpc:grpc-protobuf:${grpcVersion}"
         force "io.grpc:grpc-stub:${grpcVersion}"

@@ -187,7 +187,7 @@ jobs:
           cd release-assets && zip -r ../pipestream-service-registration-extension-${{ steps.get_version.outputs.version }}.zip . && cd ..
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_version.outputs.tag }}
           name: Release ${{ steps.get_version.outputs.version }}
@@ -271,7 +271,7 @@ jobs:
         run: ./gradlew publish -PskipCentral=true --no-daemon --stacktrace
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
         env:

@@ -32,7 +32,8 @@ dependencies {
     testImplementation 'org.testcontainers:junit-jupiter'
 
     // Consul client for service registration in tests
-    testImplementation 'com.ecwid.consul:consul-api:1.4.5'
+    // https://mvnrepository.com/artifact/org.kiwiproject/consul-client
+    implementation 'org.kiwiproject:consul-client:1.9.0'
 
     // Our deployment module provides build-time setup
     testImplementation project(':deployment')

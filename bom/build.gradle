@@ -1,0 +1,159 @@
+plugins {
+    id 'pl.allegro.tech.build.axion-release'
+    id 'com.gradleup.nmcp' version '1.3.0'
+    id 'java-platform'
+    id 'maven-publish'
+    id 'version-catalog'
+    id 'signing'
+}
+
+// Independent versioning for BOM using axion-release
+scmVersion {
+    tag {
+        prefix = 'bom-v'
+        initialVersion { config, position -> '0.2.0' }
+    }
+    checks {
+        uncommittedChanges = false
+        aheadOfRemote = false
+        snapshotDependencies = false
+    }
+}
+
+group = 'ai.pipestream'
+version = scmVersion.version
+description = 'Pipestream Quarkus Extensions BOM'
+
+javaPlatform {
+    allowDependencies()
+}
+
+dependencies {
+    api platform("io.quarkus.platform:quarkus-bom:${quarkusVersion}")
+    api platform("io.grpc:grpc-bom:1.77.0")
+    api platform("com.google.protobuf:protobuf-bom:4.33.1")
+
+    constraints {
+        // Pipestream Quarkus Extensions
+        // These versions will be updated when extensions are published
+        api("ai.pipestream:pipestream-quarkus-devservices:0.1.3")
+        api("ai.pipestream:pipestream-quarkus-devservices-deployment:0.1.3")
+
+        api("ai.pipestream:quarkus-apicurio-registry-protobuf:0.0.3")
+        api("ai.pipestream:quarkus-apicurio-registry-protobuf-deployment:0.0.3")
+
+        api("ai.pipestream:quarkus-dynamic-grpc-extension:0.0.2")
+        api("ai.pipestream:quarkus-dynamic-grpc-extension-deployment:0.0.2")
+
+        api("ai.pipestream:pipestream-service-registration-extension:0.1.1")
+        api("ai.pipestream:pipestream-service-registration-extension-deployment:0.1.1")
+
+        // Extension dependencies
+        api("io.apicurio:apicurio-registry-protobuf-serde-kafka:3.1.4")
+        api("io.apicurio:apicurio-registry-java-sdk:3.1.4")
+        api("io.apicurio:apicurio-registry-common:3.1.4")
+    }
+}
+
+catalog {
+    versionCatalog {
+        from(files("gradle/libs.versions.toml"))
+    }
+}
+
+publishing {
+    publications {
+        create('maven', MavenPublication) {
+            from components.javaPlatform
+            artifactId = 'pipestream-extensions-bom'
+
+            pom {
+                name = 'Pipestream Quarkus Extensions BOM'
+                description = 'Bill of Materials for Pipestream Quarkus extensions'
+                url = 'https://github.com/ai-pipestream/pipestream-quarkus-extensions'
+
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'krickert'
+                        name = 'Krickert'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:https://github.com/ai-pipestream/pipestream-quarkus-extensions.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/ai-pipestream/pipestream-quarkus-extensions.git'
+                    url = 'https://github.com/ai-pipestream/pipestream-quarkus-extensions'
+                }
+            }
+        }
+
+        create('catalog', MavenPublication) {
+            from components.versionCatalog
+            artifactId = 'pipestream-extensions-bom-catalog'
+
+            pom {
+                name = 'Pipestream Quarkus Extensions BOM Catalog'
+                description = 'Version Catalog for Pipestream Quarkus extensions'
+                url = 'https://github.com/ai-pipestream/pipestream-quarkus-extensions'
+
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'krickert'
+                        name = 'Krickert'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:https://github.com/ai-pipestream/pipestream-quarkus-extensions.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/ai-pipestream/pipestream-quarkus-extensions.git'
+                    url = 'https://github.com/ai-pipestream/pipestream-quarkus-extensions'
+                }
+            }
+        }
+    }
+
+    repositories {
+        mavenLocal()
+
+        maven {
+            name = 'GitHubPackages'
+            url = uri('https://maven.pkg.github.com/ai-pipestream/pipestream-quarkus-extensions')
+            credentials {
+                username = findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
+                password = findProperty('gpr.key') ?: System.getenv('GITHUB_TOKEN')
+            }
+        }
+    }
+}
+
+nmcp {
+    publishAllPublicationsToCentralPortal {
+        username = findProperty('mavenCentralUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME')
+        password = findProperty('mavenCentralPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD')
+        publishingType = "AUTOMATIC"
+    }
+}
+
+signing {
+    def signingKey = System.getenv("GPG_SIGNING_KEY")
+    def signingPassword = System.getenv("GPG_SIGNING_PASSPHRASE")
+
+    if (signingKey && signingPassword) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+        sign publishing.publications
+    }
+}

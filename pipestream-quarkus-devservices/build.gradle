@@ -6,7 +6,8 @@ plugins {
 
 scmVersion {
     tag {
-        prefix = 'v'
+        prefix = 'devservices-v'
+        initialVersion { config, position -> '0.2.0' }
     }
     checks {
         uncommittedChanges = false

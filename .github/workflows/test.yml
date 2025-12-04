@@ -1,0 +1,75 @@
+name: Test All Extensions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Setup Buf
+        uses: bufbuild/buf-action@v1
+        with:
+          token: ${{ secrets.BUF_TOKEN }}
+          setup_only: true
+
+      - name: Test pipestream-quarkus-devservices
+        env:
+          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
+        run: |
+          cd pipestream-quarkus-devservices
+          ../gradlew clean build test --no-daemon
+
+      - name: Test quarkus-apicurio-registry-protobuf
+        env:
+          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
+        run: |
+          cd quarkus-apicurio-registry-protobuf
+          ../gradlew clean build test --no-daemon
+
+      - name: Test quarkus-dynamic-grpc-extension
+        env:
+          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
+        run: |
+          cd quarkus-dynamic-grpc-extension
+          ../gradlew clean build test --no-daemon
+
+      - name: Test pipestream-service-registration-extension
+        env:
+          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
+        run: |
+          cd pipestream-service-registration-extension
+          ../gradlew clean build test --no-daemon
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: test-results
+          path: |
+            **/build/test-results/
+            **/build/reports/

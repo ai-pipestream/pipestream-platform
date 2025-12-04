@@ -1,21 +1,63 @@
-.gradle
+# Gradle
+.gradle/
 **/build/
 !**/src/**/build/
-
-# Ignore Gradle GUI config
 gradle-app.setting
-
-# Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
+.gradletasknamecache
 !gradle-wrapper.jar
-
-# Avoid ignore Gradle wrappper properties
 !gradle-wrapper.properties
 
-# Cache of project
-.gradletasknamecache
+# IDE - IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
 
-# Eclipse Gradle plugin generated files
-# Eclipse Core
+# IDE - Eclipse
 .project
-# JDT-specific (Eclipse Java Development Tools)
 .classpath
+.settings/
+
+# IDE - VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated sources
+**/generated/
+**/generated-sources/
+
+# Maven (legacy)
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Quarkus
+quarkus.log
+.quarkus
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*~
+bin/
+
+# Build helpers
+.build/
+.dev-helpers/
+
+# Claude
+.claude

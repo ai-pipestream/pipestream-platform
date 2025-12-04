@@ -1,0 +1,26 @@
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+        mavenLocal()
+    }
+    plugins {
+        id 'io.quarkus' version "${quarkusPluginVersion}"
+        id 'pl.allegro.tech.build.axion-release' version "${axionReleaseVersion}"
+    }
+}
+
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'pipestream-quarkus-extensions'
+
+// BOM module
+include 'bom'
+
+// Extension modules
+include 'pipestream-quarkus-devservices'
+include 'quarkus-apicurio-registry-protobuf'
+include 'quarkus-dynamic-grpc-extension'
+include 'pipestream-service-registration-extension'

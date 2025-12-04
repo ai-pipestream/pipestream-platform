@@ -1,0 +1,36 @@
+[versions]
+quarkus = "3.30.2"
+grpc = "1.77.0"
+protobuf = "4.33.1"
+apicurio = "3.1.4"
+
+# Extension versions (updated when extensions publish)
+pipestream-devservices = "0.1.3"
+quarkus-apicurio-protobuf = "0.0.3"
+quarkus-dynamic-grpc = "0.0.2"
+pipestream-service-registration = "0.1.1"
+
+[libraries]
+# Quarkus
+quarkus-bom = { module = "io.quarkus.platform:quarkus-bom", version.ref = "quarkus" }
+
+# Pipestream Extensions
+pipestream-devservices = { module = "ai.pipestream:pipestream-quarkus-devservices", version.ref = "pipestream-devservices" }
+pipestream-devservices-deployment = { module = "ai.pipestream:pipestream-quarkus-devservices-deployment", version.ref = "pipestream-devservices" }
+
+quarkus-apicurio-protobuf = { module = "ai.pipestream:quarkus-apicurio-registry-protobuf", version.ref = "quarkus-apicurio-protobuf" }
+quarkus-apicurio-protobuf-deployment = { module = "ai.pipestream:quarkus-apicurio-registry-protobuf-deployment", version.ref = "quarkus-apicurio-protobuf" }
+
+quarkus-dynamic-grpc = { module = "ai.pipestream:quarkus-dynamic-grpc-extension", version.ref = "quarkus-dynamic-grpc" }
+quarkus-dynamic-grpc-deployment = { module = "ai.pipestream:quarkus-dynamic-grpc-extension-deployment", version.ref = "quarkus-dynamic-grpc" }
+
+pipestream-service-registration = { module = "ai.pipestream:pipestream-service-registration-extension", version.ref = "pipestream-service-registration" }
+pipestream-service-registration-deployment = { module = "ai.pipestream:pipestream-service-registration-extension-deployment", version.ref = "pipestream-service-registration" }
+
+# Dependencies
+apicurio-protobuf-serde = { module = "io.apicurio:apicurio-registry-protobuf-serde-kafka", version.ref = "apicurio" }
+apicurio-java-sdk = { module = "io.apicurio:apicurio-registry-java-sdk", version.ref = "apicurio" }
+apicurio-common = { module = "io.apicurio:apicurio-registry-common", version.ref = "apicurio" }
+
+[plugins]
+quarkus = { id = "io.quarkus", version.ref = "quarkus" }

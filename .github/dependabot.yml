@@ -1,0 +1,61 @@
+version: 2
+updates:
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # Root Gradle (BOM)
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      gradle-dependencies:
+        patterns:
+          - "*"
+
+  # pipestream-quarkus-devservices
+  - package-ecosystem: "gradle"
+    directory: "/pipestream-quarkus-devservices"
+    schedule:
+      interval: "weekly"
+    groups:
+      devservices-dependencies:
+        patterns:
+          - "*"
+
+  # quarkus-apicurio-registry-protobuf
+  - package-ecosystem: "gradle"
+    directory: "/quarkus-apicurio-registry-protobuf"
+    schedule:
+      interval: "weekly"
+    groups:
+      apicurio-dependencies:
+        patterns:
+          - "*"
+
+  # quarkus-dynamic-grpc-extension
+  - package-ecosystem: "gradle"
+    directory: "/quarkus-dynamic-grpc-extension"
+    schedule:
+      interval: "weekly"
+    groups:
+      dynamic-grpc-dependencies:
+        patterns:
+          - "*"
+
+  # pipestream-service-registration-extension
+  - package-ecosystem: "gradle"
+    directory: "/pipestream-service-registration-extension"
+    schedule:
+      interval: "weekly"
+    groups:
+      service-registration-dependencies:
+        patterns:
+          - "*"

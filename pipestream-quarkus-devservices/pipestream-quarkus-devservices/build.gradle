@@ -1,0 +1,134 @@
+plugins {
+    alias(libs.plugins.java.library)
+    alias(libs.plugins.quarkus.extension)
+    id 'maven-publish'
+    id 'signing'
+}
+
+description = 'Quarkus Pipeline DevServices Extension - Runtime'
+
+def javaVersion = 21
+
+quarkusExtension {
+    deploymentModule = 'pipestream-quarkus-devservices-deployment'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(javaVersion)
+    }
+    withJavadocJar()
+    withSourcesJar()
+}
+
+dependencies {
+    // Quarkus BOM provides platform properties for Quarkus plugin
+    implementation platform(libs.quarkus.bom)
+
+    // Quarkus BOM version comes from parent platform BOM
+    implementation 'io.quarkus:quarkus-core'
+    implementation 'io.quarkus:quarkus-arc'
+
+    // Annotation processor for extension metadata (usually enabled by the plugin, added here explicitly)
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+
+    // Test dependencies
+    implementation 'io.quarkus:quarkus-test-common'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+    testImplementation 'org.hamcrest:hamcrest'
+
+    // Gradle 9 requires explicit JUnit Platform launcher on the test runtime classpath
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+    }
+}
+
+// Harden Javadoc for all devservices subprojects (offline-safe by default)
+tasks.withType(Javadoc).configureEach { t ->
+    // Use only compile classpath to avoid generated resource outputs
+    t.classpath = files(sourceSets.main.compileClasspath)
+    def opts = t.options
+    opts.encoding = 'UTF-8'
+    opts.locale = 'en'
+    opts.charSet = 'UTF-8'
+    // Suppress missing docs warnings; keep other checks
+    opts.addStringOption('Xdoclint:-missing', '-quiet')
+    // External links (disabled by default to avoid network in closed environments).
+    // Enable explicitly via: -PenableExternalJavadocLinks
+    if (project.hasProperty('enableExternalJavadocLinks')) {
+        [
+            'https://docs.oracle.com/en/java/javase/21/docs/api/'
+        ].each { link -> opts.addStringOption('link', link) }
+    }
+    // Exclude non-API or internal packages
+    t.exclude('**/internal/**', '**/impl/**', '**/test/**')
+}
+
+// Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution
+// The extensionDescriptor task will still run without validation
+tasks.matching { it.name == 'validateExtension' }.configureEach {
+    enabled = false
+}
+
+publishing {
+    publications {
+        create('maven', MavenPublication) {
+            from components.java
+            artifactId = 'pipestream-quarkus-devservices'
+
+            pom {
+                name = 'pipestream-quarkus-devservices'
+                description = 'Quarkus extension for Pipeline DevServices - Runtime'
+                url = 'https://github.com/ai-pipestream/pipestream-quarkus-devservices'
+
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'krickert'
+                        name = 'Krickert'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:https://github.com/ai-pipestream/pipestream-quarkus-devservices.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/ai-pipestream/pipestream-quarkus-devservices.git'
+                    url = 'https://github.com/ai-pipestream/pipestream-quarkus-devservices'
+                }
+            }
+        }
+    }
+
+    repositories {
+        mavenLocal()
+        maven {
+            name = 'GitHubPackages'
+            url = uri('https://maven.pkg.github.com/ai-pipestream/pipestream-quarkus-devservices')
+            credentials {
+                username = System.getenv('GITHUB_ACTOR') ?: findProperty('gpr.user')
+                password = System.getenv('GITHUB_TOKEN') ?: findProperty('gpr.key')
+            }
+        }
+    }
+}
+
+signing {
+    def signingKey = System.getenv("GPG_SIGNING_KEY")
+    def signingPassword = System.getenv("GPG_SIGNING_PASSPHRASE")
+
+    if (signingKey && signingPassword) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+        sign publishing.publications
+    }
+}

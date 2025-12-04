@@ -1,0 +1,207 @@
+[versions]
+quarkus = "3.30.2"
+jandex-plugin = "2.3.0"
+commons-lang3 = "3.20.0"
+opennlp-tools = "2.5.6.1"
+jackson-module-jsonschema = "2.20.1"
+logging-manager = "3.4.1"
+opensearch = "3.3.0"
+httpclient5 = "5.5.1"
+# gRPC and Protobuf versions - match Quarkus defaults
+grpc = "1.77.0"
+protobuf = "4.33.1"
+
+# Quarkiverse extensions
+quinoa = "2.7.0"
+wiremock = "3.13.2"
+wiremock-standalone = "3.13.2"
+wiremock-grpc-extension = "0.11.0"
+hibernate-types = "2.2.0"
+quarkus-mcp-server = "1.8.0"
+# AWS SDK
+aws-sdk = "2.39.5"
+# Apicurio
+apicurio = "3.1.4"
+# Testing
+awaitility = "4.3.0"
+testcontainers = "2.0.2"
+testcontainers-junit = "1.21.3"
+assertj = "3.27.6"
+hamcrest = "3.0"
+json-schema-validator = "2.0.0"
+# Other libraries
+jgrapht = "1.5.2"
+jimfs = "1.3.1"
+memoryfilesystem = "2.8.2"
+# Apache Tika - using 4.0.0-SNAPSHOT for latest features
+#tika = "4.0.0-SNAPSHOT"
+tika4-shaded = "0.1.9"
+# Sample documents test data
+sample-documents = "0.2.2"
+# DJL (Deep Java Library)
+djl = "0.35.0"
+djl-pytorch-jni = "2.7.1-0.35.0"
+djl-pytorch-native = "2.7.1"
+# Apache Commons
+commons-io = "2.21.0"
+commons-compress = "1.28.0"
+opencsv = "5.12.0"
+mutiny-test-utils = "3.0.3"
+testcontainers-consul = "1.21.3"
+smallrye-reactive-messaging = "4.31.0"
+# Document parsing
+commonmark = "0.27.0"
+pdfbox = "3.0.6"
+# Security
+password4j = "1.8.4"
+pipestream-protos = "0.3.0"
+pipestream-wiremock-server = "0.1.2"
+
+[libraries]
+# Quarkus BOM
+quarkus-bom = { module = "io.quarkus.platform:quarkus-bom", version.ref = "quarkus" }
+quarkus-amazon-services-bom = { module = "io.quarkus.platform:quarkus-amazon-services-bom", version.ref = "quarkus" }
+
+# Quarkus extensions
+quarkus-grpc = { module = "io.quarkus:quarkus-grpc" }
+quarkus-mutiny = { module = "io.quarkus:quarkus-mutiny" }
+quarkus-arc = { module = "io.quarkus:quarkus-arc" }
+quarkus-rest = { module = "io.quarkus:quarkus-rest" }
+quarkus-rest-jackson = { module = "io.quarkus:quarkus-rest-jackson" }
+quarkus-jackson = { module = "io.quarkus:quarkus-jackson" }
+quarkus-logging-manager = { module = "io.quarkiverse.loggingmanager:quarkus-logging-manager", version.ref = "logging-manager"}
+quarkus-consul-config = { module = "io.quarkus:quarkus-consul-config" }
+quarkus-micrometer = { module = "io.quarkus:quarkus-micrometer" }
+quarkus-micrometer-registry-prometheus = { module = "io.quarkus:quarkus-micrometer-registry-prometheus" }
+quarkus-rest-client = { module = "io.quarkus:quarkus-rest-client" }
+quarkus-vertx = { module = "io.quarkus:quarkus-vertx" }
+quarkus-cache = { module = "io.quarkus:quarkus-cache" }
+quarkus-smallrye-stork = { module = "io.quarkus:quarkus-smallrye-stork" }
+quarkus-hibernate-validator = { module = "io.quarkus:quarkus-hibernate-validator" }
+quarkus-smallrye-openapi = { module = "io.quarkus:quarkus-smallrye-openapi" }
+quarkus-test-common = { module = "io.quarkus:quarkus-test-common" }
+
+# gRPC and Protobuf
+protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
+protoc = { module = "com.google.protobuf:protoc", version.ref = "protobuf" }
+protobuf-java-util = { module = "com.google.protobuf:protobuf-java-util", version.ref = "protobuf" }
+grpc-protobuf = { module = "io.grpc:grpc-protobuf", version.ref = "grpc" }
+grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
+grpc-services = { module = "io.grpc:grpc-services", version.ref = "grpc" }
+grpc-core = { module = "io.grpc:grpc-core", version.ref = "grpc" }
+grpc-api = { module = "io.grpc:grpc-api", version.ref = "grpc" }
+grpc-netty = { module = "io.grpc:grpc-netty", version.ref = "grpc" }
+proto-google-common-protos = { module = "com.google.api.grpc:proto-google-common-protos" }
+
+# Google Guava (version managed by Quarkus BOM)
+guava = { module = "com.google.guava:guava" }
+
+# Data processing
+opencsv = { module = "com.opencsv:opencsv", version.ref = "opencsv" }
+
+# Utility libraries
+commons-lang3 = { module = "org.apache.commons:commons-lang3", version.ref = "commons-lang3" }
+opennlp-tools = { module = "org.apache.opennlp:opennlp-tools", version.ref = "opennlp-tools" }
+jackson-module-jsonschema = { module = "com.fasterxml.jackson.module:jackson-module-jsonSchema", version.ref = "jackson-module-jsonschema" }
+
+# Testing
+quarkus-junit5 = { module = "io.quarkus:quarkus-junit5" }
+rest-assured = { module = "io.rest-assured:rest-assured" }
+mutiny-test-utils = { module = "io.smallrye.reactive:mutiny-test-utils", version.ref = "mutiny-test-utils" }
+awaitility = { module = "org.awaitility:awaitility", version.ref = "awaitility" }
+testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
+testcontainers-consul = { module = "org.testcontainers:consul", version.ref = "testcontainers-consul" }
+testcontainers-junit = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers-junit" }
+assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+hamcrest = { module = "org.hamcrest:hamcrest", version.ref = "hamcrest" }
+hamcrest-library = { module = "org.hamcrest:hamcrest-library", version.ref = "hamcrest" }
+json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "json-schema-validator" }
+quarkus-junit5-mockito = { module = "io.quarkus:quarkus-junit5-mockito" }
+
+# OpenSearch
+opensearch-java = { module = "org.opensearch.client:opensearch-java", version.ref = "opensearch" }
+
+# Apache HTTP Client
+httpclient5 = { module = "org.apache.httpcomponents.client5:httpclient5", version.ref = "httpclient5" }
+
+# Quarkiverse extensions
+quarkus-quinoa = { module = "io.quarkiverse.quinoa:quarkus-quinoa", version.ref = "quinoa" }
+quarkus-hibernate-types = { module = "io.quarkiverse.hibernatetypes:quarkus-hibernate-types", version.ref = "hibernate-types" }
+quarkus-mcp-server-sse = { module = "io.quarkiverse.mcp:quarkus-mcp-server-sse", version.ref = "quarkus-mcp-server" }
+
+# WireMock Standalone (for grpc-wiremock library)
+wiremock-standalone = { module = "org.wiremock:wiremock-standalone", version.ref = "wiremock-standalone" }
+wiremock-grpc-extension-standalone = { module = "org.wiremock:wiremock-grpc-extension-standalone", version.ref = "wiremock-grpc-extension" }
+wiremock-grpc-extension = { module = "org.wiremock:wiremock-grpc-extension", version.ref = "wiremock-grpc-extension" }
+wiremock-core = { module = "org.wiremock:wiremock", version.ref = "wiremock" }
+
+# AWS SDK
+aws-sdk-url-connection = { module = "software.amazon.awssdk:url-connection-client", version.ref = "aws-sdk" }
+aws-sdk-netty-nio = { module = "software.amazon.awssdk:netty-nio-client", version.ref = "aws-sdk" }
+
+# Apicurio Registry
+apicurio-registry-protobuf-serde = { module = "io.apicurio:apicurio-registry-protobuf-serde-kafka", version.ref = "apicurio" }
+apicurio-registry-java-sdk = { module = "io.apicurio:apicurio-registry-java-sdk", version.ref = "apicurio" }
+apicurio-registry-common = { module = "io.apicurio:apicurio-registry-common", version.ref = "apicurio" }
+
+# Other libraries
+jgrapht-core = { module = "org.jgrapht:jgrapht-core", version.ref = "jgrapht" }
+jimfs = { module = "com.google.jimfs:jimfs", version.ref = "jimfs" }
+memoryfilesystem = { module = "com.github.marschall:memoryfilesystem", version.ref = "memoryfilesystem" }
+
+# DJL (Deep Java Library)
+djl-huggingface-tokenizers = { module = "ai.djl.huggingface:tokenizers", version.ref = "djl" }
+djl-pytorch-model-zoo = { module = "ai.djl.pytorch:pytorch-model-zoo", version.ref = "djl" }
+djl-pytorch-jni = { module = "ai.djl.pytorch:pytorch-jni", version.ref = "djl-pytorch-jni" }
+
+
+# Apache Commons
+commons-io = { module = "commons-io:commons-io", version.ref = "commons-io" }
+commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
+
+# Document parsing
+commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
+pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
+
+# Security
+password4j = { module = "com.password4j:password4j", version.ref = "password4j" }
+
+# SmallRye Reactive Messaging (for testing)
+smallrye-reactive-messaging-in-memory = { module = "io.smallrye.reactive:smallrye-reactive-messaging-in-memory", version.ref = "smallrye-reactive-messaging" }
+smallrye-mutiny-vertx-web-client = { module = "io.smallrye.reactive:smallrye-mutiny-vertx-web-client" }
+smallrye-mutiny-vertx-consul-client = { module = "io.smallrye.reactive:smallrye-mutiny-vertx-consul-client" }
+smallrye-stork-service-discovery-consul = { module = "io.smallrye.stork:stork-service-discovery-consul" }
+smallrye-stork-service-discovery-static-list = { module = "io.smallrye.stork:stork-service-discovery-static-list" }
+smallrye-stork-configuration-generator = { module = "io.smallrye.stork:stork-configuration-generator" }
+
+# Vert.x
+vertx-grpc-client = { module = "io.vertx:vertx-grpc-client" }
+vertx-web-client = { module = "io.vertx:vertx-web-client" }
+vertx-consul-client = { module = "io.vertx:vertx-consul-client" }
+tika4-shaded = { module = "ai.pipestream:tika4-shaded", version.ref = "tika4-shaded" }
+
+# Sample documents test data
+pipestream-sample-doc-types = { module = "ai.pipestream:sample-doc-types", version.ref = "sample-documents" }
+pipestream-protos = { module = "ai.pipestream:pipestream-protos", version.ref = "pipestream-protos" }
+pipestream-test-documents = { module = "ai.pipestream:test-documents", version.ref = "sample-documents" }
+pipestream-parser-pipedoc-parsed = { module = "ai.pipestream:parser-pipedoc-parsed", version.ref = "sample-documents" }
+pipestream-double-chunked-pipedocs = { module = "ai.pipestream:double-chunked-pipedocs", version.ref = "sample-documents" }
+
+# WireMock gRPC Client (New Library)
+pipestream-wiremock-grpc-client = { module = "ai.pipestream:wiremock-grpc-client" }
+pipestream-wiremock-server = { module = "ai.pipestream:pipestream-wiremock-server", version.ref = "pipestream-wiremock-server" }
+
+[plugins]
+quarkus = { id = "io.quarkus", version.ref = "quarkus" }
+jandex = { id = "org.kordamp.gradle.jandex", version.ref = "jandex-plugin" }
+java = { id = "java" }
+java-library = { id = "java-library" }
+java-platform = { id = "java-platform" }
+maven-publish = { id = "maven-publish" }
+quarkus-extension = { id = "io.quarkus.extension", version.ref = "quarkus" }
+
+[bundles]
+# Common Quarkus dependencies
+quarkus-common = ["quarkus-arc", "quarkus-mutiny"]
+quarkus-grpc = ["quarkus-grpc"]
+quarkus-rest = ["quarkus-rest", "quarkus-rest-jackson"]

@@ -1,0 +1,60 @@
+plugins {
+    id 'pl.allegro.tech.build.axion-release' version '1.21.1'
+    id 'com.gradleup.nmcp.aggregation' version '1.3.0'
+    id 'maven-publish'
+}
+
+scmVersion {
+    tag {
+        prefix = 'v'
+    }
+    checks {
+        uncommittedChanges = false
+        aheadOfRemote = false
+        snapshotDependencies = false
+    }
+}
+
+allprojects {
+    group = 'ai.pipestream'
+    version = scmVersion.version
+}
+
+nmcpAggregation {
+    publishAllProjectsProbablyBreakingProjectIsolation()
+
+    centralPortal {
+        username = findProperty('mavenCentralUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME')
+        password = findProperty('mavenCentralPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD')
+        publishingType = "AUTOMATIC"
+    }
+}
+
+// Aggregate task to build everything
+tasks.register('buildAll') {
+    group = 'build'
+    description = 'Build all subprojects'
+    dependsOn subprojects.collect { it.tasks.named('build') }
+}
+
+// Aggregate task to publish everything to Maven Local
+tasks.register('publishAllToMavenLocal') {
+    group = 'publishing'
+    description = 'Publish all subprojects to Maven Local'
+    dependsOn subprojects.findAll { it.tasks.findByName('publishToMavenLocal') }
+        .collect { it.tasks.named('publishToMavenLocal') }
+}
+
+subprojects {
+    tasks.withType(Javadoc).configureEach {
+        doFirst {
+            def linkIterator = options.links().iterator()
+            while (linkIterator.hasNext()) {
+                def linkValue = linkIterator.next()
+                if (linkValue?.toString()?.contains('https://javadoc.io/doc/io.quarkus/quarkus-core')) {
+                    linkIterator.remove()
+                }
+            }
+        }
+    }
+}

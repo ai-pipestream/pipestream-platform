@@ -1,0 +1,44 @@
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    groups:
+      quarkus:
+        patterns:
+          - "io.quarkus*"
+          - "io.quarkus.platform*"
+      grpc:
+        patterns:
+          - "io.grpc*"
+          - "com.google.protobuf*"
+      google:
+        patterns:
+          - "com.google.cloud*"
+          - "com.google.api*"
+          - "com.google.api.grpc*"
+      testing:
+        patterns:
+          - "org.junit*"
+          - "org.mockito*"
+          - "org.assertj*"
+          - "io.rest-assured*"
+      kotlin:
+        patterns:
+          - "org.jetbrains.kotlin*"
+      build-tools:
+        patterns:
+          - "gradle*"
+          - "com.gradle*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5

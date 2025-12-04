@@ -1,0 +1,256 @@
+# This file defines the infrastructure services for the LOCAL DEVELOPMENT environment.
+# The canonical port allocation strategy is defined in /docs/architecture/endpoints/Port_allocations.md
+
+name: pipeline-shared-devservices
+
+networks:
+  pipeline-test-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+  opensearch_data:
+    driver: local
+  kafka-data:
+    driver: local
+  minio-data:
+    driver: local
+
+services:
+  # Consul for service discovery
+  consul:
+    container_name: pipeline-consul
+    image: hashicorp/consul:latest
+    networks:
+      - pipeline-test-network
+    ports:
+      - "8500:8500"       # Consul UI and HTTP API
+      - "8600:8600/tcp"   # Consul DNS TCP
+      - "8600:8600/udp"   # Consul DNS UDP
+    command: "agent -dev -client=0.0.0.0 -enable-local-script-checks=true"
+    environment:
+      CONSUL_BIND_INTERFACE: eth0
+    labels:
+      quarkus-dev-service-consul: shared
+    healthcheck:
+      test: ["CMD", "consul", "members"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # MySQL instance for services
+  mysql:
+    container_name: pipeline-mysql
+    image: mysql:8.0
+    networks:
+      - pipeline-test-network
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: pipeline
+      MYSQL_USER: pipeline
+      MYSQL_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Init script to create additional databases
+      - ./init-mysql.sql:/docker-entrypoint-initdb.d/init.sql
+    labels:
+      quarkus-dev-service-mysql: shared
+      # Wait for MySQL to be ready before considering service started
+      io.quarkus.devservices.compose.wait_for.logs: ".*ready for connections.*"
+      # Map MySQL JDBC URL to datasource property
+      io.quarkus.devservices.compose.config_map.jdbc_url: quarkus.datasource.jdbc.url
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  # Kafka in KRaft mode (proven configuration)
+  kafka:
+    container_name: pipeline-kafka
+    image: apache/kafka:latest
+    hostname: kafka
+    networks:
+      - pipeline-test-network
+    ports:
+      - "9094:9094"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,LOCALHOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,LOCALHOST://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,LOCALHOST://localhost:9094
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CLUSTER_ID: 'testcontainers'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_HEAP_OPTS: -Xmx4096M
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    labels:
+      quarkus-dev-service-kafka: shared
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Apicurio Registry v3
+  apicurio-registry:
+    container_name: pipeline-apicurio-registry
+    image: apicurio/apicurio-registry:3.0.13
+    networks:
+      - pipeline-test-network
+    ports:
+      - "8081:8080"
+    environment:
+      # Apicurio Registry storage configuration
+      APICURIO_STORAGE_KIND: 'sql'
+      APICURIO_STORAGE_SQL_KIND: 'mysql'
+      # Use standard Quarkus datasource properties for 3.0.13+
+      # Named datasource configuration: Apicurio uses datasource name 'mysql'
+      QUARKUS_DATASOURCE_MYSQL_DB_KIND: 'mysql'
+      QUARKUS_DATASOURCE_MYSQL_JDBC_URL: 'jdbc:mysql://mysql:3306/apicurio_registry?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&autoReconnect=true&connectTimeout=5000&socketTimeout=10000'
+      QUARKUS_DATASOURCE_MYSQL_USERNAME: 'pipeline'
+      QUARKUS_DATASOURCE_MYSQL_PASSWORD: 'password'
+    depends_on:
+      mysql:
+        condition: service_healthy
+    labels:
+      quarkus-dev-service-apicurio-registry: shared
+    healthcheck:
+      # Try multiple known health endpoints to accommodate image differences
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || curl -sf http://localhost:8080/q/health || curl -sf http://localhost:8080/q/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # Apicurio Registry UI
+  apicurio-registry-ui:
+    container_name: pipeline-apicurio-registry-ui
+    image: apicurio/apicurio-registry-ui:3.0.13
+    networks:
+      - pipeline-test-network
+    ports:
+      - "8888:8080"
+    environment:
+      REGISTRY_API_URL: "http://localhost:8081/apis/registry/v3"
+    depends_on:
+      apicurio-registry:
+        condition: service_healthy
+    labels:
+      io.quarkus.devservices.compose.wait_for.ports.disable: "true"
+
+  # OpenSearch 3
+  opensearch:
+    container_name: pipeline-opensearch
+    image: opensearchproject/opensearch:3.1.0
+    networks:
+      - pipeline-test-network
+    environment:
+      - cluster.name=pipeline-opensearch-cluster
+      - discovery.type=single-node
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "DISABLE_SECURITY_PLUGIN=true"
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    labels:
+      quarkus-dev-service-elasticsearch: shared
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sS 'http://localhost:9200/_cluster/health' | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # OpenSearch Dashboards
+  opensearch-dashboards:
+    container_name: pipeline-opensearch-dashboards
+    image: opensearchproject/opensearch-dashboards:3.1.0
+    networks:
+      - pipeline-test-network
+    ports:
+      - "5601:5601"
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    labels:
+      io.quarkus.devservices.compose.wait_for.ports.disable: "true"
+
+  # MinIO for S3-compatible object storage
+  minio:
+    container_name: pipeline-minio
+    image: minio/minio:latest
+    networks:
+      - pipeline-test-network
+    ports:
+      - "9000:9000"     # MinIO API
+      - "9001:9001"     # MinIO Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka UI for monitoring and management
+  kafka-ui:
+    container_name: pipeline-kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    networks:
+      - pipeline-test-network
+    ports:
+      - "8889:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://apicurio-registry:8080/apis/ccompat/v7
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    depends_on:
+      - kafka
+      - apicurio-registry
+    labels:
+      io.quarkus.devservices.compose.wait_for.ports.disable: "true"
+
+  # Grafana LGTM (Grafana + OTel Collector + Prometheus + Tempo + Loki)
+  lgtm:
+    container_name: pipeline-lgtm
+    image: grafana/otel-lgtm:0.11.9
+    networks:
+      - pipeline-test-network
+    ports:
+      - "3001:3000"     # Grafana UI
+      - "5317:4317"     # OTLP gRPC
+      - "5318:4318"     # OTLP HTTP
+    labels:
+      quarkus-dev-service-lgtm: shared
+      io.quarkus.devservices.compose.wait_for.logs: ".*Grafana is up and running.*"
+      io.quarkus.devservices.compose.wait_for.ports.disable: "true"

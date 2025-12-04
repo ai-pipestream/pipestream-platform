@@ -1,0 +1,30 @@
+plugins {
+    id 'java-library'
+}
+
+configurations.configureEach {
+    resolutionStrategy {
+        force "io.grpc:grpc-protobuf:${grpcVersion}"
+        force "io.grpc:grpc-stub:${grpcVersion}"
+        force "io.grpc:grpc-netty-shaded:${grpcVersion}"
+        force "io.grpc:grpc-core:${grpcVersion}"
+        force "io.grpc:grpc-api:${grpcVersion}"
+        force "com.google.protobuf:protobuf-java:${protobufVersion}"
+        force "com.google.protobuf:protobuf-java-util:${protobufVersion}"
+    }
+}
+
+dependencies {
+    // Quarkus deployment
+    api platform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    api 'io.quarkus:quarkus-arc-deployment'
+    api 'io.quarkus:quarkus-grpc-deployment'
+    api 'io.quarkus:quarkus-smallrye-health-deployment'
+    
+    // Runtime dependency
+    api project(':runtime')
+    
+    // Annotation processor
+    annotationProcessor enforcedPlatform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+}

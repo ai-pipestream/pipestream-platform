@@ -1,0 +1,38 @@
+#!/bin/bash
+# scripts/protoc-gen-mutiny
+
+# Directory where Gradle copies the generator jars
+# We assume this script is in projectRoot/scripts/
+# and libs are in projectRoot/runtime/build/generator-libs/
+# Adjust relative path if needed based on where it's run from.
+# If run from 'runtime' dir, then ../scripts/protoc-gen-mutiny is called.
+# The libs are in build/generator-libs relative to runtime.
+
+# Let's make this robust.
+# We expect the caller (Gradle) to ensure the libs are available.
+# We will look for libs in the runtime/build/generator-libs directory relative to the project root.
+
+# Get the directory of this script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+LIB_DIR="$PROJECT_ROOT/runtime/build/generator-libs"
+
+if [ ! -d "$LIB_DIR" ]; then
+    echo "Error: Generator libs not found at $LIB_DIR" >&2
+    echo "Please run 'gradle copyMutinyLibs' first." >&2
+    exit 1
+fi
+
+# Build classpath
+CP=""
+for jar in "$LIB_DIR"/*.jar; do
+    CP="$CP:$jar"
+done
+
+# Debug
+echo "Running Mutiny Generator with args: $@" >&2
+ls -l "$LIB_DIR" >&2
+
+# Execute the Java generator
+# Pass all arguments ($@) which buf/protoc sends (usually empty for plugins, as they read stdin)
+exec java -cp "${CP#:}" io.quarkus.grpc.protoc.plugin.MutinyGrpcGenerator "$@"

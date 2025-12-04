@@ -1,0 +1,6 @@
+version: v2
+plugins:
+  - local: ../scripts/protoc-gen-mutiny
+    out: build/generated/source/proto/main/mutiny
+    opt:
+      - quarkus_package=ai.pipestream.registration

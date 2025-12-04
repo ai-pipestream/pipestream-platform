@@ -1,0 +1,139 @@
+plugins {
+    id 'java-library'
+    id 'io.quarkus.extension'
+    id 'build.buf'
+    id 'com.google.protobuf'
+}
+
+buf {
+    toolVersion = '1.61.0'
+}
+
+quarkusExtension {
+    deploymentModule = ':deployment'
+}
+
+// Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution
+// This task attempts to resolve deployment:runtimeClasspath during parallel execution without an exclusive lock
+tasks.matching { it.name == 'validateExtension' }.configureEach {
+    enabled = false
+}
+
+// 1. Define export path (build dir only, never src)
+def bufExportDir = layout.buildDirectory.dir("generated/buf-protos").get().asFile
+
+// 2. Clean export directory before sync (prevents orphaned files)
+tasks.register('cleanProtos', Delete) {
+    delete bufExportDir
+}
+
+// 3. Export protos from buf.build using plugin-managed buf binary
+tasks.register('syncProtos', Exec) {
+    dependsOn 'cleanProtos'
+    outputs.dir(bufExportDir)
+    doFirst {
+        def bufExecutable = configurations.named('bufTool').get().singleFile
+        bufExecutable.setExecutable(true)
+        bufExportDir.mkdirs()
+        commandLine bufExecutable, 'export',
+            'buf.build/pipestreamai/registration',
+            '--output', bufExportDir.path
+    }
+}
+
+// 4. Configure protobuf plugin to generate from exported protos with Mutiny support
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:${protobufVersion}"
+    }
+    plugins {
+        grpc {
+            artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
+        }
+    }
+    generateProtoTasks {
+        all()*.plugins {
+            grpc {}
+        }
+    }
+}
+
+configurations {
+    mutinyGen
+}
+
+dependencies {
+    mutinyGen "io.quarkus:quarkus-grpc-protoc-plugin:${quarkusVersion}"
+}
+
+tasks.register('copyMutinyLibs', Copy) {
+    from configurations.mutinyGen
+    into layout.buildDirectory.dir("generator-libs")
+}
+
+tasks.register('generateMutinyStubs', Exec) {
+    dependsOn 'syncProtos', 'copyMutinyLibs'
+
+    doFirst {
+        // Ensure the script is executable (fixes issue where chmod might hang or fail)
+        file('../scripts/protoc-gen-mutiny').setExecutable(true)
+        layout.buildDirectory.dir("generated/source/proto/main/mutiny").get().asFile.mkdirs()
+        layout.buildDirectory.dir("generated/buf-test/grpc").get().asFile.mkdirs()
+
+        def bufExecutable = configurations.named('bufTool').get().singleFile
+        commandLine bufExecutable, 'generate', 'buf.build/pipestreamai/registration', '--template', 'buf.gen.yaml'
+    }
+}
+
+// Hook into the build
+tasks.named('compileJava').configure { dependsOn 'generateMutinyStubs' }
+
+// 5. Point protobuf plugin to exported protos
+sourceSets {
+    main {
+        proto {
+            srcDir(bufExportDir)
+        }
+        java {
+            srcDirs 'build/generated/source/proto/main/grpc'
+            srcDirs 'build/generated/source/proto/main/java'
+            srcDirs 'build/generated/source/proto/main/mutiny'
+        }
+    }
+}
+
+// 6. Ensure syncProtos runs before proto extraction/generation
+tasks.named('extractProto').configure { dependsOn 'syncProtos' }
+tasks.named('extractIncludeProto').configure { dependsOn 'syncProtos' }
+tasks.named('generateProto').configure { dependsOn 'syncProtos' }
+tasks.named('compileJava').configure { dependsOn 'generateProto' }
+
+configurations.configureEach {
+    resolutionStrategy {
+        force "io.grpc:grpc-protobuf:${grpcVersion}"
+        force "io.grpc:grpc-stub:${grpcVersion}"
+        force "io.grpc:grpc-netty-shaded:${grpcVersion}"
+        force "io.grpc:grpc-core:${grpcVersion}"
+        force "io.grpc:grpc-api:${grpcVersion}"
+        force "com.google.protobuf:protobuf-java:${protobufVersion}"
+        force "com.google.protobuf:protobuf-java-util:${protobufVersion}"
+    }
+}
+
+dependencies {
+    api platform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    api 'io.quarkus:quarkus-arc'
+    api 'io.quarkus:quarkus-grpc'
+    api 'io.quarkus:quarkus-smallrye-health'
+
+    // gRPC and Protobuf runtime - explicitly specify versions to override BOM
+    api "io.grpc:grpc-protobuf:${grpcVersion}"
+    api "io.grpc:grpc-stub:${grpcVersion}"
+    api "io.grpc:grpc-netty-shaded:${grpcVersion}"
+    api "com.google.protobuf:protobuf-java:${protobufVersion}"
+    api "com.google.protobuf:protobuf-java-util:${protobufVersion}"
+
+    annotationProcessor enforcedPlatform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+    api "javax.annotation:javax.annotation-api:1.3.2"
+}

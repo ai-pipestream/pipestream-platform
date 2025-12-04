@@ -1,0 +1,38 @@
+plugins {
+    id 'java-library'
+    id 'io.quarkus.extension'
+}
+
+quarkusExtension {
+    deploymentModule = 'deployment'
+}
+
+dependencies {
+    // Quarkus BOM
+    implementation platform("io.quarkus:quarkus-bom:${quarkusVersion}")
+
+    // Quarkus CDI
+    implementation 'io.quarkus:quarkus-arc'
+
+    // SmallRye Reactive Messaging Kafka
+    implementation 'io.smallrye.reactive:smallrye-reactive-messaging-kafka'
+
+    // Protobuf
+    implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
+
+    // Apicurio Registry v3 Protobuf Serde
+    implementation "io.apicurio:apicurio-registry-protobuf-serde-kafka:${apicurioVersion}"
+
+    // Annotation processor for extension metadata
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+// Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution
+tasks.matching { it.name == 'validateExtension' }.configureEach {
+    enabled = false
+}

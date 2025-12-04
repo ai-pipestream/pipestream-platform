@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package ai.pipestream.apicurio.registry.protobuf.it;
+
+option java_package = "ai.pipestream.apicurio.registry.protobuf.it.proto";
+option java_outer_classname = "TestMessagesProto";
+option java_multiple_files = true;
+
+message TestRecord {
+    string id = 1;
+    string name = 2;
+    int64 timestamp = 3;
+    map<string, string> metadata = 4;
+}
+
+message TestEvent {
+    string event_id = 1;
+    string event_type = 2;
+    TestRecord payload = 3;
+}

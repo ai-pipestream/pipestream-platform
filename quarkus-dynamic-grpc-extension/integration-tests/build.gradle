@@ -24,7 +24,7 @@ dependencies {
     testImplementation 'io.quarkus:quarkus-junit5'
     testImplementation 'io.rest-assured:rest-assured'
     testImplementation 'org.awaitility:awaitility'
-    testImplementation 'org.assertj:assertj-core:3.26.3'
+    testImplementation 'org.assertj:assertj-core:3.27.6'
 
     // TestContainers for Consul - real integration tests, no mocks
     testImplementation 'org.testcontainers:testcontainers'

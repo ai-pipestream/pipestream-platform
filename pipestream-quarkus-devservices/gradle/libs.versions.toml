@@ -19,7 +19,7 @@ wiremock-grpc-extension = "0.11.0"
 hibernate-types = "2.2.0"
 quarkus-mcp-server = "1.8.0"
 # AWS SDK
-aws-sdk = "2.39.5"
+aws-sdk = "2.40.1"
 # Apicurio
 apicurio = "3.1.4"
 # Testing
@@ -39,14 +39,14 @@ tika4-shaded = "0.1.9"
 # Sample documents test data
 sample-documents = "0.2.2"
 # DJL (Deep Java Library)
-djl = "0.35.0"
-djl-pytorch-jni = "2.7.1-0.35.0"
+djl = "0.35.1"
+djl-pytorch-jni = "2.7.1-0.35.1"
 djl-pytorch-native = "2.7.1"
 # Apache Commons
 commons-io = "2.21.0"
 commons-compress = "1.28.0"
 opencsv = "5.12.0"
-mutiny-test-utils = "3.0.3"
+mutiny-test-utils = "3.1.0"
 testcontainers-consul = "1.21.3"
 smallrye-reactive-messaging = "4.31.0"
 # Document parsing
@@ -55,7 +55,7 @@ pdfbox = "3.0.6"
 # Security
 password4j = "1.8.4"
 pipestream-protos = "0.3.0"
-pipestream-wiremock-server = "0.1.2"
+pipestream-wiremock-server = "0.1.6"
 
 [libraries]
 # Quarkus BOM

@@ -1,0 +1,26 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Quarkus Dynamic gRPC Extension - Deployment'
+
+dependencies {
+    // Quarkus BOM
+    implementation platform("io.quarkus:quarkus-bom:${quarkusVersion}")
+
+    // Quarkus deployment dependencies
+    implementation 'io.quarkus:quarkus-arc-deployment'
+    implementation 'io.quarkus:quarkus-grpc-deployment'
+    implementation 'io.quarkus:quarkus-vertx-deployment'
+
+    // Runtime module
+    implementation project(':runtime')
+
+    // Annotation processor for @BuildStep discovery
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}

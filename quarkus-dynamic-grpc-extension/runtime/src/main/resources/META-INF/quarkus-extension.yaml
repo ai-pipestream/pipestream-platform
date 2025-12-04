@@ -1,0 +1,16 @@
+name: "Dynamic gRPC"
+artifact: ${project.groupId}:${project.artifactId}:${project.version}
+description: "Dynamic gRPC Client with Consul Service Discovery"
+metadata:
+  keywords:
+    - "grpc"
+    - "dynamic"
+    - "consul"
+    - "service-discovery"
+    - "client"
+    - "mutiny"
+  categories:
+    - "grpc"
+    - "service-discovery"
+  status: "stable"
+

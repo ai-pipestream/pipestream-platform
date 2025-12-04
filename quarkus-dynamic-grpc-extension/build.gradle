@@ -1,0 +1,107 @@
+plugins {
+    id 'base'
+    id 'pl.allegro.tech.build.axion-release' version '1.21.0'
+    id 'com.gradleup.nmcp.aggregation' version '1.3.0'
+    id 'maven-publish'
+    id 'signing'
+}
+
+scmVersion {
+    tag {
+        prefix = 'v'
+    }
+    checks {
+        uncommittedChanges = false
+        aheadOfRemote = false
+        snapshotDependencies = false
+    }
+}
+
+nmcpAggregation {
+    publishAllProjectsProbablyBreakingProjectIsolation()
+
+    centralPortal {
+        username = findProperty('mavenCentralUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME')
+        password = findProperty('mavenCentralPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD')
+        publishingType = "AUTOMATIC"
+    }
+}
+
+subprojects {
+    apply plugin: 'java-library'
+    apply plugin: 'maven-publish'
+    apply plugin: 'signing'
+
+    group = rootProject.group
+    version = scmVersion.version
+
+    java {
+        withSourcesJar()
+        withJavadocJar()
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    // Compute proper artifact names based on project
+    ext {
+        baseArtifactName = 'quarkus-dynamic-grpc'
+        publishedArtifactId = project.name == 'runtime' ? baseArtifactName : "${baseArtifactName}-${project.name}"
+    }
+
+    publishing {
+        publications {
+            create('maven', MavenPublication) {
+                from components.java
+                artifactId = publishedArtifactId
+
+                pom {
+                    name = publishedArtifactId
+                    description = 'Quarkus Extension for Dynamic gRPC Client with Consul Service Discovery'
+                    url = 'https://github.com/ai-pipestream/quarkus-dynamic-grpc-extension'
+
+                    licenses {
+                        license {
+                            name = 'MIT License'
+                            url = 'https://opensource.org/licenses/MIT'
+                        }
+                    }
+
+                    developers {
+                        developer {
+                            id = 'krickert'
+                            name = 'Kristian Rickert'
+                        }
+                    }
+
+                    scm {
+                        connection = 'scm:git:https://github.com/ai-pipestream/quarkus-dynamic-grpc-extension.git'
+                        developerConnection = 'scm:git:ssh://git@github.com/ai-pipestream/quarkus-dynamic-grpc-extension.git'
+                        url = 'https://github.com/ai-pipestream/quarkus-dynamic-grpc-extension'
+                    }
+                }
+            }
+        }
+        repositories {
+            mavenLocal()
+            maven {
+                name = "GitHubPackages"
+                url = "https://maven.pkg.github.com/ai-pipestream/quarkus-dynamic-grpc-extension"
+                credentials {
+                    username = System.getenv("GITHUB_ACTOR")
+                    password = System.getenv("GITHUB_TOKEN")
+                }
+            }
+        }
+    }
+
+    signing {
+        def signingKey = System.getenv("GPG_SIGNING_KEY")
+        def signingPassword = System.getenv("GPG_SIGNING_PASSPHRASE")
+
+        if (signingKey && signingPassword) {
+            useInMemoryPgpKeys(signingKey, signingPassword)
+            sign publishing.publications.maven
+        }
+    }
+}

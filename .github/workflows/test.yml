@@ -130,6 +130,7 @@ jobs:
           if [[ "$VERSION" == *"SNAPSHOT"* ]]; then
             echo "Publishing devservices SNAPSHOT $VERSION"
             ../gradlew publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
+            ../gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon
           else
             echo "Skipping devservices - version $VERSION is a release (use release workflow)"
           fi
@@ -148,6 +149,7 @@ jobs:
           if [[ "$VERSION" == *"SNAPSHOT"* ]]; then
             echo "Publishing apicurio SNAPSHOT $VERSION"
             ../gradlew publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
+            ../gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon
           else
             echo "Skipping apicurio - version $VERSION is a release (use release workflow)"
           fi
@@ -166,6 +168,7 @@ jobs:
           if [[ "$VERSION" == *"SNAPSHOT"* ]]; then
             echo "Publishing dynamic-grpc SNAPSHOT $VERSION"
             ../gradlew publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
+            ../gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon
           else
             echo "Skipping dynamic-grpc - version $VERSION is a release (use release workflow)"
           fi
@@ -184,6 +187,7 @@ jobs:
           if [[ "$VERSION" == *"SNAPSHOT"* ]]; then
             echo "Publishing service-registration SNAPSHOT $VERSION"
             ../gradlew publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
+            ../gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon
           else
             echo "Skipping service-registration - version $VERSION is a release (use release workflow)"
           fi
@@ -202,6 +206,7 @@ jobs:
           if [[ "$VERSION" == *"SNAPSHOT"* ]]; then
             echo "Publishing tika4-shaded SNAPSHOT $VERSION"
             ../gradlew publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
+            ../gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon
           else
             echo "Skipping tika4-shaded - version $VERSION is a release (use release workflow)"
           fi

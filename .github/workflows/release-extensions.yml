@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       bump_type:
-        description: 'Version bump type'
+        description: 'Release type (patch=current version, minor/major=bump)'
         required: true
         type: choice
         options:
@@ -96,8 +96,11 @@ jobs:
       - name: Calculate versions and create tags
         id: release
         run: |
-          # Function to bump version
-          bump_version() {
+          # Function to calculate release version
+          # - patch: just strip -SNAPSHOT (release current dev version)
+          # - minor: bump minor, reset patch
+          # - major: bump major, reset minor and patch
+          get_release_version() {
             local version=$1
             local bump_type=$2
 
@@ -109,7 +112,7 @@ jobs:
             case $bump_type in
               major) echo "$((major + 1)).0.0" ;;
               minor) echo "$major.$((minor + 1)).0" ;;
-              patch) echo "$major.$minor.$((patch + 1))" ;;
+              patch) echo "$major.$minor.$patch" ;;  # Just release the current version
             esac
           }
 
@@ -134,7 +137,7 @@ jobs:
           # Process devservices
           if [ "${{ inputs.release_all }}" == "true" ] || [ "${{ inputs.devservices }}" == "true" ]; then
             CURRENT=$(get_version "pipestream-quarkus-devservices")
-            NEW=$(bump_version "$CURRENT" "$BUMP_TYPE")
+            NEW=$(get_release_version "$CURRENT" "$BUMP_TYPE")
             TAG="devservices-v$NEW"
             echo "| devservices | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
             TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"
@@ -144,7 +147,7 @@ jobs:
           # Process apicurio
           if [ "${{ inputs.release_all }}" == "true" ] || [ "${{ inputs.apicurio }}" == "true" ]; then
             CURRENT=$(get_version "quarkus-apicurio-registry-protobuf")
-            NEW=$(bump_version "$CURRENT" "$BUMP_TYPE")
+            NEW=$(get_release_version "$CURRENT" "$BUMP_TYPE")
             TAG="apicurio-v$NEW"
             echo "| apicurio | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
             TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"
@@ -154,7 +157,7 @@ jobs:
           # Process dynamic-grpc
           if [ "${{ inputs.release_all }}" == "true" ] || [ "${{ inputs.dynamic_grpc }}" == "true" ]; then
             CURRENT=$(get_version "quarkus-dynamic-grpc-extension")
-            NEW=$(bump_version "$CURRENT" "$BUMP_TYPE")
+            NEW=$(get_release_version "$CURRENT" "$BUMP_TYPE")
             TAG="dynamic-grpc-v$NEW"
             echo "| dynamic-grpc | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
             TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"
@@ -164,7 +167,7 @@ jobs:
           # Process service-registration
           if [ "${{ inputs.release_all }}" == "true" ] || [ "${{ inputs.service_registration }}" == "true" ]; then
             CURRENT=$(get_version "pipestream-service-registration-extension")
-            NEW=$(bump_version "$CURRENT" "$BUMP_TYPE")
+            NEW=$(get_release_version "$CURRENT" "$BUMP_TYPE")
             TAG="service-registration-v$NEW"
             echo "| service-registration | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
             TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"
@@ -174,7 +177,7 @@ jobs:
           # Process tika4-shaded
           if [ "${{ inputs.release_all }}" == "true" ] || [ "${{ inputs.tika4_shaded }}" == "true" ]; then
             CURRENT=$(get_version "tika4-shaded")
-            NEW=$(bump_version "$CURRENT" "$BUMP_TYPE")
+            NEW=$(get_release_version "$CURRENT" "$BUMP_TYPE")
             TAG="tika-v$NEW"
             echo "| tika4-shaded | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
             TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"
@@ -184,7 +187,7 @@ jobs:
           # Process BOM (different structure - it's a subproject)
           if [ "${{ inputs.release_all }}" == "true" ] || [ "${{ inputs.bom }}" == "true" ]; then
             CURRENT=$(./gradlew :bom:currentVersion -q 2>/dev/null | tail -1 | sed 's/Project version: //')
-            NEW=$(bump_version "$CURRENT" "$BUMP_TYPE")
+            NEW=$(get_release_version "$CURRENT" "$BUMP_TYPE")
             TAG="bom-v$NEW"
             echo "| bom | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
             TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"

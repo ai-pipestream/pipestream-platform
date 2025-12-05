@@ -40,6 +40,47 @@ tasks.register('testAll') {
 // Note: cleanAll not provided - each extension uses subproject cleans
 // Use: cd <extension-dir> && ../gradlew clean
 
+// Task to list all versions
+tasks.register('listVersions') {
+    group = 'help'
+    description = 'List versions of all extensions and libraries'
+    doLast {
+        println "\n=== Pipestream Extensions Versions ==="
+        println ""
+
+        def builds = [
+            'pipestream-quarkus-devservices',
+            'quarkus-apicurio-registry-protobuf',
+            'quarkus-dynamic-grpc-extension',
+            'pipestream-service-registration-extension',
+            'tika4-shaded'
+        ]
+
+        builds.each { buildName ->
+            def proc = new ProcessBuilder('../gradlew', 'currentVersion', '-q')
+                .directory(new File("${rootDir}/${buildName}"))
+                .redirectErrorStream(true)
+                .start()
+            proc.waitFor()
+            def output = proc.inputStream.text.trim()
+            def version = output.split('\n').last().replace('Project version: ', '')
+            printf "  %-45s %s%n", buildName, version
+        }
+
+        // BOM is a subproject
+        def bomProc = new ProcessBuilder('./gradlew', ':bom:currentVersion', '-q')
+            .directory(rootDir)
+            .redirectErrorStream(true)
+            .start()
+        bomProc.waitFor()
+        def bomOutput = bomProc.inputStream.text.trim()
+        def bomVersion = bomOutput.split('\n').last().replace('Project version: ', '')
+        printf "  %-45s %s%n", "bom", bomVersion
+
+        println ""
+    }
+}
+
 // Wrapper task for Gradle wrapper
 wrapper {
     gradleVersion = '9.2.1'

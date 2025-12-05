@@ -26,6 +26,15 @@ public class AuthMetadataInterceptor implements ClientInterceptor {
 
     private static final Logger LOG = Logger.getLogger(AuthMetadataInterceptor.class);
 
+    /**
+     * Creates a new interceptor that injects authentication headers into
+     * outgoing gRPC client calls. The actual configuration and token provider
+     * are injected by CDI.
+     */
+    public AuthMetadataInterceptor() {
+        // default constructor for CDI
+    }
+
     @Inject
     DynamicGrpcConfig config;
 

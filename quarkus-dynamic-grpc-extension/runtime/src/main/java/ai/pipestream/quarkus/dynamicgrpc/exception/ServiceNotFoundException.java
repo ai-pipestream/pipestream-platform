@@ -11,7 +11,9 @@ import io.grpc.StatusRuntimeException;
  * </p>
  */
 public class ServiceNotFoundException extends StatusRuntimeException {
-
+    /**
+     * The logical service name that could not be found.
+     */
     private final String serviceName;
 
     /**

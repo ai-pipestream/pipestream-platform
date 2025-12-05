@@ -14,7 +14,7 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
-rootProject.name = 'pipestream-quarkus-extensions'
+rootProject.name = 'pipestream-platform'
 
 // Version catalog for the BOM and root project
 dependencyResolutionManagement {

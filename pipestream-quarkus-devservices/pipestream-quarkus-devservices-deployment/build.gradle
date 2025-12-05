@@ -74,7 +74,7 @@ publishing {
             pom {
                 name = 'pipestream-quarkus-devservices-deployment'
                 description = 'Quarkus extension for Pipeline DevServices - Deployment'
-                url = 'https://github.com/ai-pipestream/pipestream-quarkus-extensions'
+                url = 'https://github.com/ai-pipestream/pipestream-platform'
 
                 licenses {
                     license {
@@ -91,9 +91,9 @@ publishing {
                 }
 
                 scm {
-                    connection = 'scm:git:https://github.com/ai-pipestream/pipestream-quarkus-extensions.git'
-                    developerConnection = 'scm:git:ssh://git@github.com/ai-pipestream/pipestream-quarkus-extensions.git'
-                    url = 'https://github.com/ai-pipestream/pipestream-quarkus-extensions'
+                    connection = 'scm:git:https://github.com/ai-pipestream/pipestream-platform.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/ai-pipestream/pipestream-platform.git'
+                    url = 'https://github.com/ai-pipestream/pipestream-platform'
                 }
             }
         }
@@ -103,7 +103,7 @@ publishing {
         mavenLocal()
         maven {
             name = 'GitHubPackages'
-            url = uri('https://maven.pkg.github.com/ai-pipestream/pipestream-quarkus-extensions')
+            url = uri('https://maven.pkg.github.com/ai-pipestream/pipestream-platform')
             credentials {
                 username = System.getenv('GITHUB_ACTOR') ?: findProperty('gpr.user')
                 password = System.getenv('GITHUB_TOKEN') ?: findProperty('gpr.key')

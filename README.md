@@ -1,4 +1,4 @@
-# Pipestream Quarkus Extensions
+# Pipestream Platform
 
 Monorepo for Pipestream Quarkus extensions - custom Quarkus extensions built for the Pipestream AI platform.
 
@@ -16,7 +16,7 @@ This monorepo contains 4 Quarkus extensions:
 This project uses **Gradle composite builds** - each extension is its own root project with runtime/deployment submodules, coordinated from a single repository.
 
 ```
-pipestream-quarkus-extensions/
+pipestream-platform/
 ├── bom/                                          # Extensions BOM (subproject)
 ├── pipestream-quarkus-devservices/              # Extension 1 (composite build)
 │   ├── pipestream-quarkus-devservices/          # Runtime module

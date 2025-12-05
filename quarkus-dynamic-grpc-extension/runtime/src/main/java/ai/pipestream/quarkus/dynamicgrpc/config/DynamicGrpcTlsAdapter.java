@@ -17,6 +17,14 @@ import java.util.Optional;
 @ApplicationScoped
 public class DynamicGrpcTlsAdapter implements GrpcClientConfiguration.TlsClientConfig {
 
+    /**
+     * Creates a TLS configuration adapter backed by the extension's
+     * {@link DynamicGrpcConfig}. Values are provided by CDI at runtime.
+     */
+    public DynamicGrpcTlsAdapter() {
+        // default constructor for CDI
+    }
+
     @Inject
     DynamicGrpcConfig config;
 

@@ -12,7 +12,9 @@ import io.grpc.StatusRuntimeException;
  * </p>
  */
 public class ServiceDiscoveryException extends StatusRuntimeException {
-
+    /**
+     * The logical service name for which discovery failed.
+     */
     private final String serviceName;
 
     /**

@@ -29,6 +29,14 @@ public class DynamicGrpcMetrics {
 
     private static final String METRIC_PREFIX = "dynamic.grpc";
 
+    /**
+     * Creates a metrics recorder for the Dynamic gRPC extension. All operations
+     * are no-ops if a MeterRegistry is not present in the CDI container.
+     */
+    public DynamicGrpcMetrics() {
+        // default constructor for CDI
+    }
+
     @Inject
     Instance<MeterRegistry> registryInstance;
 

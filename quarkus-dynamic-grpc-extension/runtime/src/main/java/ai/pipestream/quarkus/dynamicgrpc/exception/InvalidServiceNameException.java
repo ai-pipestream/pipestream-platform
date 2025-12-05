@@ -9,7 +9,14 @@ package ai.pipestream.quarkus.dynamicgrpc.exception;
  */
 public class InvalidServiceNameException extends IllegalArgumentException {
 
+    /**
+     * The service name value that failed validation; may be null.
+     */
     private final String attemptedServiceName;
+
+    /**
+     * Human-readable explanation of why the provided service name is invalid.
+     */
     private final String validationFailureReason;
 
     /**

@@ -65,7 +65,7 @@ subprojects {
                 pom {
                     name = publishedArtifactId
                     description = 'Quarkus Extension for Dynamic gRPC Client with Consul Service Discovery'
-                    url = 'https://github.com/ai-pipestream/pipestream-quarkus-extensions'
+                    url = 'https://github.com/ai-pipestream/pipestream-platform'
 
                     licenses {
                         license {
@@ -82,9 +82,9 @@ subprojects {
                     }
 
                     scm {
-                        connection = 'scm:git:https://github.com/ai-pipestream/pipestream-quarkus-extensions.git'
-                        developerConnection = 'scm:git:ssh://git@github.com/ai-pipestream/pipestream-quarkus-extensions.git'
-                        url = 'https://github.com/ai-pipestream/pipestream-quarkus-extensions'
+                        connection = 'scm:git:https://github.com/ai-pipestream/pipestream-platform.git'
+                        developerConnection = 'scm:git:ssh://git@github.com/ai-pipestream/pipestream-platform.git'
+                        url = 'https://github.com/ai-pipestream/pipestream-platform'
                     }
                 }
             }
@@ -93,7 +93,7 @@ subprojects {
             mavenLocal()
             maven {
                 name = "GitHubPackages"
-                url = "https://maven.pkg.github.com/ai-pipestream/pipestream-quarkus-extensions"
+                url = "https://maven.pkg.github.com/ai-pipestream/pipestream-platform"
                 credentials {
                     username = System.getenv("GITHUB_ACTOR")
                     password = System.getenv("GITHUB_TOKEN")

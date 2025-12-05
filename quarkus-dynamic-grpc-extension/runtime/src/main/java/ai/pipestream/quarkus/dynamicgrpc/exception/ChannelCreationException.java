@@ -11,7 +11,9 @@ import io.grpc.StatusRuntimeException;
  * </p>
  */
 public class ChannelCreationException extends StatusRuntimeException {
-
+    /**
+     * The logical service name for which channel creation failed.
+     */
     private final String serviceName;
 
     /**

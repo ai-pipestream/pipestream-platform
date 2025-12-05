@@ -28,6 +28,7 @@ tasks.register('buildAll') {
     dependsOn gradle.includedBuild('quarkus-apicurio-registry-protobuf').task(':build')
     dependsOn gradle.includedBuild('quarkus-dynamic-grpc-extension').task(':build')
     dependsOn gradle.includedBuild('pipestream-service-registration-extension').task(':build')
+    dependsOn gradle.includedBuild('tika4-shaded').task(':build')
 }
 
 tasks.register('testAll') {

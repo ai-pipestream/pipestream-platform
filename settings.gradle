@@ -34,3 +34,6 @@ includeBuild 'pipestream-quarkus-devservices'
 includeBuild 'quarkus-apicurio-registry-protobuf'
 includeBuild 'quarkus-dynamic-grpc-extension'
 includeBuild 'pipestream-service-registration-extension'
+
+// Utility libraries as composite builds
+includeBuild 'tika4-shaded'

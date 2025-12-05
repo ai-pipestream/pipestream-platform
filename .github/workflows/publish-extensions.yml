@@ -7,6 +7,7 @@ on:
       - 'apicurio-v*'
       - 'dynamic-grpc-v*'
       - 'service-registration-v*'
+      - 'tika-v*'
   workflow_dispatch:
     inputs:
       extension:
@@ -19,6 +20,7 @@ on:
           - apicurio
           - dynamic-grpc
           - service-registration
+          - tika4-shaded
 
 jobs:
   publish:
@@ -155,4 +157,28 @@ jobs:
             ../gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon --stacktrace
           else
             echo "Skipping service-registration - version $VERSION is a SNAPSHOT (no changes)"
+          fi
+
+      - name: Publish tika4-shaded
+        if: github.event.inputs.extension == 'tika4-shaded' || github.event.inputs.extension == 'all' || startsWith(github.ref, 'refs/tags/tika-v')
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
+        run: |
+          cd tika4-shaded
+          VERSION=$(../gradlew currentVersion -q | tail -1 | sed 's/Project version: //')
+          echo "Version: $VERSION"
+
+          if [[ "$VERSION" != *"SNAPSHOT"* ]]; then
+            echo "Publishing tika4-shaded version $VERSION to Maven Central"
+            ../gradlew clean build publishAllPublicationsToCentralPortal --no-daemon --stacktrace
+            echo "Publishing tika4-shaded version $VERSION to GitHub Packages"
+            ../gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon --stacktrace
+          else
+            echo "Skipping tika4-shaded - version $VERSION is a SNAPSHOT (no changes)"
           fi

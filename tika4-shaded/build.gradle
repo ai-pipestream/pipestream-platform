@@ -15,8 +15,15 @@ group = 'ai.pipestream'
 
 // Configure axion-release plugin for semantic versioning
 scmVersion {
+    repository {
+        directory = rootDir.parentFile.absolutePath  // Git repo is in parent (monorepo root)
+    }
     tag {
-        prefix = 'v'
+        prefix = 'tika-v'
+        initialVersion { config, position -> '0.1.9' }
+    }
+    monorepo {
+        projectDirs = ['tika4-shaded']
     }
     checks {
         uncommittedChanges = false
@@ -265,7 +272,7 @@ publishing {
             pom {
                 name.set('Tika 4 Shaded')
                 description.set('Shaded version of Apache Tika 4.0 snapshot with core, standard parsers, scientific parser, and OCR parser')
-                url.set('https://github.com/ai-pipestream/tika4-shaded')
+                url.set('https://github.com/ai-pipestream/pipestream-quarkus-extensions')
 
                 licenses {
                     license {
@@ -282,9 +289,9 @@ publishing {
                 }
 
                 scm {
-                    connection.set('scm:git:git://github.com/ai-pipestream/tika4-shaded.git')
-                    developerConnection.set('scm:git:ssh://github.com/ai-pipestream/tika4-shaded.git')
-                    url.set('https://github.com/ai-pipestream/tika4-shaded')
+                    connection.set('scm:git:git://github.com/ai-pipestream/pipestream-quarkus-extensions.git')
+                    developerConnection.set('scm:git:ssh://github.com/ai-pipestream/pipestream-quarkus-extensions.git')
+                    url.set('https://github.com/ai-pipestream/pipestream-quarkus-extensions')
                 }
 
                 // Ensure BOM/platform dependency is included in dependencyManagement
@@ -335,7 +342,7 @@ publishing {
         mavenLocal()
 
         // Conditionally add GitHub Packages repository when credentials are available
-        def ghRepo = System.getenv('GITHUB_REPOSITORY') ?: 'ai-pipestream/tika4-shaded'
+        def ghRepo = System.getenv('GITHUB_REPOSITORY') ?: 'ai-pipestream/pipestream-quarkus-extensions'
         def ghActor = System.getenv('GITHUB_ACTOR') ?: (project.findProperty('gpr.user') ?: System.getenv('GPR_USER'))
         def ghToken = System.getenv('GITHUB_TOKEN') ?: (project.findProperty('gpr.key') ?: System.getenv('GPR_TOKEN'))
         if (ghActor && ghToken) {
@@ -346,6 +353,16 @@ publishing {
                     username = ghActor
                     password = ghToken
                 }
+            }
+        }
+
+        // Maven Central Snapshots
+        maven {
+            name = 'MavenCentralSnapshots'
+            url = uri('https://central.sonatype.com/repository/maven-snapshots/')
+            credentials {
+                username = findProperty('mavenCentralUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME')
+                password = findProperty('mavenCentralPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD')
             }
         }
     }

@@ -32,6 +32,11 @@ on:
         type: boolean
         default: true
 
+      tika4_shaded:
+        description: 'Release tika4-shaded'
+        type: boolean
+        default: true
+
       bom:
         description: 'Release BOM'
         type: boolean
@@ -159,6 +164,16 @@ jobs:
             echo "| service-registration | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
             TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"
             echo "service-registration: $CURRENT → $NEW"
+          fi
+
+          # Process tika4-shaded
+          if [ "${{ inputs.tika4_shaded }}" == "true" ]; then
+            CURRENT=$(get_version "tika4-shaded")
+            NEW=$(bump_version "$CURRENT" "$BUMP_TYPE")
+            TAG="tika-v$NEW"
+            echo "| tika4-shaded | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
+            TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"
+            echo "tika4-shaded: $CURRENT → $NEW"
           fi
 
           # Process BOM (different structure - it's a subproject)

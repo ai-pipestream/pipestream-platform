@@ -65,6 +65,13 @@ jobs:
           cd pipestream-service-registration-extension
           ../gradlew clean build test --no-daemon
 
+      - name: Build tika4-shaded
+        env:
+          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
+        run: |
+          cd tika4-shaded
+          ../gradlew clean build --no-daemon
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -179,4 +186,22 @@ jobs:
             ../gradlew publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
           else
             echo "Skipping service-registration - version $VERSION is a release (use release workflow)"
+          fi
+
+      - name: Publish tika4-shaded SNAPSHOT
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
+        run: |
+          cd tika4-shaded
+          VERSION=$(../gradlew currentVersion -q | tail -1 | sed 's/Project version: //')
+          echo "Version: $VERSION"
+          if [[ "$VERSION" == *"SNAPSHOT"* ]]; then
+            echo "Publishing tika4-shaded SNAPSHOT $VERSION"
+            ../gradlew publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
+          else
+            echo "Skipping tika4-shaded - version $VERSION is a release (use release workflow)"
           fi

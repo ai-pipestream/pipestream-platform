@@ -1,3 +1,4 @@
+
 name: Create a Release
 
 on:
@@ -84,6 +85,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Configure Git for releases
+        env:
+          GH_TOKEN: ${{ secrets.GH_WORKFLOW_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Use PAT for pushing (enables workflow triggers)
+          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/ai-pipestream/pipestream-platform.git
+          # Fetch all tags to ensure we have latest state
+          git fetch --tags
+
       - name: Build verification
         if: inputs.skip_build == false
         env:
@@ -95,39 +107,153 @@ jobs:
 
       - name: Calculate versions and create tags
         id: release
+        env:
+          GH_TOKEN: ${{ secrets.GH_WORKFLOW_TOKEN }}
         run: |
-          # Function to calculate release version
-          # - patch: just strip -SNAPSHOT (release current dev version)
-          # - minor: bump minor, reset patch
-          # - major: bump major, reset minor and patch
-          get_release_version() {
-            local version=$1
-            local bump_type=$2
-
-            # Strip -SNAPSHOT if present
-            version=${version%-SNAPSHOT}
-
-            IFS='.' read -r major minor patch <<< "$version"
-
-            case $bump_type in
-              major) echo "$((major + 1)).0.0" ;;
-              minor) echo "$major.$((minor + 1)).0" ;;
-              patch) echo "$major.$minor.$patch" ;;  # Just release the current version
-            esac
-          }
-
-          # Function to get current version for an extension
+          # Function to get current version using axion-release plugin
           get_version() {
             local ext_dir=$1
-            cd "$ext_dir"
-            version=$(../gradlew currentVersion -q 2>/dev/null | tail -1 | sed 's/Project version: //')
-            cd ..
+            local version=""
+            
+            if [ -n "$ext_dir" ]; then
+              cd "$ext_dir" || exit 1
+              version=$(../gradlew currentVersion -q -Prelease.quiet 2>&1 | tail -1)
+              cd .. || exit 1
+            else
+              # For root-level projects like BOM
+              version=$(./gradlew :bom:currentVersion -q -Prelease.quiet 2>&1 | tail -1)
+            fi
+
+            # Validate we got a version
+            if [ -z "$version" ] || [[ "$version" == *"FAILURE"* ]] || [[ "$version" == *"error"* ]]; then
+              echo "❌ Failed to get version from $ext_dir" >&2
+              exit 1
+            fi
+
             echo "$version"
+          }
+
+          # Function to calculate release version for patch (just strip SNAPSHOT)
+          # For minor/major, we'll use the plugin's incrementer
+          get_patch_version() {
+            local version=$1
+            # Strip -SNAPSHOT if present
+            echo "${version%-SNAPSHOT}"
+          }
+
+          # Function to release a component using axion-release plugin
+          release_component() {
+            local component_name=$1
+            local ext_dir=$2
+            local gradle_task=$3
+            local current_version=$4
+            local bump_type=$5
+            local dry_run_flag=$6
+
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Releasing: $component_name"
+            echo "Current:   $current_version"
+            echo "Bump type: $bump_type"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            # Determine new version and release command based on bump type
+            local new_version=""
+            local release_cmd=""
+            
+            if [ "$bump_type" == "patch" ]; then
+              # For patch: calculate exact version (strip SNAPSHOT, no increment)
+              new_version=$(get_patch_version "$current_version")
+              # Validate version format
+              if ! [[ "$new_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "❌ Invalid version format: $new_version (expected X.Y.Z)" >&2
+                exit 1
+              fi
+              release_cmd="-Prelease.version=$new_version"
+            elif [ "$bump_type" == "minor" ]; then
+              # For minor: use plugin's incrementer (will calculate new version)
+              release_cmd="-Prelease.versionIncrementer=incrementMinor"
+              # We need to calculate new version for display - plugin increments from current
+              local base_version=$(get_patch_version "$current_version")
+              IFS='.' read -r major minor patch <<< "$base_version"
+              new_version="$major.$((minor + 1)).0"
+            elif [ "$bump_type" == "major" ]; then
+              # For major: use plugin's incrementer
+              release_cmd="-Prelease.versionIncrementer=incrementMajor"
+              # Calculate for display
+              local base_version=$(get_patch_version "$current_version")
+              IFS='.' read -r major minor patch <<< "$base_version"
+              new_version="$((major + 1)).0.0"
+            else
+              echo "❌ Invalid bump_type: $bump_type" >&2
+              exit 1
+            fi
+
+            echo "New:       $new_version"
+
+            if [ "$dry_run_flag" == "true" ]; then
+              echo "🔍 DRY RUN - Would release version $new_version"
+              # Get expected tag prefix
+              local tag_prefix=""
+              case "$component_name" in
+                devservices) tag_prefix="devservices-v" ;;
+                apicurio) tag_prefix="apicurio-v" ;;
+                dynamic-grpc) tag_prefix="dynamic-grpc-v" ;;
+                service-registration) tag_prefix="service-registration-v" ;;
+                tika4-shaded) tag_prefix="tika-v" ;;
+                bom) tag_prefix="bom-v" ;;
+              esac
+              echo "| $component_name | $current_version | $new_version | \`${tag_prefix}${new_version}\` |" >> $GITHUB_STEP_SUMMARY
+            else
+              # Check if tag already exists (plugin will fail if tag exists)
+              local tag_prefix=""
+              case "$component_name" in
+                devservices) tag_prefix="devservices-v" ;;
+                apicurio) tag_prefix="apicurio-v" ;;
+                dynamic-grpc) tag_prefix="dynamic-grpc-v" ;;
+                service-registration) tag_prefix="service-registration-v" ;;
+                tika4-shaded) tag_prefix="tika-v" ;;
+                bom) tag_prefix="bom-v" ;;
+              esac
+              local expected_tag="${tag_prefix}${new_version}"
+              
+              if git rev-parse "$expected_tag" >/dev/null 2>&1; then
+                echo "⚠️  Tag $expected_tag already exists, skipping release..."
+                echo "::warning::Tag $expected_tag already exists. If you want to recreate it, delete it first."
+                echo "| $component_name | $current_version | $new_version | \`$expected_tag\` (exists) |" >> $GITHUB_STEP_SUMMARY
+                return 0
+              fi
+
+              # Run the release task with appropriate parameters
+              local release_params="$release_cmd -Prelease.disableChecks --no-daemon"
+              
+              if [ -n "$ext_dir" ]; then
+                cd "$ext_dir" || exit 1
+                if ../gradlew "$gradle_task" $release_params; then
+                  cd .. || exit 1
+                  echo "✅ Successfully released $component_name version $new_version"
+                  echo "| $component_name | $current_version | $new_version | \`$expected_tag\` |" >> $GITHUB_STEP_SUMMARY
+                else
+                  cd .. || exit 1
+                  echo "❌ Failed to release $component_name" >&2
+                  exit 1
+                fi
+              else
+                # For root-level projects like BOM
+                if ./gradlew "$gradle_task" $release_params; then
+                  echo "✅ Successfully released $component_name version $new_version"
+                  echo "| $component_name | $current_version | $new_version | \`$expected_tag\` |" >> $GITHUB_STEP_SUMMARY
+                else
+                  echo "❌ Failed to release $component_name" >&2
+                  exit 1
+                fi
+              fi
+            fi
           }
 
           BUMP_TYPE="${{ inputs.bump_type }}"
           DRY_RUN="${{ inputs.dry_run }}"
-          TAGS_TO_CREATE=""
+          RELEASE_COUNT=0
 
           echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -137,107 +263,60 @@ jobs:
           # Process devservices
           if [ "${{ inputs.release_all }}" == "true" ] || [ "${{ inputs.devservices }}" == "true" ]; then
             CURRENT=$(get_version "pipestream-quarkus-devservices")
-            NEW=$(get_release_version "$CURRENT" "$BUMP_TYPE")
-            TAG="devservices-v$NEW"
-            echo "| devservices | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
-            TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"
-            echo "devservices: $CURRENT → $NEW"
+            release_component "devservices" "pipestream-quarkus-devservices" "release" "$CURRENT" "$BUMP_TYPE" "$DRY_RUN"
+            RELEASE_COUNT=$((RELEASE_COUNT + 1))
           fi
 
           # Process apicurio
           if [ "${{ inputs.release_all }}" == "true" ] || [ "${{ inputs.apicurio }}" == "true" ]; then
             CURRENT=$(get_version "quarkus-apicurio-registry-protobuf")
-            NEW=$(get_release_version "$CURRENT" "$BUMP_TYPE")
-            TAG="apicurio-v$NEW"
-            echo "| apicurio | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
-            TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"
-            echo "apicurio: $CURRENT → $NEW"
+            release_component "apicurio" "quarkus-apicurio-registry-protobuf" "release" "$CURRENT" "$BUMP_TYPE" "$DRY_RUN"
+            RELEASE_COUNT=$((RELEASE_COUNT + 1))
           fi
 
           # Process dynamic-grpc
           if [ "${{ inputs.release_all }}" == "true" ] || [ "${{ inputs.dynamic_grpc }}" == "true" ]; then
             CURRENT=$(get_version "quarkus-dynamic-grpc-extension")
-            NEW=$(get_release_version "$CURRENT" "$BUMP_TYPE")
-            TAG="dynamic-grpc-v$NEW"
-            echo "| dynamic-grpc | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
-            TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"
-            echo "dynamic-grpc: $CURRENT → $NEW"
+            release_component "dynamic-grpc" "quarkus-dynamic-grpc-extension" "release" "$CURRENT" "$BUMP_TYPE" "$DRY_RUN"
+            RELEASE_COUNT=$((RELEASE_COUNT + 1))
           fi
 
           # Process service-registration
           if [ "${{ inputs.release_all }}" == "true" ] || [ "${{ inputs.service_registration }}" == "true" ]; then
             CURRENT=$(get_version "pipestream-service-registration-extension")
-            NEW=$(get_release_version "$CURRENT" "$BUMP_TYPE")
-            TAG="service-registration-v$NEW"
-            echo "| service-registration | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
-            TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"
-            echo "service-registration: $CURRENT → $NEW"
+            release_component "service-registration" "pipestream-service-registration-extension" "release" "$CURRENT" "$BUMP_TYPE" "$DRY_RUN"
+            RELEASE_COUNT=$((RELEASE_COUNT + 1))
           fi
 
           # Process tika4-shaded
           if [ "${{ inputs.release_all }}" == "true" ] || [ "${{ inputs.tika4_shaded }}" == "true" ]; then
             CURRENT=$(get_version "tika4-shaded")
-            NEW=$(get_release_version "$CURRENT" "$BUMP_TYPE")
-            TAG="tika-v$NEW"
-            echo "| tika4-shaded | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
-            TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"
-            echo "tika4-shaded: $CURRENT → $NEW"
+            release_component "tika4-shaded" "tika4-shaded" "release" "$CURRENT" "$BUMP_TYPE" "$DRY_RUN"
+            RELEASE_COUNT=$((RELEASE_COUNT + 1))
           fi
 
           # Process BOM (different structure - it's a subproject)
           if [ "${{ inputs.release_all }}" == "true" ] || [ "${{ inputs.bom }}" == "true" ]; then
-            CURRENT=$(./gradlew :bom:currentVersion -q 2>/dev/null | tail -1 | sed 's/Project version: //')
-            NEW=$(get_release_version "$CURRENT" "$BUMP_TYPE")
-            TAG="bom-v$NEW"
-            echo "| bom | $CURRENT | $NEW | \`$TAG\` |" >> $GITHUB_STEP_SUMMARY
-            TAGS_TO_CREATE="$TAGS_TO_CREATE $TAG"
-            echo "bom: $CURRENT → $NEW"
+            CURRENT=$(get_version "")
+            release_component "bom" "" ":bom:release" "$CURRENT" "$BUMP_TYPE" "$DRY_RUN"
+            RELEASE_COUNT=$((RELEASE_COUNT + 1))
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
 
+          if [ "$RELEASE_COUNT" -eq 0 ]; then
+            echo "⚠️  No components selected for release" >> $GITHUB_STEP_SUMMARY
+            echo "::warning::No components were selected for release."
+            exit 1
+          fi
+
           if [ "$DRY_RUN" == "true" ]; then
-            echo "**Dry run - no tags created**" >> $GITHUB_STEP_SUMMARY
+            echo "**Dry run complete - no tags were created**" >> $GITHUB_STEP_SUMMARY
             echo "::notice::Dry run complete. No tags were created."
             echo "dry_run=true" >> $GITHUB_OUTPUT
           else
-            echo "tags=$TAGS_TO_CREATE" >> $GITHUB_OUTPUT
-            echo "dry_run=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create and push tags
-        if: steps.release.outputs.dry_run == 'false'
-        env:
-          GH_TOKEN: ${{ secrets.GH_WORKFLOW_TOKEN }}
-        run: |
-          TAGS="${{ steps.release.outputs.tags }}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Use the PAT for pushing (enables workflow triggers)
-          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/ai-pipestream/pipestream-platform.git
-
-          for TAG in $TAGS; do
-            echo "Creating tag: $TAG"
-            git tag "$TAG"
-          done
-
-          echo "Pushing tags..."
-          git push --tags
-
-          # Verify tags were pushed
-          if [ $? -eq 0 ]; then
-            echo "✅ Tags pushed successfully"
-            echo "**Tags created and pushed successfully!**" >> $GITHUB_STEP_SUMMARY
+            echo "**✅ Release complete!**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "The publish workflow will now trigger automatically for each tag." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### Published Tags" >> $GITHUB_STEP_SUMMARY
-            for TAG in $TAGS; do
-              echo "- \`$TAG\`" >> $GITHUB_STEP_SUMMARY
-            done
-          else
-            echo "❌ Failed to push tags!" >&2
-            exit 1
+            echo "dry_run=false" >> $GITHUB_OUTPUT
           fi

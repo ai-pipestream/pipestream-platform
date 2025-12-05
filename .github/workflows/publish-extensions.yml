@@ -3,6 +3,7 @@ name: Publish Platform
 on:
   push:
     tags:
+      - 'bom-v*'
       - 'devservices-v*'
       - 'apicurio-v*'
       - 'dynamic-grpc-v*'
@@ -16,6 +17,7 @@ on:
         type: choice
         options:
           - all
+          - bom
           - devservices
           - apicurio
           - dynamic-grpc
@@ -63,6 +65,29 @@ jobs:
         run: |
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
 
+      - name: Publish pipestream-bom
+        if: github.event.inputs.extension == 'bom' || github.event.inputs.extension == 'all' || startsWith(github.ref, 'refs/tags/bom-v')
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
+        run: |
+          VERSION=$(./gradlew :bom:currentVersion -q | tail -1 | sed 's/Project version: //')
+          echo "Version: $VERSION"
+
+          if [[ "$VERSION" != *"SNAPSHOT"* ]]; then
+            echo "Publishing BOM version $VERSION to Maven Central"
+            ./gradlew :bom:publishAllPublicationsToCentralPortal --no-daemon --stacktrace
+            echo "Publishing BOM version $VERSION to GitHub Packages"
+            ./gradlew :bom:publishAllPublicationsToGitHubPackagesRepository --no-daemon --stacktrace
+          else
+            echo "Skipping BOM - version $VERSION is a SNAPSHOT (no changes)"
+          fi
+
       - name: Publish pipestream-quarkus-devservices
         if: github.event.inputs.extension == 'devservices' || github.event.inputs.extension == 'all' || startsWith(github.ref, 'refs/tags/devservices-v')
         env:
@@ -80,7 +105,7 @@ jobs:
 
           if [[ "$VERSION" != *"SNAPSHOT"* ]]; then
             echo "Publishing devservices version $VERSION to Maven Central"
-            ../gradlew clean build publishAllPublicationsToCentralPortal --no-daemon --stacktrace
+            ../gradlew clean build publishAggregationToCentralPortal --no-daemon --stacktrace
             echo "Publishing devservices version $VERSION to GitHub Packages"
             ../gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon --stacktrace
           else
@@ -104,7 +129,7 @@ jobs:
 
           if [[ "$VERSION" != *"SNAPSHOT"* ]]; then
             echo "Publishing apicurio version $VERSION to Maven Central"
-            ../gradlew clean build publishAllPublicationsToCentralPortal --no-daemon --stacktrace
+            ../gradlew clean build publishAggregationToCentralPortal --no-daemon --stacktrace
             echo "Publishing apicurio version $VERSION to GitHub Packages"
             ../gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon --stacktrace
           else
@@ -128,7 +153,7 @@ jobs:
 
           if [[ "$VERSION" != *"SNAPSHOT"* ]]; then
             echo "Publishing dynamic-grpc version $VERSION to Maven Central"
-            ../gradlew clean build publishAllPublicationsToCentralPortal --no-daemon --stacktrace
+            ../gradlew clean build publishAggregationToCentralPortal --no-daemon --stacktrace
             echo "Publishing dynamic-grpc version $VERSION to GitHub Packages"
             ../gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon --stacktrace
           else
@@ -152,7 +177,7 @@ jobs:
 
           if [[ "$VERSION" != *"SNAPSHOT"* ]]; then
             echo "Publishing service-registration version $VERSION to Maven Central"
-            ../gradlew clean build publishAllPublicationsToCentralPortal --no-daemon --stacktrace
+            ../gradlew clean build publishAggregationToCentralPortal --no-daemon --stacktrace
             echo "Publishing service-registration version $VERSION to GitHub Packages"
             ../gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon --stacktrace
           else

@@ -210,3 +210,21 @@ jobs:
           else
             echo "Skipping tika4-shaded - version $VERSION is a release (use release workflow)"
           fi
+
+      - name: Publish pipestream-bom SNAPSHOT
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
+        run: |
+          VERSION=$(./gradlew :bom:currentVersion -q | tail -1 | sed 's/Project version: //')
+          echo "Version: $VERSION"
+          if [[ "$VERSION" == *"SNAPSHOT"* ]]; then
+            echo "Publishing BOM SNAPSHOT $VERSION"
+            ./gradlew :bom:publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
+            ./gradlew :bom:publishAllPublicationsToGitHubPackagesRepository --no-daemon
+          else
+            echo "Skipping BOM - version $VERSION is a release (use release workflow)"
+          fi

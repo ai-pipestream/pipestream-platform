@@ -91,7 +91,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Use PAT for pushing (enables workflow triggers)
+          # Use GH_WORKFLOW_TOKEN for git operations (pushing tags)
+          # This token needs 'repo' scope to push tags, and the push will auto-trigger workflows
+          # (GITHUB_TOKEN pushes don't trigger workflows by design)
           git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/ai-pipestream/pipestream-platform.git
           # Fetch all tags to ensure we have latest state
           git fetch --tags
@@ -107,8 +109,6 @@ jobs:
 
       - name: Calculate versions and create tags
         id: release
-        env:
-          GH_TOKEN: ${{ secrets.GH_WORKFLOW_TOKEN }}
         run: |
           # Function to get current version using axion-release plugin
           get_version() {
@@ -225,6 +225,8 @@ jobs:
               fi
 
               # Run the release task with appropriate parameters
+              # Note: Git remote is already configured in "Configure Git for releases" step
+              # The axion-release plugin will use that remote URL for pushing tags
               local release_params="$release_cmd -Prelease.disableChecks --no-daemon"
               
               if [ -n "$ext_dir" ]; then
@@ -317,6 +319,6 @@ jobs:
           else
             echo "**✅ Release complete!**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "The publish workflow will now trigger automatically for each tag." >> $GITHUB_STEP_SUMMARY
+            echo "Tags were pushed and will automatically trigger publish workflows." >> $GITHUB_STEP_SUMMARY
             echo "dry_run=false" >> $GITHUB_OUTPUT
           fi

@@ -197,8 +197,8 @@ nmcp {
 }
 
 signing {
-    def signingKey = System.getenv("GPG_SIGNING_KEY")
-    def signingPassword = System.getenv("GPG_SIGNING_PASSPHRASE")
+    def signingKey = System.getenv("GPG_PRIVATE_KEY")
+    def signingPassword = System.getenv("GPG_PASSPHRASE")
 
     if (signingKey && signingPassword) {
         useInMemoryPgpKeys(signingKey, signingPassword)

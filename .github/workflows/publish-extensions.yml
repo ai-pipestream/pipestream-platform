@@ -9,6 +9,8 @@ on:
       - 'dynamic-grpc-v*'
       - 'service-registration-v*'
       - 'tika-v*'
+  repository_dispatch:
+    types: [publish-extension]
   workflow_dispatch:
     inputs:
       extension:
@@ -68,7 +70,7 @@ jobs:
           gpg --list-secret-keys --keyid-format LONG || (echo "GPG key import failed!" && exit 1)
 
       - name: Publish pipestream-bom
-        if: github.event.inputs.extension == 'bom' || github.event.inputs.extension == 'all' || startsWith(github.ref, 'refs/tags/bom-v')
+        if: github.event.inputs.extension == 'bom' || github.event.inputs.extension == 'all' || github.event.client_payload.extension == 'bom' || startsWith(github.ref, 'refs/tags/bom-v')
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -94,7 +96,7 @@ jobs:
           fi
 
       - name: Publish pipestream-quarkus-devservices
-        if: github.event.inputs.extension == 'devservices' || github.event.inputs.extension == 'all' || startsWith(github.ref, 'refs/tags/devservices-v')
+        if: github.event.inputs.extension == 'devservices' || github.event.inputs.extension == 'all' || github.event.client_payload.extension == 'devservices' || startsWith(github.ref, 'refs/tags/devservices-v')
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -119,7 +121,7 @@ jobs:
           fi
 
       - name: Publish quarkus-apicurio-registry-protobuf
-        if: github.event.inputs.extension == 'apicurio' || github.event.inputs.extension == 'all' || startsWith(github.ref, 'refs/tags/apicurio-v')
+        if: github.event.inputs.extension == 'apicurio' || github.event.inputs.extension == 'all' || github.event.client_payload.extension == 'apicurio' || startsWith(github.ref, 'refs/tags/apicurio-v')
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -144,7 +146,7 @@ jobs:
           fi
 
       - name: Publish quarkus-dynamic-grpc-extension
-        if: github.event.inputs.extension == 'dynamic-grpc' || github.event.inputs.extension == 'all' || startsWith(github.ref, 'refs/tags/dynamic-grpc-v')
+        if: github.event.inputs.extension == 'dynamic-grpc' || github.event.inputs.extension == 'all' || github.event.client_payload.extension == 'dynamic-grpc' || startsWith(github.ref, 'refs/tags/dynamic-grpc-v')
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -169,7 +171,7 @@ jobs:
           fi
 
       - name: Publish pipestream-service-registration-extension
-        if: github.event.inputs.extension == 'service-registration' || github.event.inputs.extension == 'all' || startsWith(github.ref, 'refs/tags/service-registration-v')
+        if: github.event.inputs.extension == 'service-registration' || github.event.inputs.extension == 'all' || github.event.client_payload.extension == 'service-registration' || startsWith(github.ref, 'refs/tags/service-registration-v')
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -194,7 +196,7 @@ jobs:
           fi
 
       - name: Publish tika4-shaded
-        if: github.event.inputs.extension == 'tika4-shaded' || github.event.inputs.extension == 'all' || startsWith(github.ref, 'refs/tags/tika-v')
+        if: github.event.inputs.extension == 'tika4-shaded' || github.event.inputs.extension == 'all' || github.event.client_payload.extension == 'tika4-shaded' || startsWith(github.ref, 'refs/tags/tika-v')
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}

@@ -1,37 +1,61 @@
 # Pipestream Platform
 
-Monorepo for Pipestream Quarkus extensions - custom Quarkus extensions built for the Pipestream AI platform.
+[![Build](https://github.com/ai-pipestream/pipestream-platform/actions/workflows/test.yml/badge.svg)](https://github.com/ai-pipestream/pipestream-platform/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Maven Central](https://img.shields.io/maven-central/v/ai.pipestream/pipestream-bom?label=BOM)](https://central.sonatype.com/artifact/ai.pipestream/pipestream-bom)
 
-## Extensions
+Monorepo for Pipestream platform libraries - Quarkus extensions, BOM, and utility libraries for the Pipestream AI platform.
 
-This monorepo contains 4 Quarkus extensions:
+## Contents
+
+### Bill of Materials (BOM)
+
+- **pipestream-bom** (`ai.pipestream:pipestream-bom`) - Platform-wide dependency management for all Pipestream projects
+
+### Quarkus Extensions
 
 1. **pipestream-quarkus-devservices** - Dev services for local development
 2. **quarkus-apicurio-registry-protobuf** - Apicurio Registry integration with Protobuf
 3. **quarkus-dynamic-grpc-extension** - Dynamic gRPC client with service discovery
 4. **pipestream-service-registration-extension** - Service registration client
 
+### Utility Libraries
+
+- **tika4-shaded** - Shaded Apache Tika 4 snapshot for Quarkus compatibility
+
 ## Structure
 
-This project uses **Gradle composite builds** - each extension is its own root project with runtime/deployment submodules, coordinated from a single repository.
+This project uses **Gradle composite builds** - each extension/library is its own root project, coordinated from a single repository.
 
-```
-pipestream-platform/
-├── bom/                                          # Extensions BOM (subproject)
-├── pipestream-quarkus-devservices/              # Extension 1 (composite build)
-│   ├── pipestream-quarkus-devservices/          # Runtime module
-│   └── pipestream-quarkus-devservices-deployment/ # Deployment module
-├── quarkus-apicurio-registry-protobuf/          # Extension 2 (composite build)
-├── quarkus-dynamic-grpc-extension/              # Extension 3 (composite build)
-└── pipestream-service-registration-extension/   # Extension 4 (composite build)
+```mermaid
+graph TD
+    A[pipestream-platform] --> B[bom]
+    A --> C[tika4-shaded]
+    A --> D[pipestream-quarkus-devservices]
+    A --> E[quarkus-apicurio-registry-protobuf]
+    A --> F[quarkus-dynamic-grpc-extension]
+    A --> G[pipestream-service-registration-extension]
+
+    B:::bom
+    C:::lib
+    D:::ext
+    E:::ext
+    F:::ext
+    G:::ext
+
+    classDef bom fill:#e1f5fe
+    classDef lib fill:#fff3e0
+    classDef ext fill:#e8f5e9
 ```
 
 ## Versioning Strategy
 
 ### Independent Versioning with Axion-Release
 
-Each extension has **independent versioning** using [axion-release](https://github.com/allegro/axion-release-plugin):
+Each component has **independent versioning** using [axion-release](https://github.com/allegro/axion-release-plugin):
 
+- **bom**: `bom-v0.6.0`
+- **tika4-shaded**: `tika-v0.1.9`
 - **devservices**: `devservices-v0.2.0`
 - **apicurio**: `apicurio-v0.2.0`
 - **dynamic-grpc**: `dynamic-grpc-v0.2.0`
@@ -67,11 +91,17 @@ cd pipestream-quarkus-devservices
 ../gradlew build
 ```
 
-### Check Extension Version
+### Check Individual Version
 
 ```bash
 cd pipestream-quarkus-devservices
 ../gradlew currentVersion -q
+```
+
+### List All Versions
+
+```bash
+./gradlew listVersions
 ```
 
 ## Releasing
@@ -95,6 +125,20 @@ The workflow will:
 - **release-extensions.yml** - Manual workflow to create release tags
 - **publish-extensions.yml** - Triggered by tags, publishes releases to Maven Central + GitHub Packages
 
+## Using the BOM
+
+Import the BOM to manage all Pipestream dependencies:
+
+```groovy
+dependencies {
+    implementation platform('ai.pipestream:pipestream-bom:0.6.0')
+
+    // Now you can use dependencies without versions
+    implementation 'ai.pipestream:pipestream-quarkus-devservices'
+    implementation 'ai.pipestream:tika4-shaded'
+}
+```
+
 ## Using SNAPSHOT Versions
 
 To use SNAPSHOT versions in your project, add the Maven Central snapshots repository:
@@ -105,6 +149,10 @@ repositories {
         url = uri('https://central.sonatype.com/repository/maven-snapshots/')
         mavenContent { snapshotsOnly() }
     }
+}
+
+dependencies {
+    implementation platform('ai.pipestream:pipestream-bom:0.6.0-SNAPSHOT')
 }
 ```
 

@@ -2,7 +2,13 @@
 
 [![Build](https://github.com/ai-pipestream/pipestream-platform/actions/workflows/test.yml/badge.svg)](https://github.com/ai-pipestream/pipestream-platform/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 [![Maven Central](https://img.shields.io/maven-central/v/ai.pipestream/pipestream-bom?label=BOM)](https://central.sonatype.com/artifact/ai.pipestream/pipestream-bom)
+[![Maven Central](https://img.shields.io/maven-central/v/ai.pipestream/tika4-shaded?label=tika4-shaded)](https://central.sonatype.com/artifact/ai.pipestream/tika4-shaded)
+[![Maven Central](https://img.shields.io/maven-central/v/ai.pipestream/pipestream-quarkus-devservices?label=devservices)](https://central.sonatype.com/artifact/ai.pipestream/pipestream-quarkus-devservices)
+[![Maven Central](https://img.shields.io/maven-central/v/ai.pipestream/quarkus-apicurio-registry-protobuf?label=apicurio)](https://central.sonatype.com/artifact/ai.pipestream/quarkus-apicurio-registry-protobuf)
+[![Maven Central](https://img.shields.io/maven-central/v/ai.pipestream/quarkus-dynamic-grpc?label=dynamic-grpc)](https://central.sonatype.com/artifact/ai.pipestream/quarkus-dynamic-grpc)
+[![Maven Central](https://img.shields.io/maven-central/v/ai.pipestream/pipestream-service-registration-extension?label=service-reg)](https://central.sonatype.com/artifact/ai.pipestream/pipestream-service-registration-extension)
 
 Monorepo for Pipestream platform libraries - Quarkus extensions, BOM, and utility libraries for the Pipestream AI platform.
 

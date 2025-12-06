@@ -41,6 +41,14 @@ subprojects {
     repositories {
         mavenCentral()
         mavenLocal()
+        // Apache Snapshots for Tika 4.0.0-SNAPSHOT
+        maven {
+            name = 'ApacheSnapshots'
+            url = uri('https://repository.apache.org/content/repositories/snapshots/')
+            mavenContent {
+                snapshotsOnly()
+            }
+        }
         maven {
             name = 'GitHubPackages'
             url = uri('https://maven.pkg.github.com/ai-pipestream/pipestream-platform')

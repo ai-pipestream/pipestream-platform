@@ -2,8 +2,9 @@ import org.apache.tools.ant.filters.ReplaceTokens
 
 plugins {
     alias(libs.plugins.java.library)
-    // alias(libs.plugins.shadow) // Disabled due to Gradle 9/ASM incompatibility
-    alias(libs.plugins.maven.publish) // Ensure maven-publish is applied
+    alias(libs.plugins.shadow) // Re-enabled - version 9.3.0+ works with Gradle 9
+    alias(libs.plugins.maven.publish)
+    alias(libs.plugins.jandex) // Jandex index for Quarkus compatibility
 }
 
 description = 'Shaded version of Apache Tika 4.0 snapshot with core, standard parsers, scientific parser, and OCR parser'
@@ -17,27 +18,43 @@ java {
 }
 
 dependencies {
-    api(libs.tika.core) // Use api so they are transitive since we aren't shading
-    api(libs.tika.parsers.standard)
+    // Use implementation since we're bundling these into the shaded jar
+    implementation(libs.tika.core)
+    implementation(libs.tika.parsers.standard)
     // Extended parsers for better content extraction
-    api(libs.tika.parser.scientific)
+    implementation(libs.tika.parser.scientific)
     // OCR support for images and scanned documents (requires tesseract)
-    api(libs.tika.parser.ocr)
+    implementation(libs.tika.parser.ocr)
 }
 
-// TODO: Restore Service Files collection and Shadow Jar once plugin is compatible with Gradle 9
-/*
-// Task to collect and merge all service files from dependencies
-tasks.register('collectServiceFiles') {
-    // ... (keeping this commented out for future reference)
+// Configure shadow jar to bundle all Tika dependencies
+shadowJar {
+    archiveClassifier.set('') // Remove '-all' classifier, replace the main jar
+    archiveBaseName.set('tika4-shaded')
+    
+    // Ensure Jandex index is generated before shadowJar
+    dependsOn tasks.named('jandex')
+    
+    // Relocate packages to avoid conflicts
+    relocate('org.apache.tika', 'ai.pipestream.shaded.tika')
+    relocate('com.google.protobuf', 'ai.pipestream.shaded.protobuf')
+    relocate('com.google.common', 'ai.pipestream.shaded.guava')
+    
+    // Merge service files (important for Tika's service loader mechanism)
+    mergeServiceFiles()
+    
+    // Exclude Maven metadata
+    exclude('META-INF/maven/**')
+    exclude('META-INF/versions/**')
+    
+    // Ensure all dependencies are included
+    configurations = [project.configurations.runtimeClasspath]
 }
 
-tasks {
-    shadowJar {
-        // ...
-    }
+// Make shadowJar the main artifact for publishing
+tasks.named('jar') {
+    enabled = false // Disable regular jar since we're using shadowJar
 }
-*/
 
 // Enable resource filtering to replace @version@ in application.properties
 processResources {
@@ -48,12 +65,19 @@ processResources {
     }
 }
 
-// Re-enable default java artifacts publishing
-// components.java.withVariantsFromConfiguration(configurations.apiElements) { skip() }
-// components.java.withVariantsFromConfiguration(configurations.runtimeElements) { skip() }
-
 // Publishing is configured in root build.gradle for all subprojects
-// Customize the POM name and description if needed
+// Customize the POM name and publish shadowJar as the main artifact
+// Exclude all dependencies from POM since they're bundled in the shaded jar
 afterEvaluate {
     publishing.publications.maven.pom.name = 'Tika 4 Shaded'
+    publishing.publications.maven.pom.packaging = 'jar' // Ensure packaging is jar, not pom
+    // Publish shadowJar instead of regular jar
+    publishing.publications.maven.artifact(tasks.shadowJar)
+    // Remove dependencies from POM - they're all bundled in the shaded jar
+    publishing.publications.maven.pom.withXml {
+        def dependenciesNode = asNode().get('dependencies')
+        if (dependenciesNode != null && !dependenciesNode.isEmpty()) {
+            asNode().remove(dependenciesNode[0])
+        }
+    }
 }

@@ -86,7 +86,7 @@ publishing {
             pom {
                 name = 'Pipestream AI BOM'
                 description = 'Bill of Materials for the Pipestream AI platform'
-                url = 'https://github.com/ai-pipestream/pipestream-platform'
+                url = 'https://pipestream.ai'
                 
                 licenses {
                     license {
@@ -117,7 +117,7 @@ publishing {
             pom {
                 name = 'Pipestream AI BOM Catalog'
                 description = 'Version Catalog for the Pipestream AI platform'
-                url = 'https://github.com/ai-pipestream/pipestream-platform'
+                url = 'https://pipestream.ai'
                 
                 licenses {
                     license {

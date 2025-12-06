@@ -108,7 +108,7 @@ subprojects {
                     pom {
                         name = project.name
                         description = project.description ?: "Pipestream Platform Component"
-                        url = 'https://github.com/ai-pipestream/pipestream-platform'
+                        url = 'https://pipestream.ai'
                         licenses {
                             license {
                                 name = 'MIT License'

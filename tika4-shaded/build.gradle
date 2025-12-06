@@ -8,6 +8,14 @@ plugins {
 
 description = 'Shaded version of Apache Tika 4.0 snapshot with core, standard parsers, scientific parser, and OCR parser'
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+    withJavadocJar()
+}
+
 dependencies {
     api(libs.tika.core) // Use api so they are transitive since we aren't shading
     api(libs.tika.parsers.standard)
@@ -44,13 +52,8 @@ processResources {
 // components.java.withVariantsFromConfiguration(configurations.apiElements) { skip() }
 // components.java.withVariantsFromConfiguration(configurations.runtimeElements) { skip() }
 
-publishing {
-    publications {
-        maven(MavenPublication) {
-            pom {
-                name = 'Tika 4 Shaded'
-                description = 'Shaded version of Apache Tika 4.0 snapshot'
-            }
-        }
-    }
+// Publishing is configured in root build.gradle for all subprojects
+// Customize the POM name and description if needed
+afterEvaluate {
+    publishing.publications.maven.pom.name = 'Tika 4 Shaded'
 }

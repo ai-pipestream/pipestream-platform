@@ -31,17 +31,10 @@ jobs:
         with:
           version: "1.28.1"
 
-      - name: Publish to Maven Central and GitHub Packages
+      - name: Publish to Maven Central Portal
         env:
-          # Maven Central
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          # GitHub Packages
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Signing
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-          BUF_USER: ${{ secrets.BUF_USER }}
-          BUF_API_TOKEN: ${{ secrets.BUF_API_TOKEN }}
-        run: ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository publishAllPublicationsToGitHubPackagesRepository
+        run: ./gradlew publishAggregationToCentralPortal --no-daemon

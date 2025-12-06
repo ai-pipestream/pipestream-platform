@@ -248,7 +248,7 @@ java-platform = { id = "java-platform" }
 maven-publish = { id = "maven-publish" }
 quarkus-extension = { id = "io.quarkus.extension", version.ref = "quarkusVersion" }
 axion-release = { id = "pl.allegro.tech.build.axion-release", version.ref = "axion-release" }
-nmcp = { id = "com.gradleup.nmcp", version.ref = "nmcp" }
+nmcp = { id = "com.gradleup.nmcp.aggregation", version.ref = "nmcp" }
 protobuf = { id = "com.google.protobuf", version.ref = "protobuf-plugin" }
 buf = { id = "build.buf", version.ref = "buf-plugin" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow-plugin" }

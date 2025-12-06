@@ -1,7 +1,8 @@
 plugins {
     id 'java'
+    id 'maven-publish'
     id 'pl.allegro.tech.build.axion-release' version '1.21.1'
-    id 'io.github.gradle-nexus.publish-plugin' version '2.0.0'
+    alias(libs.plugins.nmcp)
 }
 
 scmVersion {
@@ -19,6 +20,18 @@ scmVersion {
 allprojects {
     group = 'ai.pipestream'
     version = rootProject.scmVersion.version
+}
+
+nmcpAggregation {
+    publishAllProjectsProbablyBreakingProjectIsolation()
+
+    centralPortal {
+        username = findProperty('mavenCentralUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME')
+        password = findProperty('mavenCentralPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD')
+        publishingType = "AUTOMATIC"
+        // Explicitly set baseUrl to use Maven Central Portal (not OSS)
+        baseUrl = "https://central.sonatype.com/"
+    }
 }
 
 subprojects {
@@ -60,6 +73,15 @@ subprojects {
         publishing {
             repositories {
                 mavenLocal()
+                // Maven Central Snapshots (Central Portal)
+                maven {
+                    name = 'MavenCentralSnapshots'
+                    url = uri('https://central.sonatype.com/repository/maven-snapshots/')
+                    credentials {
+                        username = findProperty('mavenCentralUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME')
+                        password = findProperty('mavenCentralPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD')
+                    }
+                }
                 // GitHub Packages
                 maven {
                     name = 'GitHubPackages'
@@ -76,6 +98,8 @@ subprojects {
                     from components.java
                     
                     pom {
+                        name = project.name
+                        description = project.description ?: "Pipestream Platform Component"
                         url = 'https://github.com/ai-pipestream/pipestream-platform'
                         licenses {
                             license {
@@ -110,18 +134,6 @@ subprojects {
         if (signingKey && signingPassword) {
             useInMemoryPgpKeys(signingKey, signingPassword)
             sign publishing.publications
-        }
-    }
-}
-
-// Central Portal Publishing (Sonatype) via Nexus Publish Plugin
-nexusPublishing {
-    repositories {
-        sonatype {
-            nexusUrl.set(uri("https://s01.oss.sonatype.org/service/local/"))
-            snapshotRepositoryUrl.set(uri("https://s01.oss.sonatype.org/content/repositories/snapshots/"))
-            username = findProperty('mavenCentralUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME')
-            password = findProperty('mavenCentralPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD')
         }
     }
 }

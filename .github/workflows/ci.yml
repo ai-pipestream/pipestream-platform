@@ -1,0 +1,140 @@
+name: CI/Snapshot
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Install Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: "1.28.1"
+
+      - name: Build with Gradle
+        env:
+          BUF_USER: ${{ secrets.BUF_USER }}
+          BUF_API_TOKEN: ${{ secrets.BUF_API_TOKEN }}
+        run: ./gradlew build
+
+  validate-publish:
+    name: Validate Publishing Configuration
+    needs: build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Install Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: "1.28.1"
+
+      - name: Validate publish configuration
+        env:
+          BUF_USER: ${{ secrets.BUF_USER }}
+          BUF_API_TOKEN: ${{ secrets.BUF_API_TOKEN }}
+          # Use dummy credentials for validation (won't actually publish)
+          MAVEN_CENTRAL_USERNAME: "dummy"
+          MAVEN_CENTRAL_PASSWORD: "dummy"
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Validating publish configuration..."
+          # Check that required publish tasks exist
+          ./gradlew tasks --all | grep -E "publishAggregationToCentralPortalSnapshots" || exit 1
+          ./gradlew tasks --all | grep -E "publishAllPublicationsToGitHubPackagesRepository" || exit 1
+          echo "✓ Required publish tasks are available"
+          
+          # Validate that repositories are configured (check build.gradle)
+          grep -q "MavenCentralSnapshots" build.gradle || exit 1
+          grep -q "GitHubPackages" build.gradle || exit 1
+          echo "✓ Both Maven Central Snapshots and GitHub Packages repositories are configured"
+          
+          # Validate nmcp aggregation is configured
+          grep -q "nmcpAggregation" build.gradle || exit 1
+          echo "✓ nmcp aggregation is configured"
+          
+          echo "✓ Publish configuration is valid"
+
+  publish-snapshots:
+    name: Publish Snapshots
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Install Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: "1.28.1"
+
+      - name: Publish to Maven Central Snapshots and GitHub Packages
+        env:
+          # Maven Central
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          # GitHub Packages
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signing
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          BUF_USER: ${{ secrets.BUF_USER }}
+          BUF_API_TOKEN: ${{ secrets.BUF_API_TOKEN }}
+        run: |
+          # Publish to Maven Central Snapshots via nmcp aggregation
+          ./gradlew publishAggregationToCentralPortalSnapshots --no-daemon
+          # Publish to GitHub Packages via maven-publish (publishes all projects to all configured repositories)
+          ./gradlew publish --no-daemon

@@ -1,19 +1,17 @@
 plugins {
-    id 'java'
-    id 'io.quarkus'
+    alias(libs.plugins.java.library)
+    alias(libs.plugins.quarkus)
 }
-
-description = 'Quarkus Dynamic gRPC Extension - Integration Tests'
 
 dependencies {
     // Quarkus BOM
-    implementation platform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    implementation platform(libs.quarkus.bom)
 
     // Force TestContainers version - override Quarkus BOM
-    testImplementation(platform('org.testcontainers:testcontainers-bom:2.0.2'))
+    testImplementation(platform("org.testcontainers:testcontainers-bom:${libs.versions.testcontainersVersion.get()}"))
 
     // Our extension
-    implementation project(':runtime')
+    implementation project(':quarkus-dynamic-grpc-extension')
 
     // Quarkus core
     implementation 'io.quarkus:quarkus-arc'
@@ -23,20 +21,19 @@ dependencies {
     // Test dependencies
     testImplementation 'io.quarkus:quarkus-junit5'
     testImplementation 'io.rest-assured:rest-assured'
-    testImplementation 'org.awaitility:awaitility'
-    testImplementation 'org.assertj:assertj-core:3.27.6'
+    testImplementation libs.awaitility
+    testImplementation libs.assertj.core
 
     // TestContainers for Consul - real integration tests, no mocks
-    testImplementation 'org.testcontainers:testcontainers'
-    testImplementation 'org.testcontainers:testcontainers-consul'  // Note: renamed from 'consul' in 2.x
-    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation libs.testcontainers
+    testImplementation libs.testcontainers.consul
+    testImplementation libs.testcontainers.junit
 
     // Consul client for service registration in tests
-    // https://mvnrepository.com/artifact/org.kiwiproject/consul-client
-    implementation 'org.kiwiproject:consul-client:1.9.0'
+    implementation libs.consul.client
 
     // Our deployment module provides build-time setup
-    testImplementation project(':deployment')
+    testImplementation project(':quarkus-dynamic-grpc-extension-deployment')
 
     // JUnit Platform launcher for Gradle 9
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -48,11 +45,6 @@ sourceSets {
             srcDirs += 'build/classes/java/quarkus-generated-sources/grpc'
         }
     }
-}
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
 }
 
 test {

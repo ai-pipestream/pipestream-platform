@@ -1,27 +1,8 @@
 plugins {
-    id 'pl.allegro.tech.build.axion-release' version '1.21.1'
-    id 'com.gradleup.nmcp' version '1.3.0'
     id 'java-platform'
-    id 'maven-publish'
     id 'version-catalog'
-    id 'signing'
 }
 
-// Independent versioning for BOM using axion-release
-scmVersion {
-    tag {
-        prefix = 'bom-v'
-        initialVersion { config, position -> '0.6.0' }
-    }
-    checks {
-        uncommittedChanges = false
-        aheadOfRemote = false
-        snapshotDependencies = false
-    }
-}
-
-group = 'ai.pipestream'
-version = scmVersion.version
 description = 'Pipestream AI BOM - Bill of Materials for the entire platform'
 
 javaPlatform {
@@ -31,7 +12,7 @@ javaPlatform {
 dependencies {
     api platform(libs.quarkus.bom)
     api platform("io.grpc:grpc-bom:${libs.versions.grpc.get()}")
-    api platform("com.google.protobuf:protobuf-bom:${libs.versions.protobuf.get()}")
+    api platform("com.google.protobuf:protobuf-bom:${libs.versions.protobufVersion.get()}")
 
     constraints {
         // ========================
@@ -53,47 +34,46 @@ dependencies {
         api("io.grpc:grpc-protobuf") { version { strictly(libs.versions.grpc.get()) } }
         api("io.grpc:grpc-stub") { version { strictly(libs.versions.grpc.get()) } }
         api("io.grpc:grpc-api") { version { strictly(libs.versions.grpc.get()) } }
-        api("com.google.protobuf:protobuf-java") { version { strictly(libs.versions.protobuf.get()) } }
-        api("com.google.protobuf:protobuf-java-util") { version { strictly(libs.versions.protobuf.get()) } }
-        api("com.google.protobuf:protoc") { version { strictly(libs.versions.protobuf.get()) } }
+        api("com.google.protobuf:protobuf-java") { version { strictly(libs.versions.protobufVersion.get()) } }
+        api("com.google.protobuf:protobuf-java-util") { version { strictly(libs.versions.protobufVersion.get()) } }
+        api("com.google.protobuf:protoc") { version { strictly(libs.versions.protobufVersion.get()) } }
 
         // ========================
         // Pipestream Quarkus Extensions
         // ========================
-        api libs.pipestream.devservices
-        api libs.pipestream.devservices.deployment
+        api project(':pipestream-quarkus-devservices')
+        api project(':pipestream-quarkus-devservices-deployment')
 
-        api libs.quarkus.apicurio.registry.protobuf
-        api libs.quarkus.apicurio.registry.protobuf.deployment
+        api project(':quarkus-apicurio-registry-protobuf')
+        api project(':quarkus-apicurio-registry-protobuf-deployment')
 
-        api libs.quarkus.dynamic.grpc
-        api libs.quarkus.dynamic.grpc.deployment
+        api project(':quarkus-dynamic-grpc-extension')
+        api project(':quarkus-dynamic-grpc-extension-deployment')
 
-        api libs.pipestream.service.registration
-        api libs.pipestream.service.registration.deployment
+        api project(':pipestream-service-registration-extension')
+        api project(':pipestream-service-registration-extension-deployment')
 
         // ========================
         // Pipestream Internal Libraries
         // ========================
-        // grpc modules - part of platform release train
-        api("ai.pipestream:grpc-stubs:${version}")
-        api("ai.pipestream:grpc-google-descriptor:${version}")
-
         // Library modules
-        api libs.pipestream.wiremock.server
-        api libs.tika4.shaded
+        api project(':tika4-shaded')
 
-        // Sample documents test data
+        // Sample documents test data - still external for now unless they are in the build?
+        // The settings.gradle didn't include them, so they stay as libs.
         api libs.pipestream.sample.doc.types
         api libs.pipestream.test.documents
         api libs.pipestream.parser.pipedoc.parsed
         api libs.pipestream.double.chunked.pipedocs
+        
+        // External Pipestream libs (not yet in monorepo)
+        api libs.pipestream.wiremock.server
     }
 }
 
 catalog {
     versionCatalog {
-        from(files("gradle/libs.versions.toml"))
+        from(files("../gradle/libs.versions.toml"))
     }
 }
 
@@ -102,26 +82,26 @@ publishing {
         create('maven', MavenPublication) {
             from components.javaPlatform
             artifactId = 'pipestream-bom'
-
+            
             pom {
                 name = 'Pipestream AI BOM'
                 description = 'Bill of Materials for the Pipestream AI platform'
-                url = 'https://github.com/ai-pipestream/pipestream-platform'
-
+                url = 'https://pipestream.ai'
+                
                 licenses {
                     license {
                         name = 'MIT License'
                         url = 'https://opensource.org/licenses/MIT'
                     }
                 }
-
+                
                 developers {
                     developer {
                         id = 'krickert'
                         name = 'Kristian Rickert'
                     }
                 }
-
+                
                 scm {
                     connection = 'scm:git:https://github.com/ai-pipestream/pipestream-platform.git'
                     developerConnection = 'scm:git:ssh://git@github.com/ai-pipestream/pipestream-platform.git'
@@ -133,26 +113,26 @@ publishing {
         create('catalog', MavenPublication) {
             from components.versionCatalog
             artifactId = 'pipestream-bom-catalog'
-
+            
             pom {
                 name = 'Pipestream AI BOM Catalog'
                 description = 'Version Catalog for the Pipestream AI platform'
-                url = 'https://github.com/ai-pipestream/pipestream-platform'
-
+                url = 'https://pipestream.ai'
+                
                 licenses {
                     license {
                         name = 'MIT License'
                         url = 'https://opensource.org/licenses/MIT'
                     }
                 }
-
+                
                 developers {
                     developer {
                         id = 'krickert'
                         name = 'Kristian Rickert'
                     }
                 }
-
+                
                 scm {
                     connection = 'scm:git:https://github.com/ai-pipestream/pipestream-platform.git'
                     developerConnection = 'scm:git:ssh://git@github.com/ai-pipestream/pipestream-platform.git'
@@ -160,48 +140,5 @@ publishing {
                 }
             }
         }
-    }
-
-    repositories {
-        mavenLocal()
-
-        // GitHub Packages
-        maven {
-            name = 'GitHubPackages'
-            url = uri('https://maven.pkg.github.com/ai-pipestream/pipestream-platform')
-            credentials {
-                username = findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
-                password = findProperty('gpr.key') ?: System.getenv('GITHUB_TOKEN')
-            }
-        }
-
-        // Maven Central Snapshots
-        maven {
-            name = 'MavenCentralSnapshots'
-            url = uri('https://central.sonatype.com/repository/maven-snapshots/')
-            credentials {
-                username = findProperty('mavenCentralUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME')
-                password = findProperty('mavenCentralPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD')
-            }
-        }
-    }
-}
-
-// nmcp plugin configuration for Maven Central publishing
-nmcp {
-    publishAllPublicationsToCentralPortal {
-        username = findProperty('mavenCentralUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME')
-        password = findProperty('mavenCentralPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD')
-        publishingType = "AUTOMATIC"
-    }
-}
-
-signing {
-    def signingKey = System.getenv("GPG_PRIVATE_KEY")
-    def signingPassword = System.getenv("GPG_PASSPHRASE")
-
-    if (signingKey && signingPassword) {
-        useInMemoryPgpKeys(signingKey, signingPassword)
-        sign publishing.publications
     }
 }

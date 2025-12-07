@@ -16,24 +16,47 @@ plugins {
 
 rootProject.name = 'pipestream-platform'
 
-// Version catalog for the BOM and root project
-dependencyResolutionManagement {
-    versionCatalogs {
-        libs {
-            from(files("bom/gradle/libs.versions.toml"))
-        }
-    }
-}
-
-// BOM is a true subproject (no settings.gradle of its own)
+// Top-level modules
 include 'bom'
+include 'tika4-shaded'
 
-// Extensions as composite builds (each stays its own root project)
-// This preserves their multi-module structure (runtime/deployment)
-includeBuild 'pipestream-quarkus-devservices'
-includeBuild 'quarkus-apicurio-registry-protobuf'
-includeBuild 'quarkus-dynamic-grpc-extension'
-includeBuild 'pipestream-service-registration-extension'
+// =============================================================================
+// Extensions - Flattened Logical Structure
+// =============================================================================
 
-// Utility libraries as composite builds
-includeBuild 'tika4-shaded'
+// 1. DevServices
+include 'pipestream-quarkus-devservices'
+project(':pipestream-quarkus-devservices').projectDir = file('pipestream-quarkus-devservices/pipestream-quarkus-devservices')
+
+include 'pipestream-quarkus-devservices-deployment'
+project(':pipestream-quarkus-devservices-deployment').projectDir = file('pipestream-quarkus-devservices/pipestream-quarkus-devservices-deployment')
+
+// 2. Apicurio Registry Protobuf
+include 'quarkus-apicurio-registry-protobuf'
+project(':quarkus-apicurio-registry-protobuf').projectDir = file('quarkus-apicurio-registry-protobuf/runtime')
+
+include 'quarkus-apicurio-registry-protobuf-deployment'
+project(':quarkus-apicurio-registry-protobuf-deployment').projectDir = file('quarkus-apicurio-registry-protobuf/deployment')
+
+include 'quarkus-apicurio-registry-protobuf-integration-tests'
+project(':quarkus-apicurio-registry-protobuf-integration-tests').projectDir = file('quarkus-apicurio-registry-protobuf/integration-tests')
+
+// 3. Dynamic gRPC
+include 'quarkus-dynamic-grpc-extension'
+project(':quarkus-dynamic-grpc-extension').projectDir = file('quarkus-dynamic-grpc-extension/runtime')
+
+include 'quarkus-dynamic-grpc-extension-deployment'
+project(':quarkus-dynamic-grpc-extension-deployment').projectDir = file('quarkus-dynamic-grpc-extension/deployment')
+
+include 'quarkus-dynamic-grpc-extension-integration-tests'
+project(':quarkus-dynamic-grpc-extension-integration-tests').projectDir = file('quarkus-dynamic-grpc-extension/integration-tests')
+
+// 4. Service Registration
+include 'pipestream-service-registration-extension'
+project(':pipestream-service-registration-extension').projectDir = file('pipestream-service-registration-extension/runtime')
+
+include 'pipestream-service-registration-extension-deployment'
+project(':pipestream-service-registration-extension-deployment').projectDir = file('pipestream-service-registration-extension/deployment')
+
+include 'pipestream-service-registration-extension-integration-tests'
+project(':pipestream-service-registration-extension-integration-tests').projectDir = file('pipestream-service-registration-extension/integration-tests')

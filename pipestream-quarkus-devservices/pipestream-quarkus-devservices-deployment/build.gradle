@@ -1,26 +1,13 @@
 plugins {
     id 'java-library'
-    id 'maven-publish'
-    id 'signing'
 }
 
 description = 'Quarkus Pipeline DevServices Extension - Deployment'
-
-def javaVersion = 21
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(javaVersion)
-    }
-    withJavadocJar()
-    withSourcesJar()
-}
 
 dependencies {
     // Quarkus BOM provides platform properties for Quarkus plugin
     implementation platform(libs.quarkus.bom)
 
-    // Quarkus BOM version comes from parent platform BOM
     implementation project(':pipestream-quarkus-devservices')
     implementation 'io.quarkus:quarkus-arc-deployment'
 
@@ -44,88 +31,6 @@ tasks.withType(Test).configureEach {
     }
 }
 
-// Harden Javadoc for all devservices subprojects (offline-safe by default)
-tasks.withType(Javadoc).configureEach { t ->
-    // Use only compile classpath to avoid generated resource outputs
-    t.classpath = files(sourceSets.main.compileClasspath)
-    def opts = t.options
-    opts.encoding = 'UTF-8'
-    opts.locale = 'en'
-    opts.charSet = 'UTF-8'
-    // Suppress missing docs warnings; keep other checks
-    opts.addStringOption('Xdoclint:-missing', '-quiet')
-    // External links (disabled by default to avoid network in closed environments).
-    // Enable explicitly via: -PenableExternalJavadocLinks
-    if (project.hasProperty('enableExternalJavadocLinks')) {
-        [
-            'https://docs.oracle.com/en/java/javase/21/docs/api/'
-        ].each { link -> opts.addStringOption('link', link) }
-    }
-    // Exclude non-API or internal packages
-    t.exclude('**/internal/**', '**/impl/**', '**/test/**')
-}
-
-publishing {
-    publications {
-        create('maven', MavenPublication) {
-            from components.java
-            artifactId = 'pipestream-quarkus-devservices-deployment'
-
-            pom {
-                name = 'pipestream-quarkus-devservices-deployment'
-                description = 'Quarkus extension for Pipeline DevServices - Deployment'
-                url = 'https://github.com/ai-pipestream/pipestream-platform'
-
-                licenses {
-                    license {
-                        name = 'MIT License'
-                        url = 'https://opensource.org/licenses/MIT'
-                    }
-                }
-
-                developers {
-                    developer {
-                        id = 'krickert'
-                        name = 'Krickert'
-                    }
-                }
-
-                scm {
-                    connection = 'scm:git:https://github.com/ai-pipestream/pipestream-platform.git'
-                    developerConnection = 'scm:git:ssh://git@github.com/ai-pipestream/pipestream-platform.git'
-                    url = 'https://github.com/ai-pipestream/pipestream-platform'
-                }
-            }
-        }
-    }
-
-    repositories {
-        mavenLocal()
-        maven {
-            name = 'GitHubPackages'
-            url = uri('https://maven.pkg.github.com/ai-pipestream/pipestream-platform')
-            credentials {
-                username = System.getenv('GITHUB_ACTOR') ?: findProperty('gpr.user')
-                password = System.getenv('GITHUB_TOKEN') ?: findProperty('gpr.key')
-            }
-        }
-        maven {
-            name = 'MavenCentralSnapshots'
-            url = uri('https://central.sonatype.com/repository/maven-snapshots/')
-            credentials {
-                username = findProperty('mavenCentralUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME')
-                password = findProperty('mavenCentralPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD')
-            }
-        }
-    }
-}
-
-signing {
-    def signingKey = System.getenv("GPG_PRIVATE_KEY")
-    def signingPassword = System.getenv("GPG_PASSPHRASE")
-
-    if (signingKey && signingPassword) {
-        useInMemoryPgpKeys(signingKey, signingPassword)
-        sign publishing.publications
-    }
-}
+// Publishing is configured in root build.gradle for all subprojects
+// The root creates a 'maven' publication with artifactId = project.name
+// Quarkus extension naming convention: deployment module artifactId = runtime artifactId + '-deployment'

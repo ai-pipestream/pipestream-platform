@@ -1,15 +1,15 @@
 plugins {
-    id 'java-library'
-    id 'io.quarkus.extension'
+    alias(libs.plugins.java.library)
+    alias(libs.plugins.quarkus.extension)
 }
 
 quarkusExtension {
-    deploymentModule = 'deployment'
+    deploymentModule = 'quarkus-apicurio-registry-protobuf-deployment'
 }
 
 dependencies {
     // Quarkus BOM
-    implementation platform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    implementation platform(libs.quarkus.bom)
 
     // Quarkus CDI
     implementation 'io.quarkus:quarkus-arc'
@@ -18,18 +18,13 @@ dependencies {
     implementation 'io.smallrye.reactive:smallrye-reactive-messaging-kafka'
 
     // Protobuf
-    implementation "com.google.protobuf:protobuf-java:${protobufVersion}"
+    implementation libs.protobuf.java
 
     // Apicurio Registry v3 Protobuf Serde
-    implementation "io.apicurio:apicurio-registry-protobuf-serde-kafka:${apicurioVersion}"
+    implementation libs.apicurio.registry.protobuf.serde
 
     // Annotation processor for extension metadata
     annotationProcessor 'io.quarkus:quarkus-extension-processor'
-}
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
 }
 
 // Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution

@@ -1,249 +1,62 @@
 import org.apache.tools.ant.filters.ReplaceTokens
-import com.github.jengelman.gradle.plugins.shadow.transformers.ServiceFileTransformer
 
 plugins {
-    id 'java-library'
-    id 'com.gradleup.shadow' version '9.2.2'
-    id 'maven-publish'
-    id 'pl.allegro.tech.build.axion-release' version '1.21.0'
-    id 'signing'
-    id 'com.gradleup.nmcp' version '1.2.1'
+    alias(libs.plugins.java.library)
+    alias(libs.plugins.shadow) // Re-enabled - version 9.3.0+ works with Gradle 9
+    alias(libs.plugins.maven.publish)
+    alias(libs.plugins.jandex) // Jandex index for Quarkus compatibility
 }
 
-
-group = 'ai.pipestream'
-
-// Configure axion-release plugin for semantic versioning
-scmVersion {
-    repository {
-        directory = rootDir.parentFile.absolutePath  // Git repo is in parent (monorepo root)
-    }
-    tag {
-        prefix = 'tika-v'
-        initialVersion { config, position -> '0.1.9' }
-    }
-    monorepo {
-        projectDirs = ['tika4-shaded']
-    }
-    checks {
-        uncommittedChanges = false
-        aheadOfRemote = false
-        snapshotDependencies = false
-    }
-}
-
-version = scmVersion.version
-
-def pipelineBomVersion = findProperty('pipelineBomVersion') ?: '0.2.2'
+description = 'Shaded version of Apache Tika 4.0 snapshot with core, standard parsers, scientific parser, and OCR parser'
 
 java {
-
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-    withJavadocJar()
-    withSourcesJar()
-    
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
-}
-
-repositories {
-    mavenCentral()
-    // Apache Snapshots repository for Tika 4.0 nightlies
-    maven {
-        name = 'ApacheSnapshots'
-        url = uri('https://repository.apache.org/snapshots/')
-        mavenContent {
-            snapshotsOnly()
-        }
-    }
+    withSourcesJar()
+    withJavadocJar()
 }
 
 dependencies {
+    // Use implementation since we're bundling these into the shaded jar
     implementation(libs.tika.core)
     implementation(libs.tika.parsers.standard)
     // Extended parsers for better content extraction
     implementation(libs.tika.parser.scientific)
     // OCR support for images and scanned documents (requires tesseract)
-    // Note: OCR module is already included in tika-parsers-standard-package
-    // Adding it explicitly here ensures it's available even if not using the full standard package
     implementation(libs.tika.parser.ocr)
 }
 
-// Task to collect and merge all service files from dependencies
-tasks.register('collectServiceFiles') {
-    def outputDir = layout.buildDirectory.dir('service-files')
-    outputs.dir(outputDir)
-
-    // Get the resolved files at configuration time (compatible with config cache)
-    def classpathFiles = configurations.runtimeClasspath.incoming.files
-
-    doLast {
-        def servicesDir = outputDir.get().asFile
-        servicesDir.deleteDir()
-        servicesDir.mkdirs()
-
-        def serviceFiles = [:]
-
-        // Iterate through all runtime classpath JARs
-        classpathFiles.each { jar ->
-            if (jar.name.endsWith('.jar')) {
-                try {
-                    def zipFile = new java.util.zip.ZipFile(jar)
-                    zipFile.entries().each { entry ->
-                        if (entry.name.startsWith('META-INF/services/') && !entry.isDirectory()) {
-                            def serviceName = entry.name.replace('META-INF/services/', '')
-                            if (!serviceFiles.containsKey(serviceName)) {
-                                serviceFiles[serviceName] = new LinkedHashSet()
-                            }
-
-                            // Read the service file contents
-                            def content = zipFile.getInputStream(entry).text
-                            content.split('\n').each { line ->
-                                def trimmed = line.trim()
-                                if (trimmed && !trimmed.startsWith('#')) {
-                                    serviceFiles[serviceName].add(trimmed)
-                                }
-                            }
-                        }
-                    }
-                    zipFile.close()
-                } catch (Exception e) {
-                    logger.warn("Failed to process JAR: ${jar.name}: ${e.message}")
-                }
-            }
-        }
-
-        // Write the merged service files with relocated package names
-        serviceFiles.each { serviceName, implementations ->
-            // Relocate the service file name (for org.apache.tika services)
-            def relocatedServiceName = serviceName.replace('org.apache.tika.', 'ai.pipestream.shaded.tika.')
-
-            def serviceFile = new File(servicesDir, "META-INF/services/${relocatedServiceName}")
-            serviceFile.parentFile.mkdirs()
-
-            // Relocate the implementation class names
-            def relocatedImplementations = implementations.collect { impl ->
-                impl.replace('org.apache.tika.', 'ai.pipestream.shaded.tika.')
-            }
-
-            serviceFile.text = """#  Licensed to the Apache Software Foundation (ASF) under one or more
-#  contributor license agreements.  See the NOTICE file distributed with
-#  this work for additional information regarding copyright ownership.
-#  The ASF licenses this file to You under the Apache License, Version 2.0
-#  (the "License"); you may not use this file except in compliance with
-#  the License.  You may obtain a copy of the License at
-#
-#       http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
-
-${relocatedImplementations.join('\n')}
-"""
-            logger.lifecycle("Created service file ${relocatedServiceName} with ${relocatedImplementations.size()} implementations")
-        }
-    }
+// Configure shadow jar to bundle all Tika dependencies
+shadowJar {
+    archiveClassifier.set('') // Remove '-all' classifier, replace the main jar
+    archiveBaseName.set('tika4-shaded')
+    
+    // Ensure Jandex index is generated before shadowJar
+    dependsOn tasks.named('jandex')
+    
+    // Relocate packages to avoid conflicts
+    relocate('org.apache.tika', 'ai.pipestream.shaded.tika')
+    relocate('com.google.protobuf', 'ai.pipestream.shaded.protobuf')
+    relocate('com.google.common', 'ai.pipestream.shaded.guava')
+    
+    // Merge service files (important for Tika's service loader mechanism)
+    mergeServiceFiles()
+    
+    // Exclude Maven metadata
+    exclude('META-INF/maven/**')
+    exclude('META-INF/versions/**')
+    
+    // Ensure all dependencies are included
+    configurations = [project.configurations.runtimeClasspath]
 }
 
-tasks {
-    shadowJar {
-        archiveClassifier.set('')
-
-        // Depend on the service file collection task
-        dependsOn collectServiceFiles
-
-        // Include the merged and pre-relocated service files from our custom task
-        // The custom task already renamed the files and relocated the class names
-        from(layout.buildDirectory.dir('service-files')) {
-            include 'META-INF/services/**'
-        }
-
-        // Exclude original service files from dependencies - we'll use our merged and pre-relocated ones
-        exclude 'META-INF/services/org.apache.tika.*'
-
-        // Append other important resource files that need merging
-        append 'META-INF/DEPENDENCIES'
-        append 'META-INF/NOTICE'
-        append 'META-INF/NOTICE.txt'
-        append 'META-INF/LICENSE'
-        append 'META-INF/LICENSE.txt'
-
-        // Handle duplicate entries by excluding them
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-
-        // Exclude signature files that commonly cause ZIP conflicts
-        exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
-        // Exclude maven metadata that causes duplicates
-        exclude 'META-INF/maven/**/pom.properties'
-        exclude 'META-INF/maven/**/pom.xml'
-
-        // Allow large ZIP entries if needed
-        zip64 true
-
-        // Relocate packages to avoid conflicts
-        relocate 'org.apache.tika', 'ai.pipestream.shaded.tika'
-        relocate 'com.google.protobuf', 'ai.pipestream.shaded.protobuf'
-        relocate 'com.google.common', 'ai.pipestream.shaded.guava'
-
-        // Preserve important manifest entries
-        manifest {
-            attributes(
-                'Implementation-Title': 'Tika 4 Shaded',
-                'Implementation-Version': project.version,
-                'Implementation-Vendor': 'ai.pipestream',
-                'Built-By': System.getProperty('user.name'),
-                'Built-JDK': System.getProperty('java.version'),
-                'Created-By': "Gradle ${gradle.gradleVersion}"
-            )
-        }
-
-        // Minimize the JAR by removing unused classes (optional, can be enabled if needed)
-        // minimize()
-    }
-
-    build {
-        dependsOn shadowJar
-    }
-
-}
-
-// Ensure Java 21 compatibility for all JavaCompile tasks
-tasks.withType(JavaCompile).configureEach {
-    options.release = 21
-}
-
-
-test {
-    systemProperty "java.util.logging.manager", "org.jboss.logmanager.LogManager"
-}
-compileJava {
-    options.encoding = 'UTF-8'
-    options.compilerArgs << '-parameters'
-}
-
-compileTestJava {
-    options.encoding = 'UTF-8'
-}
-
-// Configure Javadoc task
-tasks.withType(Javadoc).configureEach { task ->
-    def opts = task.options
-    opts.encoding = 'UTF-8'
-    opts.charSet = 'UTF-8'
-    opts.locale = 'en'
-    // Suppress missing Javadoc warnings for now
-    opts.addStringOption('Xdoclint:-missing', '-quiet')
-    // Exclude internal packages
-    task.exclude('**/internal/**', '**/impl/**', '**/test/**')
+// Make shadowJar the main artifact for publishing
+tasks.named('jar') {
+    enabled = false // Disable regular jar since we're using shadowJar
 }
 
 // Enable resource filtering to replace @version@ in application.properties
-// Use @ delimiters to avoid conflicts with ${} runtime property placeholders
 processResources {
     filesMatching('**/*.properties') {
         filter(ReplaceTokens, tokens: [
@@ -252,146 +65,19 @@ processResources {
     }
 }
 
-processTestResources {
-    filesMatching('**/*.properties') {
-        filter(ReplaceTokens, tokens: [
-                version: project.version.toString()
-        ])
-    }
-}
-
-
-publishing {
-    publications {
-        create('maven', MavenPublication) {
-            artifact tasks.shadowJar
-            // Include sources and javadoc jars
-            artifact tasks.sourcesJar
-            artifact tasks.javadocJar
-
-            pom {
-                name.set('Tika 4 Shaded')
-                description.set('Shaded version of Apache Tika 4.0 snapshot with core, standard parsers, scientific parser, and OCR parser')
-                url.set('https://github.com/ai-pipestream/pipestream-platform')
-
-                licenses {
-                    license {
-                        name.set('MIT License')
-                        url.set('https://opensource.org/licenses/MIT')
-                    }
-                }
-
-                developers {
-                    developer {
-                        id.set('krickert')
-                        name.set('Pipestream Engine Team')
-                    }
-                }
-
-                scm {
-                    connection.set('scm:git:git://github.com/ai-pipestream/pipestream-platform.git')
-                    developerConnection.set('scm:git:ssh://github.com/ai-pipestream/pipestream-platform.git')
-                    url.set('https://github.com/ai-pipestream/pipestream-platform')
-                }
-
-                // Ensure BOM/platform dependency is included in dependencyManagement
-                // This ensures Maven Central can resolve dependency versions from the BOM
-                withXml {
-                    def projectNode = asNode()
-                    def dependencyManagementNodes = projectNode.get('dependencyManagement')
-                    def dmNode
-                    def depsNode
-
-                    if (dependencyManagementNodes.isEmpty()) {
-                        // Create dependencyManagement and dependencies nodes
-                        dmNode = projectNode.appendNode('dependencyManagement')
-                        depsNode = dmNode.appendNode('dependencies')
-                    } else {
-                        // Get the first dependencyManagement node
-                        dmNode = dependencyManagementNodes[0]
-                        // Check if it has a dependencies child
-                        def dependenciesNodes = dmNode.get('dependencies')
-                        if (dependenciesNodes.isEmpty()) {
-                            depsNode = dmNode.appendNode('dependencies')
-                        } else {
-                            depsNode = dependenciesNodes[0]
-                        }
-                    }
-
-                    // Check if pipeline-bom already exists
-                    def existingBom = depsNode.children().find { dep ->
-                        dep.groupId?.text() == 'ai.pipestream' &&
-                                dep.artifactId?.text() == 'pipeline-bom'
-                    }
-
-                    if (!existingBom) {
-                        def bomDependency = depsNode.appendNode('dependency')
-                        bomDependency.appendNode('groupId', 'ai.pipestream')
-                        bomDependency.appendNode('artifactId', 'pipeline-bom')
-                        bomDependency.appendNode('version', pipelineBomVersion)
-                        bomDependency.appendNode('type', 'pom')
-                        bomDependency.appendNode('scope', 'import')
-                    }
-                }
-            }
-        }
-    }
-
-    repositories {
-        // Publish to Maven Local for development
-        mavenLocal()
-
-        // Conditionally add GitHub Packages repository when credentials are available
-        def ghRepo = System.getenv('GITHUB_REPOSITORY') ?: 'ai-pipestream/pipestream-platform'
-        def ghActor = System.getenv('GITHUB_ACTOR') ?: (project.findProperty('gpr.user') ?: System.getenv('GPR_USER'))
-        def ghToken = System.getenv('GITHUB_TOKEN') ?: (project.findProperty('gpr.key') ?: System.getenv('GPR_TOKEN'))
-        if (ghActor && ghToken) {
-            maven {
-                name = 'GitHubPackages'
-                url = uri("https://maven.pkg.github.com/${ghRepo}")
-                credentials {
-                    username = ghActor
-                    password = ghToken
-                }
-            }
-        }
-
-        // Maven Central Snapshots
-        maven {
-            name = 'MavenCentralSnapshots'
-            url = uri('https://central.sonatype.com/repository/maven-snapshots/')
-            credentials {
-                username = findProperty('mavenCentralUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME')
-                password = findProperty('mavenCentralPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD')
-            }
-        }
-    }
-}
-
-
-signing {
-    // Read org-level GPG secrets directly, so runnable apps don't need extra env mapping
-    def signingKey = System.getenv("GPG_PRIVATE_KEY")
-    def signingPassword = System.getenv("GPG_PASSPHRASE")
-
-    if (signingKey && signingPassword) {
-        useInMemoryPgpKeys(signingKey, signingPassword)
-        sign publishing.publications.maven
-    }
-}
-
-// Ensure all signing tasks run before nmcp bundles and publishes artifacts
+// Publishing is configured in root build.gradle for all subprojects
+// Customize the POM name and publish shadowJar as the main artifact
+// Exclude all dependencies from POM since they're bundled in the shaded jar
 afterEvaluate {
-    tasks.matching { it.name.startsWith("nmcpZipAllPublications") || it.name.startsWith("nmcpPublishAllPublicationsToCentralPortal") }
-            .configureEach { nmcpTask ->
-                nmcpTask.dependsOn(tasks.withType(Sign))
-            }
-}
-
-nmcp {
-    publishAllPublicationsToCentralPortal {
-        username = providers.environmentVariable("MAVEN_CENTRAL_USERNAME")
-        password = providers.environmentVariable("MAVEN_CENTRAL_PASSWORD")
-        publishingType = "AUTOMATIC"
+    publishing.publications.maven.pom.name = 'Tika 4 Shaded'
+    publishing.publications.maven.pom.packaging = 'jar' // Ensure packaging is jar, not pom
+    // Publish shadowJar instead of regular jar
+    publishing.publications.maven.artifact(tasks.shadowJar)
+    // Remove dependencies from POM - they're all bundled in the shaded jar
+    publishing.publications.maven.pom.withXml {
+        def dependenciesNode = asNode().get('dependencies')
+        if (dependenciesNode != null && !dependenciesNode.isEmpty()) {
+            asNode().remove(dependenciesNode[0])
+        }
     }
 }

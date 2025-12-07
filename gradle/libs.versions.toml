@@ -1,15 +1,19 @@
 [versions]
-quarkus = "3.30.2"
+quarkusVersion = "3.30.2"
 jandex-plugin = "2.3.0"
 commons-lang3 = "3.20.0"
 opennlp-tools = "2.5.6.1"
 jackson-module-jsonschema = "2.20.1"
 logging-manager = "3.4.1"
 opensearch = "3.3.0"
+# Apache HTTP Client
 httpclient5 = "5.5.1"
+# Caffeine
+caffeine = "3.1.8"
 # gRPC and Protobuf versions - match Quarkus defaults
+
 grpc = "1.77.0"
-protobuf = "4.33.1"
+protobufVersion = "4.33.1"
 
 # Quarkiverse extensions
 quinoa = "2.7.0"
@@ -24,7 +28,7 @@ aws-sdk = "2.39.5"
 apicurio = "3.1.4"
 # Testing
 awaitility = "4.3.0"
-testcontainers = "2.0.2"
+testcontainersVersion = "2.0.2"
 testcontainers-junit = "1.21.3"
 assertj = "3.27.6"
 hamcrest = "3.0"
@@ -53,6 +57,11 @@ commonmark = "0.27.0"
 pdfbox = "3.0.6"
 # Security
 password4j = "1.8.4"
+# Consul Client
+consul-client = "1.9.0"
+
+# Tika - using 4.0.0-SNAPSHOT from Apache snapshots repository
+tika = "4.0.0-SNAPSHOT"
 
 # ========================
 # Pipestream Quarkus Extensions
@@ -70,15 +79,19 @@ pipestream-wiremock-server = "0.1.6"
 # Gradle plugins
 axion-release = "1.21.1"
 nmcp = "1.3.0"
+protobuf-plugin = "0.9.4"
+buf-plugin = "0.9.0"
+shadow-plugin = "9.3.0"
 
 [libraries]
 # Quarkus BOM
-quarkus-bom = { module = "io.quarkus.platform:quarkus-bom", version.ref = "quarkus" }
-quarkus-amazon-services-bom = { module = "io.quarkus.platform:quarkus-amazon-services-bom", version.ref = "quarkus" }
+quarkus-bom = { module = "io.quarkus.platform:quarkus-bom", version.ref = "quarkusVersion" }
+quarkus-amazon-services-bom = { module = "io.quarkus.platform:quarkus-amazon-services-bom", version.ref = "quarkusVersion" }
 
 # Quarkus extensions
 quarkus-grpc = { module = "io.quarkus:quarkus-grpc" }
 quarkus-mutiny = { module = "io.quarkus:quarkus-mutiny" }
+jandex = { module = "io.smallrye:jandex" }
 quarkus-arc = { module = "io.quarkus:quarkus-arc" }
 quarkus-rest = { module = "io.quarkus:quarkus-rest" }
 quarkus-rest-jackson = { module = "io.quarkus:quarkus-rest-jackson" }
@@ -96,9 +109,9 @@ quarkus-smallrye-openapi = { module = "io.quarkus:quarkus-smallrye-openapi" }
 quarkus-test-common = { module = "io.quarkus:quarkus-test-common" }
 
 # gRPC and Protobuf
-protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
-protoc = { module = "com.google.protobuf:protoc", version.ref = "protobuf" }
-protobuf-java-util = { module = "com.google.protobuf:protobuf-java-util", version.ref = "protobuf" }
+protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "protobufVersion" }
+protoc = { module = "com.google.protobuf:protoc", version.ref = "protobufVersion" }
+protobuf-java-util = { module = "com.google.protobuf:protobuf-java-util", version.ref = "protobufVersion" }
 grpc-protobuf = { module = "io.grpc:grpc-protobuf", version.ref = "grpc" }
 grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
 grpc-services = { module = "io.grpc:grpc-services", version.ref = "grpc" }
@@ -123,7 +136,7 @@ quarkus-junit5 = { module = "io.quarkus:quarkus-junit5" }
 rest-assured = { module = "io.rest-assured:rest-assured" }
 mutiny-test-utils = { module = "io.smallrye.reactive:mutiny-test-utils", version.ref = "mutiny-test-utils" }
 awaitility = { module = "org.awaitility:awaitility", version.ref = "awaitility" }
-testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
+testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainersVersion" }
 testcontainers-consul = { module = "org.testcontainers:consul", version.ref = "testcontainers-consul" }
 testcontainers-junit = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers-junit" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
@@ -137,6 +150,9 @@ opensearch-java = { module = "org.opensearch.client:opensearch-java", version.re
 
 # Apache HTTP Client
 httpclient5 = { module = "org.apache.httpcomponents.client5:httpclient5", version.ref = "httpclient5" }
+
+# Caffeine
+caffeine = { module = "com.github.ben-manes.caffeine:caffeine", version.ref = "caffeine" }
 
 # Quarkiverse extensions
 quarkus-quinoa = { module = "io.quarkiverse.quinoa:quarkus-quinoa", version.ref = "quinoa" }
@@ -179,6 +195,9 @@ pdfbox = { module = "org.apache.pdfbox:pdfbox", version.ref = "pdfbox" }
 # Security
 password4j = { module = "com.password4j:password4j", version.ref = "password4j" }
 
+# Consul Client
+consul-client = { module = "org.kiwiproject:consul-client", version.ref = "consul-client" }
+
 # SmallRye Reactive Messaging (for testing)
 smallrye-reactive-messaging-in-memory = { module = "io.smallrye.reactive:smallrye-reactive-messaging-in-memory", version.ref = "smallrye-reactive-messaging" }
 smallrye-mutiny-vertx-web-client = { module = "io.smallrye.reactive:smallrye-mutiny-vertx-web-client" }
@@ -201,6 +220,12 @@ pipestream-test-documents = { module = "ai.pipestream:test-documents", version.r
 pipestream-parser-pipedoc-parsed = { module = "ai.pipestream:parser-pipedoc-parsed", version.ref = "sample-documents" }
 pipestream-double-chunked-pipedocs = { module = "ai.pipestream:double-chunked-pipedocs", version.ref = "sample-documents" }
 
+# Tika (using v3 as proxy for v4-snapshot structure if compatible, or just hardcode in build.gradle if specific snapshot)
+tika-core = { module = "org.apache.tika:tika-core", version.ref = "tika" }
+tika-parsers-standard = { module = "org.apache.tika:tika-parsers-standard-package", version.ref = "tika" }
+tika-parser-scientific = { module = "org.apache.tika:tika-parser-scientific-module", version.ref = "tika" }
+tika-parser-ocr = { module = "org.apache.tika:tika-parser-ocr-module", version.ref = "tika" }
+
 # Pipestream internal libraries
 pipestream-devservices = { module = "ai.pipestream:pipestream-quarkus-devservices", version.ref = "pipestream-devservices" }
 pipestream-devservices-deployment = { module = "ai.pipestream:pipestream-quarkus-devservices-deployment", version.ref = "pipestream-devservices" }
@@ -215,15 +240,18 @@ pipestream-service-registration = { module = "ai.pipestream:pipestream-service-r
 pipestream-service-registration-deployment = { module = "ai.pipestream:pipestream-service-registration-extension-deployment", version.ref = "pipestream-service-registration" }
 
 [plugins]
-quarkus = { id = "io.quarkus", version.ref = "quarkus" }
+quarkus = { id = "io.quarkus", version.ref = "quarkusVersion" }
 jandex = { id = "org.kordamp.gradle.jandex", version.ref = "jandex-plugin" }
 java = { id = "java" }
 java-library = { id = "java-library" }
 java-platform = { id = "java-platform" }
 maven-publish = { id = "maven-publish" }
-quarkus-extension = { id = "io.quarkus.extension", version.ref = "quarkus" }
+quarkus-extension = { id = "io.quarkus.extension", version.ref = "quarkusVersion" }
 axion-release = { id = "pl.allegro.tech.build.axion-release", version.ref = "axion-release" }
-nmcp = { id = "com.gradleup.nmcp", version.ref = "nmcp" }
+nmcp = { id = "com.gradleup.nmcp.aggregation", version.ref = "nmcp" }
+protobuf = { id = "com.google.protobuf", version.ref = "protobuf-plugin" }
+buf = { id = "build.buf", version.ref = "buf-plugin" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow-plugin" }
 
 [bundles]
 # Common Quarkus dependencies

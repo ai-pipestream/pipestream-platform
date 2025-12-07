@@ -1,0 +1,45 @@
+name: Trigger Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      incrementer:
+        description: 'Version incrementer'
+        required: true
+        default: 'incrementPatch'
+        type: choice
+        options:
+          - incrementPatch
+          - incrementMinor
+          - incrementMajor
+
+jobs:
+  release:
+    name: Perform Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_WORKFLOW_TOKEN }} # Needed to push tags and trigger other workflows
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Perform Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_WORKFLOW_TOKEN }}
+        run: ./gradlew release -Prelease.incrementer=${{ inputs.incrementer }} -Prelease.disableChecks

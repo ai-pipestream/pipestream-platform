@@ -1,14 +1,14 @@
 plugins {
-    id 'java'
-    id 'io.quarkus' version "${quarkusVersion}"
+    alias(libs.plugins.java.library)
+    alias(libs.plugins.quarkus)
 }
 
 dependencies {
     // Quarkus BOM
-    implementation platform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    implementation platform(libs.quarkus.bom)
 
     // Our extension
-    implementation project(':runtime')
+    implementation project(':quarkus-apicurio-registry-protobuf')
 
     // Quarkus core
     implementation 'io.quarkus:quarkus-arc'
@@ -18,20 +18,15 @@ dependencies {
     implementation 'io.quarkus:quarkus-grpc'
 
     // Apicurio Registry Protobuf Serde
-    implementation "io.apicurio:apicurio-registry-protobuf-serde-kafka:${apicurioVersion}"
+    implementation libs.apicurio.registry.protobuf.serde
 
     // Test dependencies
     testImplementation 'io.quarkus:quarkus-junit5'
     testImplementation 'io.rest-assured:rest-assured'
-    testImplementation 'org.awaitility:awaitility'
+    testImplementation libs.awaitility
 
     // Our deployment module provides DevServices for Apicurio Registry
-    testImplementation project(':deployment')
-}
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    testImplementation project(':quarkus-apicurio-registry-protobuf-deployment')
 }
 
 // Ensure Quarkus gRPC codegen runs before compilation

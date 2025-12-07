@@ -1,88 +1,147 @@
 plugins {
-    id 'base'
+    id 'java'
+    id 'maven-publish'
+    id 'pl.allegro.tech.build.axion-release' version '1.21.1'
+    alias(libs.plugins.nmcp)
 }
 
-group = 'ai.pipestream'
+scmVersion {
+    tag {
+        prefix = 'v'
+        initialVersion { config, position -> '0.7.0' }
+    }
+    checks {
+        uncommittedChanges = false
+        aheadOfRemote = false
+        snapshotDependencies = false
+    }
+}
 
-// Repositories for BOM subproject
 allprojects {
+    group = 'ai.pipestream'
+    version = rootProject.scmVersion.version
+}
+
+nmcpAggregation {
+    publishAllProjectsProbablyBreakingProjectIsolation()
+
+    centralPortal {
+        username = findProperty('mavenCentralUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME')
+        password = findProperty('mavenCentralPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD')
+        publishingType = "AUTOMATIC"
+        // Explicitly set baseUrl to use Maven Central Portal (not OSS)
+        baseUrl = "https://central.sonatype.com/"
+    }
+}
+
+subprojects {
+    apply plugin: 'maven-publish'
+    apply plugin: 'signing'
+
     repositories {
         mavenCentral()
         mavenLocal()
+        // Apache Snapshots for Tika 4.0.0-SNAPSHOT
+        maven {
+            name = 'ApacheSnapshots'
+            url = uri('https://repository.apache.org/content/repositories/snapshots/')
+            mavenContent {
+                snapshotsOnly()
+            }
+        }
         maven {
             name = 'GitHubPackages'
-            url = uri('https://maven.pkg.github.com/ai-pipestream/*')
+            url = uri('https://maven.pkg.github.com/ai-pipestream/pipestream-platform')
             credentials {
                 username = findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
                 password = findProperty('gpr.key') ?: System.getenv('GITHUB_TOKEN')
             }
         }
     }
-}
-
-// Aggregate tasks to build all extensions (composite builds)
-tasks.register('buildAll') {
-    group = 'build'
-    description = 'Build all extensions'
-    dependsOn gradle.includedBuild('pipestream-quarkus-devservices').task(':buildAll')
-    dependsOn gradle.includedBuild('quarkus-apicurio-registry-protobuf').task(':build')
-    dependsOn gradle.includedBuild('quarkus-dynamic-grpc-extension').task(':build')
-    dependsOn gradle.includedBuild('pipestream-service-registration-extension').task(':build')
-    dependsOn gradle.includedBuild('tika4-shaded').task(':build')
-}
-
-tasks.register('testAll') {
-    group = 'verification'
-    description = 'Test all extensions (runs buildAll which includes tests)'
-    dependsOn 'buildAll'
-}
-
-// Note: cleanAll not provided - each extension uses subproject cleans
-// Use: cd <extension-dir> && ../gradlew clean
-
-// Task to list all versions
-tasks.register('listVersions') {
-    group = 'help'
-    description = 'List versions of all extensions and libraries'
-    doLast {
-        println "\n=== Pipestream Extensions Versions ==="
-        println ""
-
-        def builds = [
-            'pipestream-quarkus-devservices',
-            'quarkus-apicurio-registry-protobuf',
-            'quarkus-dynamic-grpc-extension',
-            'pipestream-service-registration-extension',
-            'tika4-shaded'
-        ]
-
-        builds.each { buildName ->
-            def proc = new ProcessBuilder('../gradlew', 'currentVersion', '-q')
-                .directory(new File("${rootDir}/${buildName}"))
-                .redirectErrorStream(true)
-                .start()
-            proc.waitFor()
-            def output = proc.inputStream.text.trim()
-            def version = output.split('\n').last().replace('Project version: ', '')
-            printf "  %-45s %s%n", buildName, version
+    
+    // Configure Java projects (excluding BOM)
+    if (project.name != 'bom') {
+        apply plugin: 'java'
+        
+        java {
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(21)
+            }
+            withSourcesJar()
+            withJavadocJar()
+        }
+        
+        // Remove JavaDoc links to internal Quarkus classes to prevent build errors
+        tasks.withType(Javadoc).configureEach {
+            doFirst {
+                options.addStringOption('Xdoclint:none', '-quiet')
+            }
         }
 
-        // BOM is a subproject
-        def bomProc = new ProcessBuilder('./gradlew', ':bom:currentVersion', '-q')
-            .directory(rootDir)
-            .redirectErrorStream(true)
-            .start()
-        bomProc.waitFor()
-        def bomOutput = bomProc.inputStream.text.trim()
-        def bomVersion = bomOutput.split('\n').last().replace('Project version: ', '')
-        printf "  %-45s %s%n", "bom", bomVersion
-
-        println ""
+        publishing {
+            repositories {
+                mavenLocal()
+                // Maven Central Snapshots (Central Portal)
+                maven {
+                    name = 'MavenCentralSnapshots'
+                    url = uri('https://central.sonatype.com/repository/maven-snapshots/')
+                    credentials {
+                        username = findProperty('mavenCentralUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME')
+                        password = findProperty('mavenCentralPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD')
+                    }
+                }
+                // GitHub Packages
+                maven {
+                    name = 'GitHubPackages'
+                    url = uri('https://maven.pkg.github.com/ai-pipestream/pipestream-platform')
+                    credentials {
+                        username = findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
+                        password = findProperty('gpr.key') ?: System.getenv('GITHUB_TOKEN')
+                    }
+                }
+            }
+            
+            publications {
+                create('maven', MavenPublication) {
+                    from components.java
+                    
+                    pom {
+                        name = project.name
+                        description = project.description ?: "Pipestream Platform Component"
+                        url = 'https://pipestream.ai'
+                        licenses {
+                            license {
+                                name = 'MIT License'
+                                url = 'https://opensource.org/licenses/MIT'
+                            }
+                        }
+                        developers {
+                            developer {
+                                id = 'krickert'
+                                name = 'Kristian Rickert'
+                            }
+                        }
+                        scm {
+                            connection = 'scm:git:https://github.com/ai-pipestream/pipestream-platform.git'
+                            developerConnection = 'scm:git:ssh://git@github.com/ai-pipestream/pipestream-platform.git'
+                            url = 'https://github.com/ai-pipestream/pipestream-platform'
+                        }
+                    }
+                }
+            }
+        }
     }
-}
 
-// Wrapper task for Gradle wrapper
-wrapper {
-    gradleVersion = '9.2.1'
-    distributionType = Wrapper.DistributionType.ALL
+    signing {
+        def signingKey = System.getenv("GPG_PRIVATE_KEY")
+        def signingPassword = System.getenv("GPG_PASSPHRASE")
+        
+        // Only sign if keys are present (e.g. CI/Release)
+        required { signingKey != null }
+        
+        if (signingKey && signingPassword) {
+            useInMemoryPgpKeys(signingKey, signingPassword)
+            sign publishing.publications
+        }
+    }
 }

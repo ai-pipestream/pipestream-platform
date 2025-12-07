@@ -1,30 +1,30 @@
 plugins {
-    id 'java-library'
+    alias(libs.plugins.java.library)
 }
 
 configurations.configureEach {
     resolutionStrategy {
-        force "io.grpc:grpc-protobuf:${grpcVersion}"
-        force "io.grpc:grpc-stub:${grpcVersion}"
-        force "io.grpc:grpc-netty-shaded:${grpcVersion}"
-        force "io.grpc:grpc-core:${grpcVersion}"
-        force "io.grpc:grpc-api:${grpcVersion}"
-        force "com.google.protobuf:protobuf-java:${protobufVersion}"
-        force "com.google.protobuf:protobuf-java-util:${protobufVersion}"
+        force libs.grpc.protobuf
+        force libs.grpc.stub
+        force libs.grpc.netty
+        force libs.grpc.core
+        force libs.grpc.api
+        force libs.protobuf.java
+        force libs.protobuf.java.util
     }
 }
 
 dependencies {
     // Quarkus deployment
-    api platform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    api platform(libs.quarkus.bom)
     api 'io.quarkus:quarkus-arc-deployment'
     api 'io.quarkus:quarkus-grpc-deployment'
     api 'io.quarkus:quarkus-smallrye-health-deployment'
     
     // Runtime dependency
-    api project(':runtime')
+    api project(':pipestream-service-registration-extension')
     
     // Annotation processor
-    annotationProcessor enforcedPlatform("io.quarkus:quarkus-bom:${quarkusVersion}")
+    annotationProcessor enforcedPlatform(libs.quarkus.bom)
     annotationProcessor 'io.quarkus:quarkus-extension-processor'
 }

@@ -24,23 +24,21 @@ scmVersion {
     }
     
     hooks {
-        preRelease { context ->
-            // Update version in libs.versions.toml for all Pipestream extensions
-            fileUpdate {
-                file('gradle/libs.versions.toml')
-                // Matches any of the four version entries
-                pattern = { previousVersion, ctx -> 
-                    /((?:pipestream-devservices|quarkus-apicurio-protobuf|quarkus-dynamic-grpc|pipestream-service-registration)\s*=\s*")[^"]*(")/
-                }
-                replacement = { currentVersion, ctx -> 
-                    "\$1${currentVersion}\$2"
-                }
+        // Update version in libs.versions.toml for all Pipestream extensions before release
+        pre('fileUpdate', [
+            file: 'gradle/libs.versions.toml',
+            pattern: { previousVersion, context -> 
+                /((?:pipestream-devservices|quarkus-apicurio-protobuf|quarkus-dynamic-grpc|pipestream-service-registration)\s*=\s*")[^"]*(")/
+            },
+            replacement: { currentVersion, context -> 
+                "\$1${currentVersion}\$2"
             }
-            
-            commit { releaseVersion, position -> 
-                "chore: update version catalog to $releaseVersion"
-            }
-        }
+        ])
+        
+        // Commit the updated version catalog
+        pre('commit', { releaseVersion, position -> 
+            "chore: update version catalog to $releaseVersion"
+        })
     }
 }
 

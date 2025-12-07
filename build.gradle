@@ -43,12 +43,12 @@ scmVersion {
 }
 
 // Fix for Gradle 9 parallel configuration resolution issue with Quarkus integration tests
-// Configure verifyRelease to use serial configuration resolution
-tasks.named('verifyRelease').configure {
-    doFirst {
-        // Force serial configuration resolution to avoid "exclusive lock" errors
-        // This is a workaround for Gradle 9's parallel resolution with Quarkus integration tests
-        project.gradle.startParameter.maxWorkerCount = 1
+// When verifyRelease runs, disable parallel configuration resolution
+// This prevents "exclusive lock" errors with Quarkus integration test configurations
+gradle.taskGraph.whenReady { graph ->
+    if (graph.hasTask(tasks.named('verifyRelease'))) {
+        // Disable parallel configuration resolution for verifyRelease
+        gradle.startParameter.maxWorkerCount = 1
     }
 }
 

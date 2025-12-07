@@ -26,10 +26,10 @@ include 'tika4-shaded'
 
 // 1. DevServices
 include 'pipestream-quarkus-devservices'
-project(':pipestream-quarkus-devservices').projectDir = file('pipestream-quarkus-devservices/pipestream-quarkus-devservices')
+project(':pipestream-quarkus-devservices').projectDir = file('pipestream-quarkus-devservices/runtime')
 
 include 'pipestream-quarkus-devservices-deployment'
-project(':pipestream-quarkus-devservices-deployment').projectDir = file('pipestream-quarkus-devservices/pipestream-quarkus-devservices-deployment')
+project(':pipestream-quarkus-devservices-deployment').projectDir = file('pipestream-quarkus-devservices/deployment')
 
 // 2. Apicurio Registry Protobuf
 include 'quarkus-apicurio-registry-protobuf'

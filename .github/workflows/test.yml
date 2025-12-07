@@ -1,10 +1,13 @@
-name: Build & Publish Snapshots
+name: Build & Test (Per-Project)
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+# Note: Publishing is handled by CI/Snapshot workflow (ci.yml)
+# This workflow focuses on detailed per-project testing
 
 jobs:
   test:
@@ -75,146 +78,3 @@ jobs:
           path: |
             **/build/test-results/
             **/build/reports/
-
-  publish-snapshots:
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Setup Buf
-        uses: bufbuild/buf-action@v1
-        with:
-          token: ${{ secrets.BUF_TOKEN }}
-          setup_only: true
-
-      - name: Publish pipestream-quarkus-devservices SNAPSHOT
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
-        run: |
-          VERSION=$(./gradlew :pipestream-quarkus-devservices:currentVersion -q | tail -1 | sed 's/Project version: //')
-          echo "Version: $VERSION"
-          if [[ "$VERSION" == *"SNAPSHOT"* ]]; then
-            echo "Publishing devservices SNAPSHOT $VERSION"
-            ./gradlew :pipestream-quarkus-devservices:publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
-            ./gradlew :pipestream-quarkus-devservices:publishAllPublicationsToGitHubPackagesRepository --no-daemon
-          else
-            echo "Skipping devservices - version $VERSION is a release (use release workflow)"
-          fi
-
-      - name: Publish quarkus-apicurio-registry-protobuf SNAPSHOT
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
-        run: |
-          VERSION=$(./gradlew :quarkus-apicurio-registry-protobuf:currentVersion -q | tail -1 | sed 's/Project version: //')
-          echo "Version: $VERSION"
-          if [[ "$VERSION" == *"SNAPSHOT"* ]]; then
-            echo "Publishing apicurio SNAPSHOT $VERSION"
-            ./gradlew :quarkus-apicurio-registry-protobuf:publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
-            ./gradlew :quarkus-apicurio-registry-protobuf:publishAllPublicationsToGitHubPackagesRepository --no-daemon
-          else
-            echo "Skipping apicurio - version $VERSION is a release (use release workflow)"
-          fi
-
-      - name: Publish quarkus-dynamic-grpc-extension SNAPSHOT
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
-        run: |
-          VERSION=$(./gradlew :quarkus-dynamic-grpc-extension:currentVersion -q | tail -1 | sed 's/Project version: //')
-          echo "Version: $VERSION"
-          if [[ "$VERSION" == *"SNAPSHOT"* ]]; then
-            echo "Publishing dynamic-grpc SNAPSHOT $VERSION"
-            ./gradlew :quarkus-dynamic-grpc-extension:publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
-            ./gradlew :quarkus-dynamic-grpc-extension:publishAllPublicationsToGitHubPackagesRepository --no-daemon
-          else
-            echo "Skipping dynamic-grpc - version $VERSION is a release (use release workflow)"
-          fi
-
-      - name: Publish pipestream-service-registration-extension SNAPSHOT
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
-        run: |
-          VERSION=$(./gradlew :pipestream-service-registration-extension:currentVersion -q | tail -1 | sed 's/Project version: //')
-          echo "Version: $VERSION"
-          if [[ "$VERSION" == *"SNAPSHOT"* ]]; then
-            echo "Publishing service-registration SNAPSHOT $VERSION"
-            ./gradlew :pipestream-service-registration-extension:publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
-            ./gradlew :pipestream-service-registration-extension:publishAllPublicationsToGitHubPackagesRepository --no-daemon
-          else
-            echo "Skipping service-registration - version $VERSION is a release (use release workflow)"
-          fi
-
-      - name: Publish tika4-shaded SNAPSHOT
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
-        run: |
-          VERSION=$(./gradlew :tika4-shaded:currentVersion -q | tail -1 | sed 's/Project version: //')
-          echo "Version: $VERSION"
-          if [[ "$VERSION" == *"SNAPSHOT"* ]]; then
-            echo "Publishing tika4-shaded SNAPSHOT $VERSION"
-            ./gradlew :tika4-shaded:publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
-            ./gradlew :tika4-shaded:publishAllPublicationsToGitHubPackagesRepository --no-daemon
-          else
-            echo "Skipping tika4-shaded - version $VERSION is a release (use release workflow)"
-          fi
-
-      - name: Publish pipestream-bom SNAPSHOT
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
-        run: |
-          VERSION=$(./gradlew :bom:currentVersion -q | tail -1 | sed 's/Project version: //')
-          echo "Version: $VERSION"
-          if [[ "$VERSION" == *"SNAPSHOT"* ]]; then
-            echo "Publishing BOM SNAPSHOT $VERSION"
-            ./gradlew :bom:publishAllPublicationsToMavenCentralSnapshotsRepository --no-daemon
-            ./gradlew :bom:publishAllPublicationsToGitHubPackagesRepository --no-daemon
-          else
-            echo "Skipping BOM - version $VERSION is a release (use release workflow)"
-          fi

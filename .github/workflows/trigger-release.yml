@@ -45,4 +45,4 @@ jobs:
       - name: Perform Release
         env:
           GITHUB_TOKEN: ${{ secrets.GH_WORKFLOW_TOKEN }}
-        run: ./gradlew release -Prelease.incrementer=${{ inputs.incrementer }} -Prelease.disableChecks
+        run: ./gradlew release -Prelease.incrementer=${{ inputs.incrementer }} -Prelease.disableChecks -Dorg.gradle.parallel=false

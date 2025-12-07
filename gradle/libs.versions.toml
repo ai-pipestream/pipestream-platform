@@ -9,11 +9,11 @@ opensearch = "3.3.0"
 # Apache HTTP Client
 httpclient5 = "5.5.1"
 # Caffeine
-caffeine = "3.1.8"
+caffeine = "3.2.3"
 # gRPC and Protobuf versions - match Quarkus defaults
 
 grpc = "1.77.0"
-protobufVersion = "4.33.1"
+protobufVersion = "4.33.2"
 
 # Quarkiverse extensions
 quinoa = "2.7.0"
@@ -23,7 +23,7 @@ wiremock-grpc-extension = "0.11.0"
 hibernate-types = "2.2.0"
 quarkus-mcp-server = "1.8.0"
 # AWS SDK
-aws-sdk = "2.39.5"
+aws-sdk = "2.40.3"
 # Apicurio
 apicurio = "3.1.4"
 # Testing
@@ -42,14 +42,14 @@ tika4-shaded = "0.1.9"
 # Sample documents test data
 sample-documents = "0.2.2"
 # DJL (Deep Java Library)
-djl = "0.35.0"
-djl-pytorch-jni = "2.7.1-0.35.0"
+djl = "0.35.1"
+djl-pytorch-jni = "2.7.1-0.35.1"
 djl-pytorch-native = "2.7.1"
 # Apache Commons
 commons-io = "2.21.0"
 commons-compress = "1.28.0"
 opencsv = "5.12.0"
-mutiny-test-utils = "3.0.3"
+mutiny-test-utils = "3.1.0"
 testcontainers-consul = "1.21.3"
 smallrye-reactive-messaging = "4.31.0"
 # Document parsing
@@ -66,9 +66,9 @@ tika = "4.0.0-SNAPSHOT"
 # ========================
 # Pipestream Quarkus Extensions
 # ========================
-pipestream-devservices = "0.2.0-SNAPSHOT"
-quarkus-apicurio-protobuf = "0.2.0-SNAPSHOT"
-quarkus-dynamic-grpc = "0.2.0-SNAPSHOT"
+pipestream-devservices = "0.7.0-SNAPSHOT"
+quarkus-apicurio-protobuf = "0.7.0-SNAPSHOT"
+quarkus-dynamic-grpc = "0.2.2-SNAPSHOT"
 pipestream-service-registration = "0.2.0-SNAPSHOT"
 
 # ========================
@@ -79,8 +79,8 @@ pipestream-wiremock-server = "0.1.6"
 # Gradle plugins
 axion-release = "1.21.1"
 nmcp = "1.3.0"
-protobuf-plugin = "0.9.4"
-buf-plugin = "0.9.0"
+protobuf-plugin = "0.9.5"
+buf-plugin = "0.10.3"
 shadow-plugin = "9.3.0"
 
 [libraries]

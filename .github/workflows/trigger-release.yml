@@ -1,10 +1,10 @@
-name: Trigger Release
+name: Trigger Release (START HERE)
 
 on:
   workflow_dispatch:
     inputs:
       incrementer:
-        description: 'Version incrementer'
+        description: 'Version incrementer - START HERE to create a release'
         required: true
         default: 'incrementPatch'
         type: choice

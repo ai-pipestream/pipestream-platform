@@ -1,5 +1,7 @@
-name: Publish Release
+name: Publish Release (Auto-triggered)
 
+# This workflow runs automatically when a tag is pushed by "Trigger Release"
+# Do NOT run this manually - it's triggered automatically
 on:
   push:
     tags:

@@ -11,7 +11,7 @@ dependencies {
     testImplementation(platform("org.testcontainers:testcontainers-bom:${libs.versions.testcontainersVersion.get()}"))
 
     // Our extension
-    implementation project(':quarkus-dynamic-grpc-extension')
+    implementation project(':quarkus-dynamic-grpc')
 
     // Quarkus core
     implementation 'io.quarkus:quarkus-arc'
@@ -33,7 +33,7 @@ dependencies {
     implementation libs.consul.client
 
     // Our deployment module provides build-time setup
-    testImplementation project(':quarkus-dynamic-grpc-extension-deployment')
+    testImplementation project(':quarkus-dynamic-grpc-deployment')
 
     // JUnit Platform launcher for Gradle 9
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

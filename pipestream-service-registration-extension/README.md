@@ -422,7 +422,7 @@ Contributions are welcome! Please ensure that:
 
 - [platform-registration-service](../platform/core-services/platform-registration-service) - The central registration service
 - [pipestream-protos](../platform/pipestream-protos) - Protocol buffer definitions
-- [quarkus-dynamic-grpc-extension](../platform/extensions/quarkus-dynamic-grpc-extension) - Dynamic gRPC service registration
+- [quarkus-dynamic-grpc](../quarkus-dynamic-grpc) - Dynamic gRPC service registration
 
 ## Support
 

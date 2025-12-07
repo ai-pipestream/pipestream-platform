@@ -47,8 +47,8 @@ dependencies {
         api project(':quarkus-apicurio-registry-protobuf')
         api project(':quarkus-apicurio-registry-protobuf-deployment')
 
-        api project(':quarkus-dynamic-grpc-extension')
-        api project(':quarkus-dynamic-grpc-extension-deployment')
+        api project(':quarkus-dynamic-grpc')
+        api project(':quarkus-dynamic-grpc-deployment')
 
         api project(':pipestream-service-registration-extension')
         api project(':pipestream-service-registration-extension-deployment')

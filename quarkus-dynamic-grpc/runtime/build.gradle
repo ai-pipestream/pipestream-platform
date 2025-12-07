@@ -4,7 +4,7 @@ plugins {
 }
 
 quarkusExtension {
-    deploymentModule = 'quarkus-dynamic-grpc-extension-deployment'
+    deploymentModule = 'quarkus-dynamic-grpc-deployment'
 }
 
 dependencies {

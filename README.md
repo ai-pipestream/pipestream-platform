@@ -22,7 +22,7 @@ Monorepo for Pipestream platform libraries - Quarkus extensions, BOM, and utilit
 
 1. **pipestream-quarkus-devservices** - Dev services for local development
 2. **quarkus-apicurio-registry-protobuf** - Apicurio Registry integration with Protobuf
-3. **quarkus-dynamic-grpc-extension** - Dynamic gRPC client with service discovery
+3. **quarkus-dynamic-grpc** - Dynamic gRPC client with service discovery
 4. **pipestream-service-registration-extension** - Service registration client
 
 ### Utility Libraries
@@ -39,7 +39,7 @@ graph TD
     A --> C[tika4-shaded]
     A --> D[pipestream-quarkus-devservices]
     A --> E[quarkus-apicurio-registry-protobuf]
-    A --> F[quarkus-dynamic-grpc-extension]
+    A --> F[quarkus-dynamic-grpc]
     A --> G[pipestream-service-registration-extension]
 
     B:::bom

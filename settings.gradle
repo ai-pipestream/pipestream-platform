@@ -42,14 +42,14 @@ include 'quarkus-apicurio-registry-protobuf-integration-tests'
 project(':quarkus-apicurio-registry-protobuf-integration-tests').projectDir = file('quarkus-apicurio-registry-protobuf/integration-tests')
 
 // 3. Dynamic gRPC
-include 'quarkus-dynamic-grpc-extension'
-project(':quarkus-dynamic-grpc-extension').projectDir = file('quarkus-dynamic-grpc-extension/runtime')
+include 'quarkus-dynamic-grpc'
+project(':quarkus-dynamic-grpc').projectDir = file('quarkus-dynamic-grpc/runtime')
 
-include 'quarkus-dynamic-grpc-extension-deployment'
-project(':quarkus-dynamic-grpc-extension-deployment').projectDir = file('quarkus-dynamic-grpc-extension/deployment')
+include 'quarkus-dynamic-grpc-deployment'
+project(':quarkus-dynamic-grpc-deployment').projectDir = file('quarkus-dynamic-grpc/deployment')
 
-include 'quarkus-dynamic-grpc-extension-integration-tests'
-project(':quarkus-dynamic-grpc-extension-integration-tests').projectDir = file('quarkus-dynamic-grpc-extension/integration-tests')
+include 'quarkus-dynamic-grpc-integration-tests'
+project(':quarkus-dynamic-grpc-integration-tests').projectDir = file('quarkus-dynamic-grpc/integration-tests')
 
 // 4. Service Registration
 include 'pipestream-service-registration-extension'

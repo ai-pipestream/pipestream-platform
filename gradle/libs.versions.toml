@@ -68,8 +68,8 @@ tika = "4.0.0-SNAPSHOT"
 # ========================
 pipestream-devservices = "0.7.0-SNAPSHOT"
 quarkus-apicurio-protobuf = "0.7.0-SNAPSHOT"
-quarkus-dynamic-grpc = "0.2.2-SNAPSHOT"
-pipestream-service-registration = "0.2.0-SNAPSHOT"
+quarkus-dynamic-grpc = "0.7.0-SNAPSHOT"
+pipestream-service-registration = "0.7.0-SNAPSHOT"
 
 # ========================
 # Pipestream Libraries

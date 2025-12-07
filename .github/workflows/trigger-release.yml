@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.GH_WORKFLOW_TOKEN }} # Needed to push tags and trigger other workflows
+          token: ${{ secrets.GH_WORKFLOW_TOKEN }}
 
       - name: Set up JDK 21
         uses: actions/setup-java@v5
@@ -38,14 +38,23 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Configure credentials for JGit (used by axion-release plugin)
-          git config credential.helper store
-          echo "https://x-access-token:${{ secrets.GH_WORKFLOW_TOKEN }}@github.com" > ~/.git-credentials
 
       - name: Verify Release (Check for SNAPSHOT dependencies)
         run: ./gradlew verifyRelease -Prelease.dryRun -Dorg.gradle.parallel=false
 
-      - name: Perform Release
+      - name: Create Release Tag
+        run: ./gradlew createRelease -Prelease.incrementer=${{ inputs.incrementer }} -Prelease.disableChecks -Dorg.gradle.parallel=false
+
+      - name: Publish to Maven Central
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: ./gradlew publishAggregationToCentralPortal --no-daemon
+
+      - name: Push Release Tag
         env:
           GITHUB_TOKEN: ${{ secrets.GH_WORKFLOW_TOKEN }}
-        run: ./gradlew release -Prelease.incrementer=${{ inputs.incrementer }} -Prelease.disableChecks -Dorg.gradle.parallel=false
+        run: git push --tags
+        # Tag push triggers publish-release.yml for GitHub Packages

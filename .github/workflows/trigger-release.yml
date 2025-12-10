@@ -53,8 +53,10 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: ./gradlew publishAggregationToCentralPortal --no-daemon
 
-      - name: Push Release Tag
+      - name: Push Release Tag and Commit
         env:
           GITHUB_TOKEN: ${{ secrets.GH_WORKFLOW_TOKEN }}
-        run: git push --tags
+        run: |
+          git push origin main
+          git push --tags
         # Tag push triggers publish-release.yml for GitHub Packages

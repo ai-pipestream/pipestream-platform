@@ -66,6 +66,10 @@ class ApicurioRegistryProtobufProcessor {
     private static final DotName MESSAGE_LITE = DotName.createSimple("com.google.protobuf.MessageLite");
     private static final DotName GENERATED_MESSAGE = DotName.createSimple("com.google.protobuf.GeneratedMessage");
 
+    // SmallRye Kafka Record type (Record<K, V> - check V for Protobuf)
+    private static final DotName RECORD = DotName.createSimple("io.smallrye.reactive.messaging.kafka.Record");
+    private static final DotName UUID = DotName.createSimple("java.util.UUID");
+
     // Standard Reactive Messaging annotations
     private static final DotName INCOMING = DotName.createSimple("org.eclipse.microprofile.reactive.messaging.Incoming");
     private static final DotName OUTGOING = DotName.createSimple("org.eclipse.microprofile.reactive.messaging.Outgoing");
@@ -297,10 +301,32 @@ class ApicurioRegistryProtobufProcessor {
             return false;
         }
 
-        // Handle parameterized types (e.g., Multi<TestRecord>)
+        // Handle parameterized types (e.g., Multi<TestRecord>, Record<K, V>)
         if (type.kind() == Type.Kind.PARAMETERIZED_TYPE) {
             ParameterizedType paramType = type.asParameterizedType();
+            DotName rawTypeName = paramType.name();
             List<Type> args = paramType.arguments();
+            
+            // Special handling for Record<K, V> - check the VALUE (second argument)
+            if (RECORD.equals(rawTypeName) && args.size() >= 2) {
+                // Check if the VALUE is a Protobuf type
+                boolean isValueProtobuf = isProtobufType(index, args.get(1));
+                
+                if (isValueProtobuf) {
+                    // STRICT REQUIREMENT: Key must be UUID
+                    Type keyType = args.get(0);
+                    if (!UUID.equals(keyType.name())) {
+                        throw new ProtobufConfigurationException(
+                            "Invalid Kafka Record Key type: " + keyType.name() + 
+                            ". When using Protobuf values in Record<K, V>, the Key (K) MUST be java.util.UUID."
+                        );
+                    }
+                    return true;
+                }
+                return false;
+            }
+            
+            // For other parameterized types (e.g., Multi<TestRecord>), check first argument
             if (!args.isEmpty()) {
                 return isProtobufType(index, args.getFirst());
             }

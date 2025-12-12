@@ -58,8 +58,10 @@ public class ProtobufChannelConfigSource implements ConfigSource {
     private static final Map<String, String> incomingChannels = new HashMap<>();
     private static final Map<String, String> outgoingChannels = new HashMap<>();
     private static volatile boolean enabled = false;
+    private static volatile int channelVersion = 0;
 
     private final Map<String, String> properties = new HashMap<>();
+    private volatile int lastBuiltVersion = -1;
 
     /**
      * Default constructor.
@@ -117,11 +119,16 @@ public class ProtobufChannelConfigSource implements ConfigSource {
         for (String s : outgoing) {
             outgoingChannels.put(s, s);
         }
+        channelVersion++;
         enabled = true;  // Enable the config source after channels are set
     }
 
     private void buildProperties() {
-        if (!enabled || !properties.isEmpty()) {
+        if (!enabled) {
+            return;
+        }
+        
+        if (lastBuiltVersion == channelVersion && !properties.isEmpty()) {
             return;
         }
 
@@ -155,6 +162,8 @@ public class ProtobufChannelConfigSource implements ConfigSource {
             // and the Kafka serializers, and enables DevServices to detect when a registry is already configured
             bridgeApicurioRegistryUrl();
         }
+        
+        lastBuiltVersion = channelVersion;
     }
 
     /**

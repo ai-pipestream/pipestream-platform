@@ -83,6 +83,11 @@ public class ServiceDiscoveryManager {
      * Ensures a service is defined in Stork under the given {@code storkServiceName} but discovers
      * Consul instances that are registered under {@code consulApplicationName}.
      * <p>
+     * This method first checks if the service is already configured via MicroProfile Config
+     * (e.g., {@code stork.<service>.service-discovery.type=static}). If so, it uses that configuration.
+     * Otherwise, it creates a Consul-based discovery definition.
+     * </p>
+     * <p>
      * If the configuration key {@code quarkus.dynamic-grpc.consul.application-name.<storkServiceName>}
      * is present, it overrides {@code consulApplicationName} for discovery. Subsequent calls are
      * idempotent and will not re-define an already known Stork service.
@@ -94,13 +99,83 @@ public class ServiceDiscoveryManager {
      * @throws ServiceDiscoveryException if the service definition fails
      */
     public Uni<Void> ensureServiceDefinedFor(String storkServiceName, String consulApplicationName) {
+        // First check if this service is already programmatically defined
         Optional<Service> existingService = Stork.getInstance().getServiceOptional(storkServiceName);
         if (existingService.isPresent()) {
-            LOG.debugf("Service %s already defined in Stork", storkServiceName);
+            LOG.debugf("Service %s already defined in Stork (programmatic)", storkServiceName);
             return Uni.createFrom().voidItem();
         }
 
-        LOG.infof("Defining new Stork service for dynamic discovery: %s (consul application: %s)", storkServiceName, consulApplicationName);
+        final Config config = ConfigProvider.getConfig();
+
+        // Check if service is configured via MicroProfile Config (e.g., stork.repo-service.service-discovery.type)
+        // This supports static discovery, Kubernetes, or any other Stork provider configured via properties
+        final String discoveryTypeKey = "stork." + storkServiceName + ".service-discovery.type";
+        Optional<String> configuredDiscoveryType = config.getOptionalValue(discoveryTypeKey, String.class);
+
+        // Log available stork config keys for debugging service discovery issues
+        if (LOG.isDebugEnabled()) {
+            LOG.debugf("Checking for Stork config key: %s (found=%s)", discoveryTypeKey, configuredDiscoveryType.isPresent());
+            int storkConfigCount = 0;
+            for (String name : config.getPropertyNames()) {
+                if (name.startsWith("stork.")) {
+                    storkConfigCount++;
+                    LOG.debugf("Stork property: %s = %s",
+                            name, config.getOptionalValue(name, String.class).orElse("<not found>"));
+                }
+            }
+            LOG.debugf("Found %d stork.* properties total", storkConfigCount);
+        }
+
+        if (configuredDiscoveryType.isPresent()) {
+            String discoveryType = configuredDiscoveryType.get();
+            LOG.infof("Service %s has Stork config via properties (type=%s), creating definition",
+                    storkServiceName, discoveryType);
+
+            // Quarkus Stork extension initializes services at startup from config,
+            // but test resources add config AFTER startup. So we need to manually
+            // create the service definition from the config properties.
+            // Check if already defined (might have been created by Quarkus at startup)
+            Optional<Service> existingFromConfig = Stork.getInstance().getServiceOptional(storkServiceName);
+            if (existingFromConfig.isPresent()) {
+                LOG.debugf("Service %s already exists in Stork", storkServiceName);
+                return Uni.createFrom().voidItem();
+            }
+            // Service doesn't exist yet - create it from config below
+
+            // Build service definition from config properties
+            Map<String, String> discoveryParams = new HashMap<>();
+            String prefix = "stork." + storkServiceName + ".service-discovery.";
+            for (String name : config.getPropertyNames()) {
+                if (name.startsWith(prefix) && !name.equals(prefix + "type")) {
+                    String paramName = name.substring(prefix.length());
+                    String paramValue = config.getOptionalValue(name, String.class).orElse("");
+                    discoveryParams.put(paramName, paramValue);
+                    LOG.debugf("Adding discovery param: %s=%s", paramName, paramValue);
+                }
+            }
+
+            var discoveryConfig = new SimpleServiceConfig.SimpleServiceDiscoveryConfig(discoveryType, discoveryParams);
+            ServiceDefinition definition = ServiceDefinition.of(discoveryConfig);
+
+            try {
+                Stork.getInstance().defineIfAbsent(storkServiceName, definition);
+                LOG.infof("Successfully defined Stork service %s with %s discovery", storkServiceName, discoveryType);
+                return Uni.createFrom().voidItem();
+            } catch (Exception e) {
+                LOG.errorf(e, "Failed to define Stork service %s with %s discovery", storkServiceName, discoveryType);
+                metrics.recordException(e.getClass().getSimpleName(), storkServiceName, "service_definition");
+                return Uni.createFrom().failure(
+                        new ServiceDiscoveryException(storkServiceName, "Failed to define service from config", e)
+                );
+            }
+        }
+
+        LOG.debugf("No Stork config found for key %s, will use Consul fallback", discoveryTypeKey);
+
+        // No config found - fall back to Consul-based discovery
+        LOG.infof("Defining new Stork service for Consul discovery: %s (consul application: %s)",
+                storkServiceName, consulApplicationName);
 
         Map<String, String> consulParams = new HashMap<>();
         consulParams.put("consul-host", consulHost);
@@ -108,7 +183,6 @@ public class ServiceDiscoveryManager {
         consulParams.put("refresh-period", consulRefreshPeriod);
         consulParams.put("use-health-checks", String.valueOf(consulUseHealthChecks));
 
-        final Config config = ConfigProvider.getConfig();
         final String overrideKey = "quarkus.dynamic-grpc.consul.application-name." + storkServiceName;
         final String applicationToDiscover = config.getOptionalValue(overrideKey, String.class)
                 .orElse(consulApplicationName);

@@ -90,8 +90,11 @@ public class ChannelManager {
                 .recordStats()
                 .build();
 
-        LOG.infof("Initialized ChannelManager with TTL=%d minutes, max size=%d",
-                config.channel().idleTtlMinutes(), config.channel().maxSize());
+        LOG.infof("Initialized ChannelManager with TTL=%d minutes, max cache size=%d, maxInboundMessageSize=%d, maxOutboundMessageSize=%d",
+                config.channel().idleTtlMinutes(),
+                config.channel().maxSize(),
+                config.channel().maxInboundMessageSize(),
+                config.channel().maxOutboundMessageSize());
 
         if (tlsConfig.enabled()) {
             LOG.infof("TLS Configuration: enabled=true, trustAll=%s, verifyHostname=%s",
@@ -232,9 +235,15 @@ public class ChannelManager {
                         serviceName, tlsConfig.trustAll(), tlsConfig.verifyHostname());
             }
 
-            // Create gRPC client options with HTTP options
+            // Create gRPC client options with HTTP options and message size limits
             GrpcClientOptions clientOptions = new GrpcClientOptions()
-                    .setTransportOptions(httpOptions);
+                    .setTransportOptions(httpOptions)
+                    .setMaxMessageSize(config.channel().maxInboundMessageSize());
+
+            LOG.debugf("Creating gRPC client for %s with maxInbound=%d, maxOutbound=%d",
+                    serviceName,
+                    config.channel().maxInboundMessageSize(),
+                    config.channel().maxOutboundMessageSize());
 
             GrpcClient grpcClient = GrpcClient.client(vertx, clientOptions);
 

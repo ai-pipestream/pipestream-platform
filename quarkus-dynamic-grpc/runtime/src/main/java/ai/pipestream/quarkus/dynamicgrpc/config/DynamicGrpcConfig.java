@@ -70,6 +70,24 @@ public interface DynamicGrpcConfig {
          */
         @WithDefault("2")
         long shutdownTimeoutSeconds();
+
+        /**
+         * Maximum inbound message size in bytes.
+         * Default is 2GB (Integer.MAX_VALUE) for large payload support.
+         *
+         * @return the maximum inbound message size in bytes
+         */
+        @WithDefault("2147483647")
+        int maxInboundMessageSize();
+
+        /**
+         * Maximum outbound message size in bytes.
+         * Default is 2GB (Integer.MAX_VALUE) for large payload support.
+         *
+         * @return the maximum outbound message size in bytes
+         */
+        @WithDefault("2147483647")
+        int maxOutboundMessageSize();
     }
 
     /**

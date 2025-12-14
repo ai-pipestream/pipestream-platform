@@ -20,8 +20,9 @@ dependencies {
     // Metrics
     implementation 'io.quarkus:quarkus-micrometer'
 
-    // Stork Consul discovery (version managed by Quarkus BOM)
+    // Stork service discovery providers (versions managed by Quarkus BOM)
     implementation 'io.smallrye.stork:stork-service-discovery-consul'
+    implementation 'io.smallrye.stork:stork-service-discovery-static-list'
 
     // Vertx Consul client
     implementation 'io.vertx:vertx-consul-client'

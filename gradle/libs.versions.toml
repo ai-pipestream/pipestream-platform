@@ -63,10 +63,10 @@ consul-client = "1.9.0"
 # ========================
 # Pipestream Quarkus Extensions
 # ========================
-pipestream-devservices = "0.7.5"
-quarkus-apicurio-protobuf = "0.7.5"
-quarkus-dynamic-grpc = "0.7.5"
-pipestream-service-registration = "0.7.5"
+pipestream-devservices = "0.7.6"
+quarkus-apicurio-protobuf = "0.7.6"
+quarkus-dynamic-grpc = "0.7.6"
+pipestream-service-registration = "0.7.6"
 
 # ========================
 # Pipestream Libraries

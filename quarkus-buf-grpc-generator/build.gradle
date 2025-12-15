@@ -1,0 +1,54 @@
+plugins {
+    id 'groovy'
+    id 'java-gradle-plugin'
+    id 'maven-publish'
+}
+
+group = 'ai.pipestream'
+version = '1.0.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    gradlePluginPortal()
+}
+
+dependencies {
+    implementation gradleApi()
+    implementation localGroovy()
+    
+    // JSON parsing for pipestream-protos.json
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.16.1'
+
+    // Testing
+    testImplementation gradleTestKit()
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.spockframework:spock-core:2.3-groovy-4.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+gradlePlugin {
+    plugins {
+        protoToolchain {
+            id = 'ai.pipestream.proto-toolchain'
+            implementationClass = 'ai.pipestream.proto.ProtoToolchainPlugin'
+        }
+    }
+}
+
+// Java 21 compatibility (matching Pipestream standard)
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+// Ensure the project uses the same Java toolchain
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}

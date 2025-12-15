@@ -43,7 +43,7 @@ services:
   # MySQL instance for services
   mysql:
     container_name: pipeline-mysql
-    image: mysql:8.0
+    image: mysql:latest
     networks:
       - pipeline-test-network
     environment:
@@ -106,7 +106,7 @@ services:
   # Apicurio Registry v3
   apicurio-registry:
     container_name: pipeline-apicurio-registry
-    image: apicurio/apicurio-registry:3.0.13
+    image: apicurio/apicurio-registry:latest
     networks:
       - pipeline-test-network
     ports:
@@ -115,7 +115,7 @@ services:
       # Apicurio Registry storage configuration
       APICURIO_STORAGE_KIND: 'sql'
       APICURIO_STORAGE_SQL_KIND: 'mysql'
-      # Use standard Quarkus datasource properties for 3.0.13+
+      # Use standard Quarkus datasource properties for 3.1.4
       # Named datasource configuration: Apicurio uses datasource name 'mysql'
       QUARKUS_DATASOURCE_MYSQL_DB_KIND: 'mysql'
       QUARKUS_DATASOURCE_MYSQL_JDBC_URL: 'jdbc:mysql://mysql:3306/apicurio_registry?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&autoReconnect=true&connectTimeout=5000&socketTimeout=10000'
@@ -137,7 +137,7 @@ services:
   # Apicurio Registry UI
   apicurio-registry-ui:
     container_name: pipeline-apicurio-registry-ui
-    image: apicurio/apicurio-registry-ui:3.0.13
+    image: apicurio/apicurio-registry-ui:latest
     networks:
       - pipeline-test-network
     ports:
@@ -153,7 +153,7 @@ services:
   # OpenSearch 3
   opensearch:
     container_name: pipeline-opensearch
-    image: opensearchproject/opensearch:3.1.0
+    image: opensearchproject/opensearch:latest
     networks:
       - pipeline-test-network
     environment:
@@ -186,7 +186,7 @@ services:
   # OpenSearch Dashboards
   opensearch-dashboards:
     container_name: pipeline-opensearch-dashboards
-    image: opensearchproject/opensearch-dashboards:3.1.0
+    image: opensearchproject/opensearch-dashboards:latest
     networks:
       - pipeline-test-network
     ports:
@@ -243,7 +243,7 @@ services:
   # Grafana LGTM (Grafana + OTel Collector + Prometheus + Tempo + Loki)
   lgtm:
     container_name: pipeline-lgtm
-    image: grafana/otel-lgtm:0.11.9
+    image: grafana/otel-lgtm:latest
     networks:
       - pipeline-test-network
     ports:

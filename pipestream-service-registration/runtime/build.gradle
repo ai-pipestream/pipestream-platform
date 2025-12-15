@@ -18,16 +18,18 @@ tasks.matching { it.name == 'validateExtension' }.configureEach {
 // ============================================================
 
 pipestreamProtos {
-    // Fetch from BSR (default) or Git via: -PprotoSource=git
-    sourceMode = providers.gradleProperty('protoSource').orElse('bsr')
+    // Fetch from Git (default) or BSR via: -PprotoSource=bsr
+    sourceMode = providers.gradleProperty('protoSource').orElse('git')
 
     modules {
         register("registration") {
-            bsr = "buf.build/pipestreamai/registration"
-            // Git fallback (if BSR is unavailable)
-            // gitRepo = "https://github.com/ai-pipestream/pipestream-protos.git"
-            // gitRef = "main"
-            // gitSubdir = "registration"
+            // BSR (rate-limited, use -PprotoSource=bsr if needed)
+            // bsr = "buf.build/pipestreamai/registration"
+
+            // Git source (default - no rate limiting)
+            gitRepo = "https://github.com/ai-pipestream/pipestream-protos.git"
+            gitRef = "main"
+            gitSubdir = "registration"
         }
     }
 }

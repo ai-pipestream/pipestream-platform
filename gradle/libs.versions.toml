@@ -79,6 +79,7 @@ nmcp = "1.3.0"
 protobuf-plugin = "0.9.5"
 buf-plugin = "0.10.3"
 shadow-plugin = "9.3.0"
+proto-toolchain = "0.7.2"
 
 [libraries]
 # Quarkus BOM
@@ -230,6 +231,9 @@ quarkus-dynamic-grpc-deployment = { module = "ai.pipestream:quarkus-dynamic-grpc
 pipestream-service-registration = { module = "ai.pipestream:pipestream-service-registration", version.ref = "pipestream-service-registration" }
 pipestream-service-registration-deployment = { module = "ai.pipestream:pipestream-service-registration-deployment", version.ref = "pipestream-service-registration" }
 
+# Pipestream Gradle Plugins
+proto-toolchain = { module = "ai.pipestream:proto-toolchain", version.ref = "proto-toolchain" }
+
 [plugins]
 quarkus = { id = "io.quarkus", version.ref = "quarkusVersion" }
 jandex = { id = "org.kordamp.gradle.jandex", version.ref = "jandex-plugin" }
@@ -243,6 +247,7 @@ nmcp = { id = "com.gradleup.nmcp.aggregation", version.ref = "nmcp" }
 protobuf = { id = "com.google.protobuf", version.ref = "protobuf-plugin" }
 buf = { id = "build.buf", version.ref = "buf-plugin" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow-plugin" }
+proto-toolchain = { id = "ai.pipestream.proto-toolchain", version.ref = "proto-toolchain" }
 
 [bundles]
 # Common Quarkus dependencies

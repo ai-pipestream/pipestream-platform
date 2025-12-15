@@ -56,8 +56,7 @@ dependencies {
         // ========================
         // Pipestream Gradle Plugins
         // ========================
-        // proto-toolchain plugin moved to separate repo: github.com/ai-pipestream/quarkus-buf-grpc-generator
-        // Will be added back to BOM after first stable release
+        api libs.proto.toolchain
 
         // ========================
         // Pipestream Internal Libraries

@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Gradle Plugin](https://img.shields.io/badge/Gradle-Plugin-blue.svg)](https://plugins.gradle.org/)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-orange.svg)](https://openjdk.org/)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/ai-pipestream/pipestream-platform/build.yml?branch=main&label=build)](https://github.com/ai-pipestream/pipestream-platform/actions)
+[![Build](https://github.com/ai-pipestream/pipestream-platform/actions/workflows/test.yml/badge.svg)](https://github.com/ai-pipestream/pipestream-platform/actions/workflows/test.yml)
 
 A Gradle plugin for streamlined Protocol Buffer code generation with **100% local execution**. Fetch protos from BSR or Git, generate Java/gRPC/Mutiny stubs—all without uploading data to external servers.
 

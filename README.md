@@ -9,13 +9,17 @@
 [![Maven Central](https://img.shields.io/maven-central/v/ai.pipestream/quarkus-dynamic-grpc?label=dynamic-grpc)](https://central.sonatype.com/artifact/ai.pipestream/quarkus-dynamic-grpc)
 [![Maven Central](https://img.shields.io/maven-central/v/ai.pipestream/pipestream-service-registration?label=service-reg)](https://central.sonatype.com/artifact/ai.pipestream/pipestream-service-registration)
 
-Monorepo for Pipestream platform libraries - Quarkus extensions, BOM, and utility libraries for the Pipestream AI platform.
+Monorepo for Pipestream platform libraries - Quarkus extensions, BOM, Gradle plugins, and utility libraries for the Pipestream AI platform.
 
 ## Contents
 
 ### Bill of Materials (BOM)
 
 - **pipestream-bom** (`ai.pipestream:pipestream-bom`) - Platform-wide dependency management for all Pipestream projects
+
+### Gradle Plugins
+
+- **[quarkus-buf-grpc-generator](quarkus-buf-grpc-generator/)** (`ai.pipestream.proto-toolchain`) - Gradle plugin for Protocol Buffer code generation with 100% local execution. Fetch protos from BSR or Git, generate Java/gRPC/Mutiny stubs without uploading data to external servers.
 
 ### Quarkus Extensions
 
@@ -31,18 +35,21 @@ This project uses **Gradle composite builds** - each extension/library is its ow
 ```mermaid
 graph TD
     A[pipestream-platform] --> B[bom]
+    A --> C[quarkus-buf-grpc-generator]
     A --> D[pipestream-quarkus-devservices]
     A --> E[quarkus-apicurio-registry-protobuf]
     A --> F[quarkus-dynamic-grpc]
     A --> G[pipestream-service-registration]
 
     B:::bom
+    C:::plugin
     D:::ext
     E:::ext
     F:::ext
     G:::ext
 
     classDef bom fill:#e1f5fe
+    classDef plugin fill:#fff3e0
     classDef ext fill:#e8f5e9
 ```
 

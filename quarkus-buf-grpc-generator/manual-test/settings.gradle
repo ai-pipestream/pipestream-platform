@@ -1,4 +1,0 @@
-pluginManagement {
-    includeBuild("..")
-}
-rootProject.name = 'manual-test'

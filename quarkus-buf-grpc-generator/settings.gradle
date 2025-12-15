@@ -1,3 +1,0 @@
-// This settings file is used when the plugin is included via pluginManagement.includeBuild()
-// It uses a different name to avoid conflicts with the main build's project include
-rootProject.name = 'proto-toolchain-plugin'

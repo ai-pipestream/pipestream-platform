@@ -7,9 +7,8 @@ pluginManagement {
     plugins {
         id 'io.quarkus' version "${quarkusPluginVersion}"
         id 'pl.allegro.tech.build.axion-release' version "${axionReleaseVersion}"
+        id 'ai.pipestream.proto-toolchain' version "${protoToolchainVersion}"
     }
-    // Include the proto-toolchain plugin from the same build
-    includeBuild('quarkus-buf-grpc-generator')
 }
 
 plugins {
@@ -63,6 +62,5 @@ include 'pipestream-service-registration-integration-tests'
 project(':pipestream-service-registration-integration-tests').projectDir = file('pipestream-service-registration/integration-tests')
 
 // 5. Proto Toolchain Gradle Plugin
-// Included via pluginManagement.includeBuild() for plugin resolution by other subprojects
-// Published separately: ./gradlew -p quarkus-buf-grpc-generator publishToMavenLocal
-// External consumers use: id 'ai.pipestream.proto-toolchain' version '<version>'
+// Now published to Maven Central: https://github.com/ai-pipestream/quarkus-buf-grpc-generator
+// Usage: id 'ai.pipestream.proto-toolchain' version '0.7.0'

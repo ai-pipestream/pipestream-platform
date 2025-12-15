@@ -156,43 +156,9 @@ public class ProtobufChannelConfigSource implements ConfigSource {
             properties.put("mp.messaging.connector.smallrye-kafka.apicurio.registry.artifact-resolver-strategy",
                     "io.apicurio.registry.serde.strategy.SimpleTopicIdStrategy");
             properties.put("mp.messaging.connector.smallrye-kafka.apicurio.registry.find-latest", "true");
-
-            // Bridge apicurio.registry.url to mp.messaging.connector.smallrye-kafka.apicurio.registry.url
-            // This allows users to configure a single property that works for both the Apicurio client
-            // and the Kafka serializers, and enables DevServices to detect when a registry is already configured
-            bridgeApicurioRegistryUrl();
         }
         
         lastBuiltVersion = channelVersion;
-    }
-
-    /**
-     * Bridges the apicurio.registry.url property to the SmallRye Kafka connector property.
-     * This ensures that when users set apicurio.registry.url (e.g., from Compose Dev Services),
-     * the Kafka serializers also receive this configuration.
-     */
-    private void bridgeApicurioRegistryUrl() {
-        try {
-            Optional<String> registryUrl = ConfigProvider.getConfig()
-                    .getOptionalValue("apicurio.registry.url", String.class);
-
-            if (registryUrl.isPresent() && !registryUrl.get().isBlank()) {
-                String connectorKey = "mp.messaging.connector.smallrye-kafka.apicurio.registry.url";
-                // Only set if not already explicitly configured
-                Optional<String> existingConnectorUrl = ConfigProvider.getConfig()
-                        .getOptionalValue(connectorKey, String.class);
-
-                if (existingConnectorUrl.isEmpty()) {
-                    properties.put(connectorKey, registryUrl.get());
-                    LOG.infof("Bridged apicurio.registry.url=%s to %s", registryUrl.get(), connectorKey);
-                }
-            }
-        } catch (Exception e) {
-            // Config may not be fully initialized yet during early bootstrap
-            // Log this as a warning so the user knows why it might fail
-            LOG.warn("Failed to bridge 'apicurio.registry.url' to 'mp.messaging.connector.smallrye-kafka.apicurio.registry.url'. " +
-                    "If you are manually configuring the registry URL, please explicitly set 'mp.messaging.connector.smallrye-kafka.apicurio.registry.url' in your configuration.", e);
-        }
     }
 
     @Override

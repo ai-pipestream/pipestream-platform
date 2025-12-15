@@ -8,14 +8,13 @@ buildscript {
 plugins {
     id 'java'
     id 'maven-publish'
-    id 'pl.allegro.tech.build.axion-release' version '1.21.1'
-    alias(libs.plugins.nmcp)
+    alias(libs.plugins.axion.release)
+    alias(libs.plugins.nmcp.bundle)
 }
 
 scmVersion {
     tag {
         prefix = 'v'
-        initialVersion { config, position -> '0.7.0' }
     }
     checks {
         uncommittedChanges = false
@@ -23,24 +22,6 @@ scmVersion {
         // Disabled due to Gradle 9 + Quarkus configuration resolution issues
         // Quarkus creates special configurations that can't be safely resolved during release verification
         snapshotDependencies = false
-    }
-    
-    hooks {
-        // Update version in libs.versions.toml for all Pipestream extensions before release
-        pre('fileUpdate', [
-            file: 'gradle/libs.versions.toml',
-            pattern: { previousVersion, context -> 
-                /((?:pipestream-devservices|quarkus-apicurio-protobuf|quarkus-dynamic-grpc|pipestream-service-registration)\s*=\s*")[^"]*(")/
-            },
-            replacement: { currentVersion, context -> 
-                "\$1${currentVersion}\$2"
-            }
-        ])
-        
-        // Commit the updated version catalog
-        pre('commit', { releaseVersion, position -> 
-            "chore: update version catalog to $releaseVersion"
-        })
     }
 }
 

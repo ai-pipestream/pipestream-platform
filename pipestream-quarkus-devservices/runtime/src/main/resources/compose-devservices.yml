@@ -106,7 +106,7 @@ services:
   # Apicurio Registry v3
   apicurio-registry:
     container_name: pipeline-apicurio-registry
-    image: apicurio/apicurio-registry:latest
+    image: apicurio/apicurio-registry:3.1.4
     networks:
       - pipeline-test-network
     ports:
@@ -126,6 +126,7 @@ services:
         condition: service_healthy
     labels:
       quarkus-dev-service-apicurio-registry: shared
+      quarkus-dev-service-apicurio-registry-protobuf: apicurio-registry
     healthcheck:
       # Try multiple known health endpoints to accommodate image differences
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || curl -sf http://localhost:8080/q/health || curl -sf http://localhost:8080/q/health/ready"]

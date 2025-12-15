@@ -61,3 +61,6 @@ bin/
 
 # Claude
 .claude
+
+#gemini
+.gemini

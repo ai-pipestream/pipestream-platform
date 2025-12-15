@@ -68,7 +68,7 @@ class PipelineDevServicesConfigSourceTest {
 
         Set<String> names = configSource.getPropertyNames();
 
-        assertThat(names, hasSize(12));
+        assertThat(names, hasSize(11));
         assertThat(names, containsInAnyOrder(
             // Compose devservices configuration properties
             "quarkus.compose.devservices.enabled",
@@ -78,8 +78,9 @@ class PipelineDevServicesConfigSourceTest {
             "quarkus.compose.devservices.stop-services",
             "quarkus.compose.devservices.reuse-project-for-tests",
             // Auto-injected service connection properties
+            // Note: Apicurio Registry URL is NOT included here - it is discovered
+            // automatically by the quarkus-apicurio-registry-protobuf extension
             "quarkus.devservices.launch-on-shared-network",
-            "mp.messaging.connector.smallrye-kafka.apicurio.registry.url",
             "opensearch.hosts",
             "CONSUL_HOST",
             "CONSUL_PORT",

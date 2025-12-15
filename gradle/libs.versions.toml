@@ -61,15 +61,7 @@ password4j = "1.8.4"
 consul-client = "1.9.0"
 
 # ========================
-# Pipestream Quarkus Extensions
-# ========================
-pipestream-devservices = "0.7.6"
-quarkus-apicurio-protobuf = "0.7.6"
-quarkus-dynamic-grpc = "0.7.6"
-pipestream-service-registration = "0.7.6"
-
-# ========================
-# Pipestream Libraries
+# External Pipestream Libraries (not part of this monorepo)
 # ========================
 pipestream-wiremock-server = "0.1.17"
 
@@ -218,18 +210,8 @@ pipestream-test-documents = { module = "ai.pipestream:test-documents", version.r
 pipestream-parser-pipedoc-parsed = { module = "ai.pipestream:parser-pipedoc-parsed", version.ref = "sample-documents" }
 pipestream-double-chunked-pipedocs = { module = "ai.pipestream:double-chunked-pipedocs", version.ref = "sample-documents" }
 
-# Pipestream internal libraries
-pipestream-devservices = { module = "ai.pipestream:pipestream-quarkus-devservices", version.ref = "pipestream-devservices" }
-pipestream-devservices-deployment = { module = "ai.pipestream:pipestream-quarkus-devservices-deployment", version.ref = "pipestream-devservices" }
+# External Pipestream Libraries (versions managed separately)
 pipestream-wiremock-server = { module = "ai.pipestream:pipestream-wiremock-server", version.ref = "pipestream-wiremock-server" }
-
-# Pipestream Quarkus Extensions
-quarkus-apicurio-registry-protobuf = { module = "ai.pipestream:quarkus-apicurio-registry-protobuf", version.ref = "quarkus-apicurio-protobuf" }
-quarkus-apicurio-registry-protobuf-deployment = { module = "ai.pipestream:quarkus-apicurio-registry-protobuf-deployment", version.ref = "quarkus-apicurio-protobuf" }
-quarkus-dynamic-grpc = { module = "ai.pipestream:quarkus-dynamic-grpc", version.ref = "quarkus-dynamic-grpc" }
-quarkus-dynamic-grpc-deployment = { module = "ai.pipestream:quarkus-dynamic-grpc-deployment", version.ref = "quarkus-dynamic-grpc" }
-pipestream-service-registration = { module = "ai.pipestream:pipestream-service-registration", version.ref = "pipestream-service-registration" }
-pipestream-service-registration-deployment = { module = "ai.pipestream:pipestream-service-registration-deployment", version.ref = "pipestream-service-registration" }
 
 # Pipestream Gradle Plugins
 proto-toolchain = { module = "ai.pipestream:proto-toolchain", version.ref = "proto-toolchain" }
@@ -243,7 +225,8 @@ java-platform = { id = "java-platform" }
 maven-publish = { id = "maven-publish" }
 quarkus-extension = { id = "io.quarkus.extension", version.ref = "quarkusVersion" }
 axion-release = { id = "pl.allegro.tech.build.axion-release", version.ref = "axion-release" }
-nmcp = { id = "com.gradleup.nmcp.aggregation", version.ref = "nmcp" }
+nmcp-bundle = { id = "com.gradleup.nmcp.aggregation", version.ref = "nmcp" }
+nmcp-single = { id = "com.gradleup.nmcp", version.ref = "nmcp" }
 protobuf = { id = "com.google.protobuf", version.ref = "protobuf-plugin" }
 buf = { id = "build.buf", version.ref = "buf-plugin" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow-plugin" }

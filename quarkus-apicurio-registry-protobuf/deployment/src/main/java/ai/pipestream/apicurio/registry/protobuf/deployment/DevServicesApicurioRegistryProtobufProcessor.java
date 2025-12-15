@@ -106,6 +106,7 @@ public class DevServicesApicurioRegistryProtobufProcessor {
             DevServicesComposeProjectBuildItem composeProjectBuildItem,
             List<DevServicesSharedNetworkBuildItem> devServicesSharedNetworkBuildItem,
             ApicurioRegistryProtobufBuildTimeConfig config,
+            ProtobufChannelsBuildItem protobufChannels,
             @SuppressWarnings("OptionalUsedAsFieldOrParameterType") Optional<ConsoleInstalledBuildItem> consoleInstalledBuildItem,
             CuratedApplicationShutdownBuildItem closeBuildItem,
             LoggingSetupBuildItem loggingSetupBuildItem,
@@ -135,7 +136,7 @@ public class DevServicesApicurioRegistryProtobufProcessor {
                     devServicesConfig, devServicesSharedNetworkBuildItem);
 
             StartResult result = startApicurioRegistry(dockerStatusBuildItem, composeProjectBuildItem,
-                    configuration, launchMode, useSharedNetwork, devServicesConfig.timeout());
+                    configuration, launchMode, useSharedNetwork, devServicesConfig.timeout(), protobufChannels);
             compressor.close();
 
             if (result == null) {
@@ -205,29 +206,36 @@ public class DevServicesApicurioRegistryProtobufProcessor {
             ApicurioRegistryDevServiceCfg config,
             LaunchModeBuildItem launchMode,
             boolean useSharedNetwork,
-            @SuppressWarnings("OptionalUsedAsFieldOrParameterType") Optional<Duration> timeout) {
+            @SuppressWarnings("OptionalUsedAsFieldOrParameterType") Optional<Duration> timeout,
+            ProtobufChannelsBuildItem protobufChannels) {
+
+        log.warn("DEBUG: Starting Apicurio Registry Dev Services check...");
 
         if (!config.devServicesEnabled) {
-            log.debug("Not starting dev services for Apicurio Registry, as it has been disabled in the config.");
+            log.warn("DEBUG: Not starting dev services for Apicurio Registry, as it has been disabled in the config.");
             return null;
         }
 
         // Check both the connector-level URL and the simpler apicurio.registry.url property
         if (isPropertySet(APICURIO_REGISTRY_URL_CONFIG)) {
-            log.debug("Not starting dev services for Apicurio Registry, " + APICURIO_REGISTRY_URL_CONFIG
+            log.warn("DEBUG: Not starting dev services for Apicurio Registry, " + APICURIO_REGISTRY_URL_CONFIG
                     + " is configured.");
             return null;
         }
 
         if (isPropertySet(APICURIO_REGISTRY_URL_SIMPLE)) {
-            log.debug("Not starting dev services for Apicurio Registry, " + APICURIO_REGISTRY_URL_SIMPLE
+            log.warn("DEBUG: Not starting dev services for Apicurio Registry, " + APICURIO_REGISTRY_URL_SIMPLE
                     + " is configured.");
             return null;
         }
 
-        if (!hasKafkaChannelWithoutRegistry()) {
-            log.debug(
-                    "Not starting dev services for Apicurio Registry, all the channels have a registry URL configured.");
+        // If we detected Protobuf channels via annotations, we definitely need the registry.
+        // This handles cases where connector config is injected dynamically and not visible in ConfigProvider.
+        boolean hasDetectedProtobufChannels = protobufChannels.hasChannels();
+
+        if (!hasKafkaChannelWithoutRegistry() && !hasDetectedProtobufChannels) {
+            log.warn(
+                    "DEBUG: Not starting dev services for Apicurio Registry, all the channels have a registry URL configured.");
             return null;
         }
 
@@ -241,8 +249,10 @@ public class DevServicesApicurioRegistryProtobufProcessor {
                 config.serviceName, config.shared, launchMode.getLaunchMode());
         if (sharedContainer.isPresent()) {
             var address = sharedContainer.get();
-            log.infof("Found existing shared Apicurio Registry dev service at %s", address.getUrl());
+            log.warn("DEBUG: Found existing shared Apicurio Registry dev service at " + address.getUrl());
             return new StartResult(null, address.getId(), getRegistryUrlConfigs("http://" + address.getUrl()));
+        } else {
+            log.warn("DEBUG: Shared container not found via label: " + config.serviceName);
         }
 
         // Second, try to locate a container from Compose Dev Services
@@ -254,11 +264,14 @@ public class DevServicesApicurioRegistryProtobufProcessor {
                 useSharedNetwork);
         if (composeContainer.isPresent()) {
             var address = composeContainer.get();
-            log.infof("Found Apicurio Registry from Compose Dev Services at %s", address.getUrl());
+            log.warn("DEBUG: Found Apicurio Registry from Compose Dev Services at " + address.getUrl());
             return new StartResult(null, address.getId(), getRegistryUrlConfigs("http://" + address.getUrl()));
+        } else {
+            log.warn("DEBUG: Container not found in Compose project.");
         }
 
         // No existing container found, start our own
+        log.warn("DEBUG: No existing container found, starting new ApicurioRegistryContainer...");
         ApicurioRegistryContainer container = new ApicurioRegistryContainer(
                 DockerImageName.parse(config.imageName),
                 config.fixedExposedPort,

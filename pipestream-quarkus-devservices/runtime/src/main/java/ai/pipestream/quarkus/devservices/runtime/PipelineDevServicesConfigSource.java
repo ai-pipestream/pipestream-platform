@@ -10,16 +10,23 @@ import java.util.Set;
 
 /**
  * ConfigSource that provides both compose devservices configuration and
- * auto-injects common service connection properties for QuarkusDev mode.
+ * auto-injects common service connection properties for Quarkus Dev mode.
  *
- * This enables zero-config development by automatically configuring:
- * - Kafka bootstrap servers
- * - Apicurio Schema Registry URL
- * - OpenSearch connection
- * - Consul service discovery
- * - OTLP observability endpoints
+ * <p>This enables zero-config development by automatically configuring:</p>
+ * <ul>
+ *   <li>Kafka bootstrap servers</li>
+ *   <li>OpenSearch connection</li>
+ *   <li>Consul service discovery</li>
+ *   <li>OTLP observability endpoints</li>
+ * </ul>
  *
- * All properties can be overridden via application.properties or environment variables.
+ * <p><strong>Note:</strong> Apicurio Schema Registry URL is NOT configured here.
+ * It is discovered automatically by the {@code quarkus-apicurio-registry-protobuf}
+ * extension via {@code ComposeLocator}. This allows proper integration with the
+ * Quarkus Compose Dev Services discovery mechanism.</p>
+ *
+ * <p>All properties can be overridden via {@code application.properties} or
+ * environment variables.</p>
  */
 public class PipelineDevServicesConfigSource implements ConfigSource {
 
@@ -39,9 +46,9 @@ public class PipelineDevServicesConfigSource implements ConfigSource {
         // Property: quarkus.devservices.launch-on-shared-network (maps to launchOnSharedNetwork())
         DEV_SERVICE_PROPERTIES.put("quarkus.devservices.launch-on-shared-network", "true");
 
-        // Apicurio Schema Registry (port 8081)
-        DEV_SERVICE_PROPERTIES.put("mp.messaging.connector.smallrye-kafka.apicurio.registry.url",
-                "http://localhost:8081/apis/registry/v3");
+        // Note: Apicurio Schema Registry URL is NOT set here - it is discovered automatically
+        // by the quarkus-apicurio-registry-protobuf extension via ComposeLocator from the
+        // apicurio-registry container in compose-devservices.yml
 
         // OpenSearch configuration (port 9200)
         DEV_SERVICE_PROPERTIES.put("opensearch.hosts", "localhost:9200");

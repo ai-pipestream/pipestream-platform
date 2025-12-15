@@ -5,9 +5,10 @@ plugins {
     id 'signing'
 }
 
-// Use parent project's group and version
+// Simple versioning - plugin will move to its own repo
+// For now, version manually and publish separately
 group = 'ai.pipestream'
-// Version is inherited from parent's allprojects block
+version = '0.7.0'
 
 repositories {
     mavenCentral()

@@ -64,4 +64,5 @@ project(':pipestream-service-registration-integration-tests').projectDir = file(
 
 // 5. Proto Toolchain Gradle Plugin
 // Included via pluginManagement.includeBuild() for plugin resolution by other subprojects
-// For publishing, use: ./gradlew -p quarkus-buf-grpc-generator publishToMavenLocal
+// Published separately: ./gradlew -p quarkus-buf-grpc-generator publishToMavenLocal
+// External consumers use: id 'ai.pipestream.proto-toolchain' version '<version>'

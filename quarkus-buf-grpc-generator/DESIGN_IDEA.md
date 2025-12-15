@@ -218,6 +218,8 @@ plugins:
 
 ## **5. Gradle Tasks Provided**
 
+### Core Tasks
+
 | Task | Description |
 |------|-------------|
 | `fetchProtos` | Downloads protos from BSR or Git using buf export |
@@ -225,6 +227,15 @@ plugins:
 | `generateProtos` | Runs buf generate with all LOCAL plugins |
 | `buildDescriptors` | Builds protobuf descriptor files (if enabled) |
 | `cleanProtos` | Removes all generated proto artifacts |
+
+### Quality & Validation Tasks
+
+| Task | Description |
+|------|-------------|
+| `lintProtos` | Runs `buf lint` on exported proto files |
+| `checkBreaking` | Checks for breaking changes against a reference |
+| `formatProtos` | Formats proto files using `buf format` (modifies files) |
+| `checkFormatProtos` | Checks formatting without making changes (CI-friendly) |
 
 ## **6. Maven Artifacts Used**
 
@@ -284,12 +295,13 @@ The original design used remote BSR plugins (`buf.build/protocolbuffers/java`), 
 - No proto files ever leave the build machine
 - Works fully offline after initial Maven download
 
-## **9. Future Enhancements**
+## **9. Cross-Platform Support**
 
-* **`lintProtos`:** Run `buf lint` on exported files
-* **`checkBreaking`:** Compare git protos against BSR for breaking changes
-* **`formatProtos`:** Run `buf format` to auto-format proto files
-* **Windows `.bat` support:** Currently generates shell scripts only
+The plugin generates both Unix shell scripts and Windows batch files for the Mutiny generator wrapper, ensuring cross-platform compatibility:
+- **Unix:** `build/tmp/protoc-plugins/protoc-gen-mutiny` (shell script)
+- **Windows:** `build/tmp/protoc-plugins/protoc-gen-mutiny.bat` (batch file)
+
+The appropriate script is automatically selected based on the current operating system.
 
 ## **10. Summary**
 

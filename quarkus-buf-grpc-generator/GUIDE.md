@@ -499,12 +499,19 @@ flowchart TD
     buildDescriptors[buildDescriptors]
     compileJava[compileJava]
     cleanProtos[cleanProtos]
+    lintProtos[lintProtos]
+    checkBreaking[checkBreaking]
+    formatProtos[formatProtos]
 
     fetchProtos --> prepareGenerators
     prepareGenerators --> generateProtos
     fetchProtos --> buildDescriptors
     generateProtos --> compileJava
     buildDescriptors --> compileJava
+
+    fetchProtos --> lintProtos
+    fetchProtos --> checkBreaking
+    fetchProtos --> formatProtos
 
     cleanProtos -.->|removes artifacts from| fetchProtos
     cleanProtos -.->|removes artifacts from| prepareGenerators
@@ -582,6 +589,74 @@ Removes all generated proto artifacts.
 ```
 
 Useful when you want to force a fresh generation without running the full `clean` task.
+
+### Quality & Validation Tasks
+
+#### `lintProtos`
+
+Runs `buf lint` on exported proto files to check for style and correctness issues.
+
+- **Group**: `protobuf`
+- **Depends on**: `fetchProtos`
+- **Inputs**: Exported protos, lint configuration
+
+```bash
+./gradlew lintProtos
+```
+
+Configure lint arguments:
+```groovy
+pipestreamProtos {
+    lintArgs = ['--config', 'buf.yaml']
+}
+```
+
+#### `checkBreaking`
+
+Checks for breaking changes by comparing current protos against a reference.
+
+- **Group**: `protobuf`
+- **Depends on**: `fetchProtos`
+- **Inputs**: Exported protos, reference (BSR module, git URL, or local directory)
+
+```bash
+./gradlew checkBreaking
+```
+
+Configure the reference to compare against:
+```groovy
+pipestreamProtos {
+    breakingAgainstRef = 'buf.build/pipestreamai/intake'  // BSR reference
+    // Or: breakingAgainstRef = '../previous-protos'      // Local directory
+    // Or: breakingAgainstRef = 'https://github.com/org/repo.git#ref=v1.0.0'  // Git
+}
+```
+
+#### `formatProtos`
+
+Formats proto files using `buf format`. This modifies files in place.
+
+- **Group**: `protobuf`
+- **Depends on**: `fetchProtos`
+- **Inputs/Outputs**: Exported protos
+
+```bash
+./gradlew formatProtos
+```
+
+#### `checkFormatProtos`
+
+Checks proto file formatting without making changes. Useful for CI pipelines.
+
+- **Group**: `protobuf`
+- **Depends on**: `fetchProtos`
+- **Inputs**: Exported protos
+
+```bash
+./gradlew checkFormatProtos
+```
+
+Fails if files are not formatted correctly. Run `formatProtos` to fix.
 
 ---
 

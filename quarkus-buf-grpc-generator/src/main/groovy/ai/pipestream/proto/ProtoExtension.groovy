@@ -71,6 +71,9 @@ abstract class ProtoExtension {
             project.layout.buildDirectory.dir("protos/export")
         )
         getBufGenerateArgs().convention([])
+        getLintArgs().convention([])
+        getBreakingArgs().convention([])
+        getFormatArgs().convention([])
     }
 
     /**
@@ -150,6 +153,29 @@ abstract class ProtoExtension {
      * Example: ['--exclude-path', 'google/']
      */
     abstract ListProperty<String> getBufGenerateArgs()
+
+    /**
+     * Extra arguments to pass to buf lint command.
+     * Example: ['--config', 'buf.yaml']
+     */
+    abstract ListProperty<String> getLintArgs()
+
+    /**
+     * Reference to compare against for breaking change detection.
+     * Can be a BSR reference, git URL, or local directory.
+     * Example: 'buf.build/pipestreamai/intake' or '../previous-protos'
+     */
+    abstract Property<String> getBreakingAgainstRef()
+
+    /**
+     * Extra arguments to pass to buf breaking command.
+     */
+    abstract ListProperty<String> getBreakingArgs()
+
+    /**
+     * Extra arguments to pass to buf format command.
+     */
+    abstract ListProperty<String> getFormatArgs()
 
     /**
      * Container of proto modules to fetch and generate.

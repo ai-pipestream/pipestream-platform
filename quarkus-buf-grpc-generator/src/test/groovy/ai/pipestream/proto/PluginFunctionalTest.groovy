@@ -33,11 +33,17 @@ class PluginFunctionalTest extends Specification {
             .build()
 
         then:
+        // Core tasks
         result.output.contains('fetchProtos')
         result.output.contains('prepareGenerators')
         result.output.contains('generateProtos')
         result.output.contains('buildDescriptors')
         result.output.contains('cleanProtos')
+        // Quality tasks
+        result.output.contains('lintProtos')
+        result.output.contains('checkBreaking')
+        result.output.contains('formatProtos')
+        result.output.contains('checkFormatProtos')
     }
 
     def "can configure modules via DSL"() {
@@ -158,7 +164,7 @@ class PluginFunctionalTest extends Specification {
         content.contains(testProjectDir.absolutePath)
     }
 
-    def "prepareGenerators creates mutiny wrapper script"() {
+    def "prepareGenerators creates mutiny wrapper scripts for both platforms"() {
         given:
         buildFile << """
             plugins {
@@ -190,10 +196,18 @@ class PluginFunctionalTest extends Specification {
         then:
         result.task(":prepareGenerators").outcome == TaskOutcome.SUCCESS
 
+        // Unix shell script
         def mutinyScript = new File(testProjectDir, 'build/tmp/protoc-plugins/protoc-gen-mutiny')
         mutinyScript.exists()
         mutinyScript.canExecute()
         mutinyScript.text.contains('MutinyGrpcGenerator')
+        mutinyScript.text.contains('#!/bin/sh')
+
+        // Windows batch file
+        def mutinyBat = new File(testProjectDir, 'build/tmp/protoc-plugins/protoc-gen-mutiny.bat')
+        mutinyBat.exists()
+        mutinyBat.text.contains('MutinyGrpcGenerator')
+        mutinyBat.text.contains('@echo off')
     }
 
     def "cleanProtos removes all generated artifacts"() {

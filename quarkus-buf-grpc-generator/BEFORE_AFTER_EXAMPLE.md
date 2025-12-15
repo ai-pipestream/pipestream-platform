@@ -292,6 +292,10 @@ pipestreamProtos {
 | `generateProtos` | Runs buf generate with LOCAL plugins |
 | `buildDescriptors` | Builds protobuf descriptor files (if enabled) |
 | `cleanProtos` | Removes all generated proto artifacts |
+| `lintProtos` | Runs buf lint on exported proto files |
+| `checkBreaking` | Checks for breaking changes against a reference |
+| `formatProtos` | Formats proto files using buf format |
+| `checkFormatProtos` | Checks formatting without making changes (CI-friendly) |
 
 ---
 

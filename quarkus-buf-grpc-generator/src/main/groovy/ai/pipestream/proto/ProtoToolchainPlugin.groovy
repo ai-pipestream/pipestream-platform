@@ -1,8 +1,11 @@
 package ai.pipestream.proto
 
 import ai.pipestream.proto.tasks.BuildDescriptorsTask
+import ai.pipestream.proto.tasks.CheckBreakingTask
 import ai.pipestream.proto.tasks.FetchProtosTask
+import ai.pipestream.proto.tasks.FormatProtosTask
 import ai.pipestream.proto.tasks.GenerateProtosTask
+import ai.pipestream.proto.tasks.LintProtosTask
 import ai.pipestream.proto.tasks.PrepareGeneratorsTask
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -139,6 +142,55 @@ class ProtoToolchainPlugin implements Plugin<Project> {
                 project.delete(descriptorPath)
                 project.logger.lifecycle("Cleaned proto artifacts")
             }
+        }
+
+        // Register lintProtos task
+        project.tasks.register("lintProtos", LintProtosTask) { task ->
+            task.group = "protobuf"
+            task.description = "Runs buf lint on exported proto files"
+            task.dependsOn(fetchTask)
+
+            task.protoDir.set(exportDir)
+            task.bufExecutable.setFrom(bufConfig)
+            task.lintArgs.set(extension.lintArgs)
+        }
+
+        // Register checkBreaking task
+        project.tasks.register("checkBreaking", CheckBreakingTask) { task ->
+            task.group = "protobuf"
+            task.description = "Checks for breaking changes in proto files"
+            task.dependsOn(fetchTask)
+
+            task.protoDir.set(exportDir)
+            task.bufExecutable.setFrom(bufConfig)
+            task.againstRef.set(extension.breakingAgainstRef)
+            task.breakingArgs.set(extension.breakingArgs)
+        }
+
+        // Register formatProtos task
+        project.tasks.register("formatProtos", FormatProtosTask) { task ->
+            task.group = "protobuf"
+            task.description = "Formats proto files using buf format"
+            task.dependsOn(fetchTask)
+
+            task.protoDir.set(exportDir)
+            task.bufExecutable.setFrom(bufConfig)
+            task.checkOnly.set(false)
+            task.showDiff.set(true)
+            task.formatArgs.set(extension.formatArgs)
+        }
+
+        // Register checkFormatProtos task (format check only, doesn't modify files)
+        project.tasks.register("checkFormatProtos", FormatProtosTask) { task ->
+            task.group = "protobuf"
+            task.description = "Checks proto file formatting without making changes"
+            task.dependsOn(fetchTask)
+
+            task.protoDir.set(exportDir)
+            task.bufExecutable.setFrom(bufConfig)
+            task.checkOnly.set(true)
+            task.showDiff.set(true)
+            task.formatArgs.set(extension.formatArgs)
         }
 
         // Configure binary dependencies after evaluation (when versions are known)

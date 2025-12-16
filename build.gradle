@@ -85,6 +85,28 @@ subprojects {
             }
         }
 
+        // Configure parallel test execution with unique output directories
+        // This prevents XML test result write conflicts when maxParallelForks > 1
+        tasks.withType(Test).configureEach { testTask ->
+            // Enable parallel test execution (use half of available processors for safety)
+            testTask.maxParallelForks = Runtime.runtime.availableProcessors().intdiv(2) ?: 1
+            
+            // Configure unique output directories per test worker to avoid file conflicts
+            // Each parallel fork writes to its own directory using the worker ID
+            testTask.reports {
+                junitXml {
+                    // Use worker ID to create unique directory per parallel fork
+                    // If worker ID is not available (single fork), use default location
+                    def workerId = System.getProperty('org.gradle.test.worker')
+                    if (workerId) {
+                        outputLocation = layout.buildDirectory.dir("test-results/${testTask.name}-worker-${workerId}")
+                    } else {
+                        outputLocation = layout.buildDirectory.dir("test-results/${testTask.name}")
+                    }
+                }
+            }
+        }
+
         publishing {
             repositories {
                 mavenLocal()

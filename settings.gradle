@@ -63,4 +63,4 @@ project(':pipestream-service-registration-integration-tests').projectDir = file(
 
 // 5. Proto Toolchain Gradle Plugin
 // Now published to Maven Central: https://github.com/ai-pipestream/quarkus-buf-grpc-generator
-// Usage: id 'ai.pipestream.proto-toolchain' version '0.7.0'
+// Usage: id 'ai.pipestream.proto-toolchain' version '0.7.6'

@@ -72,7 +72,12 @@ dependencies {
         api libs.pipestream.double.chunked.pipedocs
         
         // External Pipestream libs (not yet in monorepo)
-        api libs.pipestream.wiremock.server
+        // pipestream-wiremock-server: minimum version only (not enforced) - allows consumers to use newer versions
+        api("ai.pipestream:pipestream-wiremock-server") { 
+            version { 
+                require(libs.versions.pipestream.wiremock.server.get())
+            }
+        }
     }
 }
 

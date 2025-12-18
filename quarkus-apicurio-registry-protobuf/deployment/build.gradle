@@ -14,7 +14,7 @@ dependencies {
     implementation libs.jandex
 
     // Testcontainers for DevServices
-    implementation libs.testcontainers
+    implementation libs.testcontainers.core
 
     // Quarkus DevServices common utilities (for Compose Dev Services support)
     implementation 'io.quarkus:quarkus-devservices-common'

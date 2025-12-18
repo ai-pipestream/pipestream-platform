@@ -25,7 +25,7 @@ dependencies {
     testImplementation libs.assertj.core
 
     // TestContainers for Consul - real integration tests, no mocks
-    testImplementation libs.testcontainers
+    testImplementation libs.testcontainers.core
     testImplementation libs.testcontainers.consul
     testImplementation libs.testcontainers.junit
 

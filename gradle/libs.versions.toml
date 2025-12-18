@@ -1,5 +1,5 @@
 [versions]
-quarkusVersion = "3.30.3"
+quarkusVersion = "3.30.4"
 jandex-plugin = "2.3.0"
 commons-lang3 = "3.20.0"
 opennlp-tools = "2.5.7"
@@ -126,11 +126,11 @@ quarkus-junit5 = { module = "io.quarkus:quarkus-junit5" }
 rest-assured = { module = "io.rest-assured:rest-assured" }
 mutiny-test-utils = { module = "io.smallrye.reactive:mutiny-test-utils", version.ref = "mutiny-test-utils" }
 awaitility = { module = "org.awaitility:awaitility", version.ref = "awaitility" }
-testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainersVersion" }
+testcontainers-core = { module = "org.testcontainers:testcontainers", version.ref = "testcontainersVersion" }
 testcontainers-consul = { module = "org.testcontainers:consul", version.ref = "testcontainers-consul" }
 testcontainers-junit = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers-junit" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
-hamcrest = { module = "org.hamcrest:hamcrest", version.ref = "hamcrest" }
+hamcrest-core = { module = "org.hamcrest:hamcrest", version.ref = "hamcrest" }
 hamcrest-library = { module = "org.hamcrest:hamcrest-library", version.ref = "hamcrest" }
 json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "json-schema-validator" }
 quarkus-junit5-mockito = { module = "io.quarkus:quarkus-junit5-mockito" }

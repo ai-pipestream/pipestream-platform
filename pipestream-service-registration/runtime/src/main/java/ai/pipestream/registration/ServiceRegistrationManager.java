@@ -1,7 +1,7 @@
 package ai.pipestream.registration;
 
 import ai.pipestream.platform.registration.v1.RegisterResponse;
-import ai.pipestream.platform.registration.v1.EventType;
+import ai.pipestream.platform.registration.v1.PlatformEventType;
 import ai.pipestream.registration.config.RegistrationConfig;
 import ai.pipestream.registration.model.RegistrationState;
 import ai.pipestream.registration.model.ServiceInfo;
@@ -130,12 +130,12 @@ public class ServiceRegistrationManager {
         var event = response.getEvent();
         LOG.infof("Registration event: type=%s, message=%s", event.getEventType(), event.getMessage());
 
-        if (event.getEventType() == EventType.EVENT_TYPE_COMPLETED) {
+        if (event.getEventType() == PlatformEventType.PLATFORM_EVENT_TYPE_COMPLETED) {
             String newServiceId = event.getServiceId();
             serviceId.set(newServiceId);
             state.set(RegistrationState.REGISTERED);
             LOG.infof("Service registered successfully with ID: %s", newServiceId);
-        } else if (event.getEventType() == EventType.EVENT_TYPE_FAILED) {
+        } else if (event.getEventType() == PlatformEventType.PLATFORM_EVENT_TYPE_FAILED) {
             LOG.errorf("Registration failed: %s", event.getErrorDetail());
             state.set(RegistrationState.FAILED);
         }

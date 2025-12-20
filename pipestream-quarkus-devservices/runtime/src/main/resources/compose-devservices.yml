@@ -10,6 +10,10 @@ networks:
 volumes:
   mysql_data:
     driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
   opensearch_data:
     driver: local
   kafka-data:
@@ -40,7 +44,7 @@ services:
       retries: 5
       start_period: 10s
 
-  # MySQL instance for services
+  # MySQL instance for services (legacy - migration to PostgreSQL in progress)
   mysql:
     container_name: pipeline-mysql
     image: mysql:latest
@@ -69,6 +73,55 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+
+  # PostgreSQL instance for services (primary database going forward)
+  postgres:
+    container_name: pipeline-postgres
+    image: postgres:16-alpine
+    networks:
+      - pipeline-test-network
+    environment:
+      POSTGRES_USER: pipeline
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: pipeline
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Init script to create additional databases
+      - ./init-postgres.sql:/docker-entrypoint-initdb.d/init.sql
+    labels:
+      quarkus-dev-service-postgresql: shared
+      # Wait for PostgreSQL to be ready before considering service started
+      io.quarkus.devservices.compose.wait_for.logs: ".*database system is ready to accept connections.*"
+      # Map PostgreSQL JDBC URL to datasource property
+      io.quarkus.devservices.compose.config_map.jdbc_url: quarkus.datasource.jdbc.url
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pipeline"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis for Infisical and caching
+  redis:
+    container_name: pipeline-redis
+    image: redis:7-alpine
+    networks:
+      - pipeline-test-network
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    labels:
+      quarkus-dev-service-redis: shared
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # Kafka in KRaft mode (proven configuration)
   kafka:
@@ -197,9 +250,10 @@ services:
       DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
     depends_on:
       opensearch:
-        condition: service_healthy
+        condition: service_started
     labels:
       io.quarkus.devservices.compose.wait_for.ports.disable: "true"
+      # No health check dependency - starts after OpenSearch is available but doesn't block startup
 
   # MinIO for S3-compatible object storage
   minio:
@@ -240,6 +294,45 @@ services:
       - apicurio-registry
     labels:
       io.quarkus.devservices.compose.wait_for.ports.disable: "true"
+      # No health check dependency - starts after services are available but doesn't block startup
+
+  # Infisical for secret management and KMS
+  infisical:
+    container_name: pipeline-infisical
+    image: infisical/infisical:latest
+    networks:
+      - pipeline-test-network
+    ports:
+      # Only expose frontend for UI access; API (8080) is accessible within Docker network
+      - "3000:3000"     # Infisical Frontend
+    expose:
+      - "8080"          # Infisical API (internal only)
+    environment:
+      # Database configuration (PostgreSQL) - using separate database for Infisical
+      DB_CONNECTION_URI: "postgresql://pipeline:password@postgres:5432/infisical?sslmode=disable"
+      # Redis configuration
+      REDIS_URL: "redis://redis:6379"
+      # Encryption keys (for development - use secure keys in production)
+      # ENCRYPTION_KEY: 16-byte hex string (32 hex characters)
+      ENCRYPTION_KEY: "d57fe96e9ac0b03e50e2e078bb916d63"
+      # AUTH_SECRET: 32-byte base64 string
+      AUTH_SECRET: "PgviZ6tQbBwPKgv4JqsjqKec9XEfh0iCFPlSHrnV0jM="
+      # Site URL (absolute URL for the Infisical instance) - use internal network name
+      SITE_URL: "http://infisical:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      quarkus-dev-service-infisical: shared
+    healthcheck:
+      # Check if Infisical is responding (using root endpoint since /api/v1/health doesn't exist)
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
 
   # Grafana LGTM (Grafana + OTel Collector + Prometheus + Tempo + Loki)
   lgtm:

@@ -2,7 +2,10 @@ package ai.pipestream.quarkus.devservices.deployment;
 
 import ai.pipestream.quarkus.devservices.PipelineDevServicesConfig;
 import ai.pipestream.quarkus.devservices.runtime.ComposeDevServicesConfigBuilder;
+import ai.pipestream.quarkus.devservices.runtime.InfisicalAdminInitializer;
+import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.IsDevelopment;
+import io.quarkus.deployment.IsTest;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.DevServicesResultBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
@@ -46,6 +49,32 @@ class PipelineDevServicesProcessor {
     @BuildStep
     StaticInitConfigBuilderBuildItem registerConfigBuilder() {
         return new StaticInitConfigBuilderBuildItem(ComposeDevServicesConfigBuilder.class);
+    }
+
+    /**
+     * Register InfisicalAdminInitializer bean only in dev mode.
+     * This ensures the bean is not included in production builds.
+     */
+    @BuildStep(onlyIf = IsDevelopment.class)
+    AdditionalBeanBuildItem registerInfisicalAdminInitializerDev() {
+        LOG.debug("Registering InfisicalAdminInitializer bean (dev mode)");
+        return AdditionalBeanBuildItem.builder()
+                .addBeanClass(InfisicalAdminInitializer.class)
+                .setUnremovable()
+                .build();
+    }
+
+    /**
+     * Register InfisicalAdminInitializer bean only in test mode.
+     * This ensures the bean is not included in production builds.
+     */
+    @BuildStep(onlyIf = IsTest.class)
+    AdditionalBeanBuildItem registerInfisicalAdminInitializerTest() {
+        LOG.debug("Registering InfisicalAdminInitializer bean (test mode)");
+        return AdditionalBeanBuildItem.builder()
+                .addBeanClass(InfisicalAdminInitializer.class)
+                .setUnremovable()
+                .build();
     }
 
     @BuildStep(onlyIf = IsDevelopment.class)
@@ -215,7 +244,7 @@ class PipelineDevServicesProcessor {
             if (!existingVersion.sha().equals(existingSha)) {
                 // File was edited, create backup
                 String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
-                Path backupFile = Paths.get(composeFile.toString() + ".backup." + timestamp);
+                Path backupFile = Paths.get(composeFile + ".backup." + timestamp);
                 Files.copy(composeFile, backupFile, StandardCopyOption.REPLACE_EXISTING);
                 LOG.info("Created backup of edited compose file: " + backupFile);
             }

@@ -1,6 +1,6 @@
 # Quarkus Pipeline Dev Services Extension
 
-This Quarkus extension provides shared development infrastructure services for pipeline microservices. It enables out-of-the-box (OOTB) startup of a complete development environment including MySQL, Consul, Kafka, Apicurio Registry, OpenSearch, MinIO, and Redis.
+This Quarkus extension provides shared development infrastructure services for pipeline microservices. It enables out-of-the-box (OOTB) startup of a complete development environment including PostgreSQL, MySQL, Consul, Kafka, Apicurio Registry, OpenSearch, MinIO, Redis, and Infisical (for KMS/secret management).
 
 **Important:** This is a development-only feature designed for local microservice development. It provides common infrastructure shared across multiple components to facilitate rapid development workflows. Do not use in production environments.
 
@@ -111,12 +111,15 @@ sequenceDiagram
 
 | Service | Purpose | Ports | Labels |
 |---------|---------|-------|--------|
-| MySQL | Primary database | 3306 | `quarkus-dev-service-mysql: shared` |
+| PostgreSQL | Primary database (migrating from MySQL) | 5432 | `quarkus-dev-service-postgresql: shared` |
+| MySQL | Legacy database | 3306 | `quarkus-dev-service-mysql: shared` |
+| Redis | Caching and Infisical support | 6379 | `quarkus-dev-service-redis: shared` |
 | Consul | Service discovery | 8500, 8600 | `quarkus-dev-service-consul: shared` |
 | Kafka | Message broker | 9092, 9094 | `quarkus-dev-service-kafka: shared` |
 | Apicurio Registry | Schema registry | 8081, 8888 | - |
 | OpenSearch | Search engine | 9200, 5601 | `quarkus-dev-service-elasticsearch: shared` |
 | MinIO | Object storage | 9000, 9001 | - |
+| Infisical | Secret management and KMS | 3000 (UI only) | `quarkus-dev-service-infisical: shared` |
 | LGTM Stack | Observability | 3001, 4317, 4318 | `quarkus-dev-service-lgtm: shared` |
 
 ### Configuration Options
@@ -134,7 +137,38 @@ quarkus.pipeline-devservices.force-update=false  # Force update even if modified
 %dev.quarkus.compose.devservices.enabled=true
 %dev.quarkus.compose.devservices.files=${user.home}/.pipeline/compose-devservices.yml
 %dev.quarkus.compose.devservices.project-name=pipeline-shared-devservices
+
+# Infisical Admin Auto-Setup (optional, dev/test only)
+# Automatically creates admin account on first startup
+%dev.quarkus.pipeline-devservices.infisical.admin-auto-setup=true
+%dev.quarkus.pipeline-devservices.infisical.admin-email=admin@pipestream.local
+%dev.quarkus.pipeline-devservices.infisical.admin-password=admin-password-change-me
+
+# Test mode - optional
+%test.quarkus.pipeline-devservices.infisical.admin-auto-setup=false
 ```
+
+### Infisical Integration
+
+The extension includes automatic Infisical admin account setup for development and test modes:
+
+- **Automatic Admin Creation**: On first startup, the extension can automatically create an admin account
+- **Dev/Test Only**: This feature is **only active in dev and test modes** - it is completely excluded from production builds
+- **Configurable**: Enable/disable via `application.properties`
+- **Idempotent**: Checks if admin exists before creating (safe to run multiple times)
+
+**Configuration:**
+```properties
+# Enable admin auto-setup in dev mode
+%dev.quarkus.pipeline-devservices.infisical.admin-auto-setup=true
+%dev.quarkus.pipeline-devservices.infisical.admin-email=admin@pipestream.local
+%dev.pipeline-devservices.infisical.admin-password=admin-password-change-me
+
+# Optional: Customize API URL (defaults to http://infisical:8080)
+%dev.quarkus.pipeline-devservices.infisical.api-url=http://infisical:8080
+```
+
+**Production Note**: The Infisical admin initialization code is **not included** in production builds. Production deployments should use AWS KMS directly or configure Infisical manually.
 
 ### Version Management
 

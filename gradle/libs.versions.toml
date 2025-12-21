@@ -28,8 +28,7 @@ aws-sdk = "2.40.8"
 apicurio = "3.1.4"
 # Testing
 awaitility = "4.3.0"
-testcontainersVersion = "2.0.2"
-testcontainers-junit = "1.21.3"
+testcontainersVersion = "2.0.3"
 assertj = "3.27.6"
 hamcrest = "3.0"
 json-schema-validator = "3.0.0"
@@ -50,7 +49,6 @@ commons-io = "2.21.0"
 commons-compress = "1.28.0"
 opencsv = "5.12.0"
 mutiny-test-utils = "3.1.0"
-testcontainers-consul = "1.21.3"
 smallrye-reactive-messaging = "4.31.0"
 # Document parsing
 commonmark = "0.27.0"
@@ -127,8 +125,8 @@ rest-assured = { module = "io.rest-assured:rest-assured" }
 mutiny-test-utils = { module = "io.smallrye.reactive:mutiny-test-utils", version.ref = "mutiny-test-utils" }
 awaitility = { module = "org.awaitility:awaitility", version.ref = "awaitility" }
 testcontainers-core = { module = "org.testcontainers:testcontainers", version.ref = "testcontainersVersion" }
-testcontainers-consul = { module = "org.testcontainers:consul", version.ref = "testcontainers-consul" }
-testcontainers-junit = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers-junit" }
+testcontainers-consul = { module = "org.testcontainers:testcontainers-consul", version.ref = "testcontainersVersion" }
+testcontainers-junit = { module = "org.testcontainers:testcontainers-junit-jupiter", version.ref = "testcontainersVersion" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 hamcrest-core = { module = "org.hamcrest:hamcrest", version.ref = "hamcrest" }
 hamcrest-library = { module = "org.hamcrest:hamcrest-library", version.ref = "hamcrest" }

@@ -8,8 +8,6 @@ networks:
     driver: bridge
 
 volumes:
-  mysql_data:
-    driver: local
   postgres_data:
     driver: local
   redis_data:
@@ -44,37 +42,7 @@ services:
       retries: 5
       start_period: 10s
 
-  # MySQL instance for services (legacy - migration to PostgreSQL in progress)
-  mysql:
-    container_name: pipeline-mysql
-    image: mysql:latest
-    networks:
-      - pipeline-test-network
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: pipeline
-      MYSQL_USER: pipeline
-      MYSQL_PASSWORD: password
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      # Init script to create additional databases
-      - ./init-mysql.sql:/docker-entrypoint-initdb.d/init.sql
-    labels:
-      quarkus-dev-service-mysql: shared
-      # Wait for MySQL to be ready before considering service started
-      io.quarkus.devservices.compose.wait_for.logs: ".*ready for connections.*"
-      # Map MySQL JDBC URL to datasource property
-      io.quarkus.devservices.compose.config_map.jdbc_url: quarkus.datasource.jdbc.url
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-
-  # PostgreSQL instance for services (primary database going forward)
+  # PostgreSQL instance for services (primary database)
   postgres:
     container_name: pipeline-postgres
     image: postgres:16-alpine
@@ -167,15 +135,14 @@ services:
     environment:
       # Apicurio Registry storage configuration
       APICURIO_STORAGE_KIND: 'sql'
-      APICURIO_STORAGE_SQL_KIND: 'mysql'
+      APICURIO_STORAGE_SQL_KIND: 'postgresql'
       # Use standard Quarkus datasource properties for 3.1.4
-      # Named datasource configuration: Apicurio uses datasource name 'mysql'
-      QUARKUS_DATASOURCE_MYSQL_DB_KIND: 'mysql'
-      QUARKUS_DATASOURCE_MYSQL_JDBC_URL: 'jdbc:mysql://mysql:3306/apicurio_registry?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&autoReconnect=true&connectTimeout=5000&socketTimeout=10000'
-      QUARKUS_DATASOURCE_MYSQL_USERNAME: 'pipeline'
-      QUARKUS_DATASOURCE_MYSQL_PASSWORD: 'password'
+      APICURIO_DATASOURCE_URL: 'jdbc:postgresql://postgres:5432/apicurio_registry'
+      APICURIO_DATASOURCE_USERNAME: 'pipeline'
+      APICURIO_DATASOURCE_PASSWORD: 'password'
+      APICURIO_SQL_INIT: 'true'
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     labels:
       quarkus-dev-service-apicurio-registry: shared

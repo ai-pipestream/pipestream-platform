@@ -70,6 +70,15 @@ jobs:
         run: |
           ./gradlew :pipestream-service-registration:clean :pipestream-service-registration:build :pipestream-service-registration:test --no-daemon
 
+      - name: Publish Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Test Results
+          path: "**/build/test-results/test/TEST-*.xml"
+          reporter: java-junit
+          fail-on-error: false
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v6

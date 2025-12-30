@@ -22,9 +22,11 @@ dependencies {
         api libs.opensearch.java
         api libs.wiremock.standalone
         api libs.wiremock.grpc.extension.standalone
-        api libs.apicurio.registry.java.sdk
-        api libs.apicurio.registry.common
-        api libs.apicurio.registry.protobuf.serde
+        // Apicurio Registry - override Quarkus BOM versions to use latest
+        // Using strictly() to override platform-provided versions
+        api("io.apicurio:apicurio-registry-java-sdk") { version { strictly(libs.versions.apicurio.get()) } }
+        api("io.apicurio:apicurio-registry-common") { version { strictly(libs.versions.apicurio.get()) } }
+        api("io.apicurio:apicurio-registry-protobuf-serde-kafka") { version { strictly(libs.versions.apicurio.get()) } }
         api libs.commonmark
         api libs.pdfbox
         api libs.password4j

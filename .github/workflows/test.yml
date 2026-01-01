@@ -71,7 +71,7 @@ jobs:
           ./gradlew :pipestream-service-registration:clean :pipestream-service-registration:build :pipestream-service-registration:test --no-daemon
 
       - name: Publish Test Report
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v2
         if: always()
         with:
           name: Test Results

@@ -1,5 +1,7 @@
 package ai.pipestream.registration.config;
 
+import io.quarkus.runtime.annotations.ConfigPhase;
+import io.quarkus.runtime.annotations.ConfigRoot;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 import io.smallrye.config.WithName;
@@ -15,6 +17,7 @@ import java.util.Optional;
  * All settings have sensible defaults for zero-configuration usage.
  */
 @ConfigMapping(prefix = "pipestream.registration")
+@ConfigRoot(phase = ConfigPhase.RUN_TIME)
 public interface RegistrationConfig {
 
     /**

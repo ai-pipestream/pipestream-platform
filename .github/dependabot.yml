@@ -6,7 +6,7 @@ registries:
     type: maven-repository
     url: https://maven.pkg.github.com/ai-pipestream/*
     username: x-access-token
-    password: ${{ secrets.GITHUB_TOKEN }}
+    token: ${{secrets.GITHUB_TOKEN}}
 
 updates:
   # GitHub Actions

@@ -1,12 +1,5 @@
 version: 2
 
-registries:
-  github-packages:
-    type: maven-repository
-    url: https://maven.pkg.github.com/ai-pipestream/*
-    username: x-access-token
-    password: ${{secrets.GITHUB_TOKEN}}
-
 updates:
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -23,8 +16,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    registries:
-      - github-packages
     groups:
       gradle-dependencies:
         patterns:
@@ -35,8 +26,6 @@ updates:
     directory: "/pipestream-quarkus-devservices"
     schedule:
       interval: "weekly"
-    registries:
-      - github-packages
     groups:
       devservices-dependencies:
         patterns:
@@ -47,8 +36,6 @@ updates:
     directory: "/quarkus-apicurio-registry-protobuf"
     schedule:
       interval: "weekly"
-    registries:
-      - github-packages
     groups:
       apicurio-dependencies:
         patterns:
@@ -59,8 +46,6 @@ updates:
     directory: "/quarkus-dynamic-grpc"
     schedule:
       interval: "weekly"
-    registries:
-      - github-packages
     groups:
       dynamic-grpc-dependencies:
         patterns:
@@ -71,8 +56,6 @@ updates:
     directory: "/pipestream-service-registration"
     schedule:
       interval: "weekly"
-    registries:
-      - github-packages
     groups:
       service-registration-dependencies:
         patterns:

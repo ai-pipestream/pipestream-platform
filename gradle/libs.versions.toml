@@ -17,9 +17,9 @@ protobufVersion = "4.33.4"
 
 # Quarkiverse extensions
 quinoa = "2.7.1"
-wiremock = "3.13.2"
-wiremock-standalone = "3.13.2"
-wiremock-grpc-extension = "0.11.0"
+wiremock = "4.0.0-beta.25"
+wiremock-standalone = "4.0.0-beta.25"
+wiremock-grpc-extension = "1.0.0-beta.4"
 hibernate-types = "2.2.0"
 quarkus-mcp-server = "1.8.1"
 # AWS SDK
@@ -69,7 +69,7 @@ nmcp = "1.4.3"
 protobuf-plugin = "0.9.6"
 buf-plugin = "0.10.3"
 shadow-plugin = "9.3.1"
-proto-toolchain = "0.7.7"
+proto-toolchain = "0.7.9"
 
 [libraries]
 # Quarkus BOM

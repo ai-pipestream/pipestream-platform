@@ -61,6 +61,3 @@ project(':pipestream-service-registration-deployment').projectDir = file('pipest
 include 'pipestream-service-registration-integration-tests'
 project(':pipestream-service-registration-integration-tests').projectDir = file('pipestream-service-registration/integration-tests')
 
-// 5. Proto Toolchain Gradle Plugin
-// Now published to Maven Central: https://github.com/ai-pipestream/quarkus-buf-grpc-generator
-// Usage: id 'ai.pipestream.proto-toolchain' version '0.7.7'

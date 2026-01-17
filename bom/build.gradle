@@ -31,7 +31,6 @@ dependencies {
         api libs.pdfbox
         api libs.password4j
         api libs.quarkus.mcp.server.sse
-        api libs.smallrye.reactive.messaging.in.memory
 
         // Strict gRPC/Protobuf version alignment
         api("io.grpc:grpc-protobuf") { version { strictly(libs.versions.grpc.get()) } }
@@ -64,6 +63,7 @@ dependencies {
         // Pipestream Gradle Plugins
         // ========================
         api libs.proto.toolchain
+        api libs.quarkus.buf.grpc.generator
 
         // ========================
         // Pipestream Internal Libraries

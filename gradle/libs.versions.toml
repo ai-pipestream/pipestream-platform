@@ -69,7 +69,8 @@ nmcp = "1.4.3"
 protobuf-plugin = "0.9.6"
 buf-plugin = "0.10.3"
 shadow-plugin = "9.3.1"
-proto-toolchain = "0.7.10"
+proto-toolchain = "0.7.11"
+quarkus-buf-grpc-generator = "0.7.11"
 
 [libraries]
 # Quarkus BOM
@@ -214,6 +215,7 @@ pipestream-wiremock-server = { module = "ai.pipestream:pipestream-wiremock-serve
 
 # Pipestream Gradle Plugins
 proto-toolchain = { module = "ai.pipestream:proto-toolchain", version.ref = "proto-toolchain" }
+quarkus-buf-grpc-generator = { module = "ai.pipestream:quarkus-buf-grpc-generator", version.ref = "quarkus-buf-grpc-generator" }
 
 [plugins]
 quarkus = { id = "io.quarkus", version.ref = "quarkusVersion" }

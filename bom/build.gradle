@@ -63,6 +63,7 @@ dependencies {
         // Pipestream Gradle Plugins
         // ========================
         api libs.proto.toolchain
+        api libs.quarkus.buf.grpc.generator
 
         // ========================
         // Pipestream Internal Libraries

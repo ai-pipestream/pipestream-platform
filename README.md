@@ -20,14 +20,21 @@ Monorepo for Pipestream platform libraries - Quarkus extensions, BOM, Gradle plu
 
 ### Gradle Plugins
 
-- **[quarkus-buf-grpc-generator](quarkus-buf-grpc-generator/)** (`ai.pipestream.proto-toolchain`) - Gradle plugin for Protocol Buffer code generation with 100% local execution. Fetch protos from BSR or Git, generate Java/gRPC/Mutiny stubs without uploading data to external servers.
+- **[quarkus-buf-grpc-generator](quarkus-buf-grpc-generator/)** (`ai.pipestream.proto-toolchain`) - Gradle plugin for Protocol Buffer 
+  code generation with 100% local execution. Fetch protos from BSR or Git, generate Java/gRPC/Mutiny stubs without uploading data to 
+  external servers.  This approach uses the more modern buf tool for code generation while still creating the quarkus reactive mutiny stubs.
 
 ### Quarkus Extensions
 
-1. **pipestream-quarkus-devservices** - Dev services for local development
-2. **quarkus-apicurio-registry-protobuf** - Apicurio Registry integration with Protobuf
-3. **quarkus-dynamic-grpc** - Dynamic gRPC client with service discovery
-4. **pipestream-service-registration** - Service registration client
+1. **pipestream-quarkus-devservices** - Dev services for local development.  Allows for developers to have 0-config setups when starting 
+   services in quarkus dev mode.
+2. **quarkus-apicurio-registry-protobuf** - Apicurio Registry integration with Protobuf.  Allows for protobuf configuration of Apicurio 
+   Registry with kafka using quarkus with little configuration.
+3. **quarkus-dynamic-grpc** - Dynamic gRPC client with service discovery.  Quarkus lacks the ability to have service beans allocated via 
+   service discovery without the use of annotations.  With this plugin, a user still gets all the advantages of grpc service discovery 
+   without the need for buildtime configuration or reflection.
+4. **pipestream-service-registration** - Service registration client for registering pipestream services, modules, and connectors into 
+   consul registration and apicruio registration for module and connector configuration schema registration.
 
 ## Structure
 
@@ -60,23 +67,24 @@ graph TD
 
 All components share a **single version** managed at the root level using [axion-release](https://github.com/allegro/axion-release-plugin):
 
-- All extensions and the BOM use the same version (e.g., `0.7.0`)
-- Version is determined from git tags with the `v` prefix (e.g., `v0.7.0`)
-- **Tagged**: `git tag v0.7.0` → version `0.7.0`
-- **Untagged**: No tag → version `0.7.0-SNAPSHOT`
+- All extensions and the BOM use the same version (e.g., `0.7.16`)
+- Version is determined from git tags with the `v` prefix (e.g., `v0.7.16`)
+- **Tagged**: `git tag v0.7.16` → version `0.7.16`
+- **Untagged**: No tag → version `0.7.16-SNAPSHOT`
 
 ### How It Works
 
 Axion-release automatically determines the version based on git tags at the repository root. All subprojects inherit this version, ensuring consistent releases across all components.
 
-**Note:** `tika4-shaded` is managed as a separate independent project in its own repository.
+**Note:** `tika4-shaded` is a hard versioned tika library that is built from tika snapshots.  It is managed as a separate independent 
+project in its own repository.
 
 ## Building
 
 ### Build All Extensions
 
 ```bash
-./gradlew buildAll
+./gradlew build
 ```
 
 ### Test All Extensions
@@ -88,8 +96,7 @@ Axion-release automatically determines the version based on git tags at the repo
 ### Build Individual Extension
 
 ```bash
-cd pipestream-quarkus-devservices
-../gradlew build
+./gradlew pipestream-quarkus-devservices:build
 ```
 
 ### Check Current Version
@@ -111,7 +118,7 @@ Use the **Release Extensions** workflow in GitHub Actions:
 
 The workflow will:
 - Build and verify all extensions
-- Create a git tag for the release (e.g., `v0.7.0`)
+- Create a git tag for the release (e.g., `v0.7.16`)
 - Push the tag (triggers automatic publishing of all components)
 
 ## CI/CD Workflows
@@ -126,12 +133,12 @@ Import the BOM to manage all Pipestream dependencies:
 
 ```groovy
 dependencies {
-    implementation platform('ai.pipestream:pipestream-bom:0.7.0')
+    implementation platform('ai.pipestream:pipestream-bom:0.7.16')
 
     // Now you can use dependencies without versions
     implementation 'ai.pipestream:pipestream-quarkus-devservices'
     // Note: tika4-shaded is available as a separate dependency from its own repository
-    // implementation 'ai.pipestream:tika4-shaded:0.7.0'
+    // implementation 'ai.pipestream:tika4-shaded:0.7.16'
 }
 ```
 
@@ -149,7 +156,7 @@ repositories {
 }
 
 dependencies {
-    implementation platform('ai.pipestream:pipestream-bom:0.7.0-SNAPSHOT')
+    implementation platform('ai.pipestream:pipestream-bom:0.7.16-SNAPSHOT')
 }
 ```
 

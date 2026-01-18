@@ -17,7 +17,12 @@ public class RepositoryWireMockTestResource extends BaseWireMockTestResource {
                 .withEnv("WIREMOCK_ACCOUNT_GETACCOUNT_DEFAULT_NAME", "Valid Account")
                 .withEnv("WIREMOCK_ACCOUNT_GETACCOUNT_DEFAULT_DESCRIPTION", "Valid account for testing")
                 .withEnv("WIREMOCK_ACCOUNT_GETACCOUNT_DEFAULT_ACTIVE", "true")
-                .withEnv("WIREMOCK_ACCOUNT_GETACCOUNT_NOTFOUND_ID", "nonexistent");
+                .withEnv("WIREMOCK_ACCOUNT_GETACCOUNT_NOTFOUND_ID", "nonexistent")
+                // StreamAllAccounts fixtures
+                .withEnv("WIREMOCK_ACCOUNT_STREAMALLACCOUNTS_IDS", "valid-account,inactive-account")
+                .withEnv("WIREMOCK_ACCOUNT_STREAMALLACCOUNTS_NAMES", "Valid Account,Inactive Account")
+                .withEnv("WIREMOCK_ACCOUNT_STREAMALLACCOUNTS_DESCRIPTIONS", "Valid account for testing,Inactive account for testing")
+                .withEnv("WIREMOCK_ACCOUNT_STREAMALLACCOUNTS_ACTIVES", "true,false");
     }
 
     @Override
@@ -29,6 +34,7 @@ public class RepositoryWireMockTestResource extends BaseWireMockTestResource {
         String standardPort = String.valueOf(getMappedPort(DEFAULT_HTTP_PORT));
         String directPort = String.valueOf(getMappedPort(DEFAULT_GRPC_PORT));
         String accountAddress = host + ":" + standardPort;
+        String accountManagerAddress = host + ":" + directPort;
 
         return Map.of(
                 // Legacy/Direct client config (tests may use a direct Quarkus gRPC client)
@@ -41,7 +47,7 @@ public class RepositoryWireMockTestResource extends BaseWireMockTestResource {
 
                 // Repo-service uses dynamic-grpc with the service name "account-manager"
                 "stork.account-manager.service-discovery.type", "static",
-                "stork.account-manager.service-discovery.address-list", accountAddress,
+                "stork.account-manager.service-discovery.address-list", accountManagerAddress,
 
                 // Registration service config - use the direct server port
                 "pipestream.registration.registration-service.host", host,

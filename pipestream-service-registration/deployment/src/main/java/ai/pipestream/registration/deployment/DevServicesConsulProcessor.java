@@ -95,6 +95,28 @@ public class DevServicesConsulProcessor {
 
         RegistrationBuildTimeConfig.DevServicesConfig configuration = config.devservices();
 
+        // Check if explicitly disabled
+        if (configuration.enabled().isPresent() && !configuration.enabled().get()) {
+            log.debug("Consul Dev Services explicitly disabled");
+            return null;
+        }
+
+        // Check if Consul is already configured
+        Config runtimeConfig = ConfigProvider.getConfig();
+        Optional<String> consulHost = runtimeConfig.getOptionalValue(CONSUL_HOST_CONFIG, String.class);
+        Optional<String> consulPort = runtimeConfig.getOptionalValue(CONSUL_PORT_CONFIG, String.class);
+
+        boolean alreadyConfigured = consulHost.isPresent() || consulPort.isPresent();
+
+        // If explicitly enabled, ignore existing config and force start
+        boolean forceStart = configuration.enabled().orElse(false);
+
+        if (alreadyConfigured && !forceStart) {
+            log.infof("Consul already configured at %s:%s, skipping Dev Services",
+                consulHost.orElse("localhost"), consulPort.orElse("8500"));
+            return null;
+        }
+
         if (runningContainer != null || runningContainerId != null) {
             boolean restartRequired = !configuration.equals(cfg);
             if (!restartRequired) {

@@ -23,6 +23,7 @@ public final class ServiceInfo {
     private final Map<String, String> metadata;
     private final List<String> tags;
     private final List<String> capabilities;
+    private final List<HttpEndpointInfo> httpEndpoints;
 
     private ServiceInfo(Builder builder) {
         this.name = Objects.requireNonNull(builder.name, "name is required");
@@ -36,6 +37,7 @@ public final class ServiceInfo {
         this.metadata = builder.metadata != null ? Map.copyOf(builder.metadata) : Collections.emptyMap();
         this.tags = builder.tags != null ? List.copyOf(builder.tags) : Collections.emptyList();
         this.capabilities = builder.capabilities != null ? List.copyOf(builder.capabilities) : Collections.emptyList();
+        this.httpEndpoints = builder.httpEndpoints != null ? List.copyOf(builder.httpEndpoints) : Collections.emptyList();
     }
 
     public String getName() {
@@ -82,6 +84,10 @@ public final class ServiceInfo {
         return capabilities;
     }
 
+    public List<HttpEndpointInfo> getHttpEndpoints() {
+        return httpEndpoints;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -100,6 +106,7 @@ public final class ServiceInfo {
                 ", metadata=" + metadata +
                 ", tags=" + tags +
                 ", capabilities=" + capabilities +
+                ", httpEndpoints=" + httpEndpoints +
                 '}';
     }
 
@@ -115,6 +122,7 @@ public final class ServiceInfo {
         private Map<String, String> metadata;
         private List<String> tags;
         private List<String> capabilities;
+        private List<HttpEndpointInfo> httpEndpoints;
 
         private Builder() {
         }
@@ -171,6 +179,11 @@ public final class ServiceInfo {
 
         public Builder capabilities(List<String> capabilities) {
             this.capabilities = capabilities;
+            return this;
+        }
+
+        public Builder httpEndpoints(List<HttpEndpointInfo> httpEndpoints) {
+            this.httpEndpoints = httpEndpoints;
             return this;
         }
 

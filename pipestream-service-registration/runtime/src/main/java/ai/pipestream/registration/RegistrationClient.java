@@ -218,6 +218,19 @@ public class RegistrationClient {
                 .addAllTags(serviceInfo.getTags())
                 .addAllCapabilities(serviceInfo.getCapabilities());
 
+        if (!serviceInfo.getHttpEndpoints().isEmpty()) {
+            serviceInfo.getHttpEndpoints().forEach(endpoint ->
+                requestBuilder.addHttpEndpoints(HttpEndpoint.newBuilder()
+                    .setScheme(endpoint.getScheme())
+                    .setHost(endpoint.getHost())
+                    .setPort(endpoint.getPort())
+                    .setBasePath(endpoint.getBasePath())
+                    .setHealthPath(endpoint.getHealthPath())
+                    .setTlsEnabled(endpoint.isTlsEnabled())
+                    .build())
+            );
+        }
+
         if (serviceInfo.getVersion() != null) {
             requestBuilder.setVersion(serviceInfo.getVersion());
         }

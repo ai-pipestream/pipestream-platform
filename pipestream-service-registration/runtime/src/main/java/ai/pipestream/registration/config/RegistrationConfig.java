@@ -130,6 +130,12 @@ public interface RegistrationConfig {
     ReRegistrationConfig reRegistration();
 
     /**
+     * Configuration for HTTP endpoint registration.
+     */
+    @WithName("http")
+    HttpConfig http();
+
+    /**
      * Registration service connection configuration.
      */
     interface RegistrationServiceConfig {
@@ -240,5 +246,54 @@ public interface RegistrationConfig {
          */
         @WithDefault("2.0")
         double multiplier();
+    }
+
+    /**
+     * HTTP endpoint configuration for service registration.
+     */
+    interface HttpConfig {
+        /**
+         * Whether HTTP endpoint registration is enabled.
+         */
+        @WithDefault("true")
+        boolean enabled();
+
+        /**
+         * Scheme for HTTP endpoints (e.g., http, https).
+         */
+        @WithDefault("http")
+        String scheme();
+
+        /**
+         * Advertised HTTP host (defaults to advertised-host when unset).
+         */
+        @WithName("advertised-host")
+        Optional<String> advertisedHost();
+
+        /**
+         * Advertised HTTP port (defaults to quarkus.http.port when unset).
+         */
+        @WithName("advertised-port")
+        Optional<Integer> advertisedPort();
+
+        /**
+         * Base path prefix for HTTP endpoints (e.g., /intake, /repository).
+         */
+        @WithName("base-path")
+        Optional<String> basePath();
+
+        /**
+         * Health check path (defaults to /q/health).
+         */
+        @WithName("health-path")
+        @WithDefault("/q/health")
+        String healthPath();
+
+        /**
+         * Whether TLS is enabled for HTTP endpoints.
+         */
+        @WithName("tls-enabled")
+        @WithDefault("false")
+        boolean tlsEnabled();
     }
 }

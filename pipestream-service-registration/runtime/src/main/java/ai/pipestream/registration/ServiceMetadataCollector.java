@@ -2,6 +2,7 @@ package ai.pipestream.registration;
 
 import ai.pipestream.platform.registration.v1.ServiceType;
 import ai.pipestream.registration.config.RegistrationConfig;
+import ai.pipestream.registration.model.HttpEndpointInfo;
 import ai.pipestream.registration.model.ServiceInfo;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -35,6 +36,9 @@ public class ServiceMetadataCollector {
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "8080")
     int httpPort;
 
+    @ConfigProperty(name = "quarkus.http.root-path", defaultValue = "")
+    String httpRootPath;
+
     @ConfigProperty(name = "quarkus.grpc.server.port", defaultValue = "9000")
     int grpcPort;
 
@@ -60,6 +64,7 @@ public class ServiceMetadataCollector {
         Map<String, String> metadata = collectMetadata();
         List<String> tags = config.tags().orElse(Collections.emptyList());
         List<String> capabilities = config.capabilities().orElse(Collections.emptyList());
+        List<HttpEndpointInfo> httpEndpoints = collectHttpEndpoints(advertisedHost);
 
         ServiceInfo serviceInfo = ServiceInfo.builder()
                 .name(name)
@@ -73,6 +78,7 @@ public class ServiceMetadataCollector {
                 .metadata(metadata)
                 .tags(tags)
                 .capabilities(capabilities)
+                .httpEndpoints(httpEndpoints)
                 .build();
 
         LOG.infof("Collected service metadata: %s", serviceInfo);
@@ -120,6 +126,31 @@ public class ServiceMetadataCollector {
         metadata.put("quarkus.version", getQuarkusVersion());
 
         return metadata;
+    }
+
+    private List<HttpEndpointInfo> collectHttpEndpoints(String advertisedHost) {
+        RegistrationConfig.HttpConfig httpConfig = config.http();
+        if (!httpConfig.enabled()) {
+            return Collections.emptyList();
+        }
+
+        String scheme = httpConfig.scheme();
+        String host = httpConfig.advertisedHost().orElse(advertisedHost);
+        int port = httpConfig.advertisedPort().orElse(httpPort);
+        String basePath = httpConfig.basePath().orElse(httpRootPath == null ? "" : httpRootPath);
+        String healthPath = httpConfig.healthPath();
+        boolean tlsEnabled = httpConfig.tlsEnabled();
+
+        HttpEndpointInfo endpoint = new HttpEndpointInfo(
+            scheme,
+            host,
+            port,
+            basePath,
+            healthPath,
+            tlsEnabled
+        );
+
+        return List.of(endpoint);
     }
 
     private String getQuarkusVersion() {

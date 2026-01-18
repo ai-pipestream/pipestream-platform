@@ -29,21 +29,6 @@ scmVersion {
 allprojects {
     group = 'ai.pipestream'
     version = rootProject.scmVersion.version
-
-    // WORKAROUND: Disable Quarkus component variants during IDE sync to fix NPE
-    // Bug: GradleApplicationModelBuilder uses null TaskDependencyFactory during IDE sync,
-    // but the component variants feature (introduced in Quarkus 3.25+) requires it.
-    // This causes IntelliJ Gradle sync to fail with NPE on Linux.
-    // See: https://github.com/quarkusio/quarkus/issues/XXXXX (to be filed)
-    def isIdeSync = System.getProperty("idea.sync.active") == "true" ||
-                    System.getProperty("idea.active") == "true" ||
-                    gradle.startParameter.taskNames.contains("prepareKotlinBuildScriptModel") ||
-                    gradle.startParameter.taskNames.empty
-
-    if (isIdeSync) {
-        // Disable component variants during IDE sync only - use legacy dependency resolution
-        ext.set("disableQuarkusComponentVariants", "true")
-    }
 }
 
 // Repositories for root project (needed for nmcp plugin's internal dependencies)

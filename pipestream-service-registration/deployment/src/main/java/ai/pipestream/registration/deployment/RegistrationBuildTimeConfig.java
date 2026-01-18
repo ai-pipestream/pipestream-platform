@@ -60,7 +60,7 @@ public interface RegistrationBuildTimeConfig {
          * If a matching container is found, it is used, and a new one is not started.
          * </p>
          */
-        @WithDefault("true")
+        @WithDefault("false")
         boolean shared();
 
         /**
@@ -70,7 +70,7 @@ public interface RegistrationBuildTimeConfig {
          * This label is used to identify the shared container.
          * </p>
          */
-        @WithDefault("consul")
+        @WithDefault("consul-registration")
         String serviceName();
 
         /**

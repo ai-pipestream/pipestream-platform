@@ -131,13 +131,22 @@ public class DevServicesConsulProcessor {
 
             if (first) {
                 first = false;
-                log.info("Dev Services for Consul started.");
+                Runnable closeTask = () -> {
+                    shutdownConsul();
+                    first = true;
+                    runningContainer = null;
+                    runningContainerId = null;
+                    runningConfig = null;
+                    cfg = null;
+                };
+                closeBuildItem.addCloseTask(closeTask, true);
             }
 
+            String containerId = runningContainer != null ? runningContainer.getContainerId() : runningContainerId;
             return DevServicesResultBuildItem.discovered()
                     .name(DEV_SERVICE_NAME)
-                    .containerId(result.containerId())
-                    .config(result.config())
+                    .containerId(containerId)
+                    .config(runningConfig)
                     .build();
 
         } catch (Throwable t) {
@@ -192,14 +201,6 @@ public class DevServicesConsulProcessor {
         );
 
         return new StartResult(container, container.getContainerId(), config);
-    }
-
-    /**
-     * Shutdown hook for Consul Dev Service.
-     */
-    @BuildStep
-    void shutdownConsul(CuratedApplicationShutdownBuildItem closeBuildItem) {
-        closeBuildItem.addCloseTask(this::shutdownConsul, true);
     }
 
     private void shutdownConsul() {

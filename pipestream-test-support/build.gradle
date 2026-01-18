@@ -10,4 +10,13 @@ dependencies {
     testFixturesImplementation libs.quarkus.test.common
     testFixturesImplementation libs.testcontainers.core
     testFixturesImplementation 'org.slf4j:slf4j-api'
+
+    testImplementation platform(libs.quarkus.bom)
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation libs.quarkus.test.common
+    testImplementation(testFixtures(project(':pipestream-test-support')))
+}
+
+test {
+    useJUnitPlatform()
 }

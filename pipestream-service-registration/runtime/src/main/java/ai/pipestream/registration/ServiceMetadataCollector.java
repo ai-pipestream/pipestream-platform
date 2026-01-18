@@ -65,6 +65,9 @@ public class ServiceMetadataCollector {
         List<String> tags = config.tags().orElse(Collections.emptyList());
         List<String> capabilities = config.capabilities().orElse(Collections.emptyList());
         List<HttpEndpointInfo> httpEndpoints = collectHttpEndpoints(advertisedHost);
+        String httpSchema = config.http().schema().orElse(null);
+        String httpSchemaVersion = config.http().schemaVersion().orElse(null);
+        String httpSchemaArtifactId = config.http().schemaArtifactId().orElse(null);
 
         ServiceInfo serviceInfo = ServiceInfo.builder()
                 .name(name)
@@ -79,6 +82,9 @@ public class ServiceMetadataCollector {
                 .tags(tags)
                 .capabilities(capabilities)
                 .httpEndpoints(httpEndpoints)
+                .httpSchema(httpSchema)
+                .httpSchemaVersion(httpSchemaVersion)
+                .httpSchemaArtifactId(httpSchemaArtifactId)
                 .build();
 
         LOG.infof("Collected service metadata: %s", serviceInfo);

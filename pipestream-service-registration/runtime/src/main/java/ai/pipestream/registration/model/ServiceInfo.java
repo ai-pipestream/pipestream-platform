@@ -24,6 +24,9 @@ public final class ServiceInfo {
     private final List<String> tags;
     private final List<String> capabilities;
     private final List<HttpEndpointInfo> httpEndpoints;
+    private final String httpSchema;
+    private final String httpSchemaVersion;
+    private final String httpSchemaArtifactId;
 
     private ServiceInfo(Builder builder) {
         this.name = Objects.requireNonNull(builder.name, "name is required");
@@ -38,6 +41,9 @@ public final class ServiceInfo {
         this.tags = builder.tags != null ? List.copyOf(builder.tags) : Collections.emptyList();
         this.capabilities = builder.capabilities != null ? List.copyOf(builder.capabilities) : Collections.emptyList();
         this.httpEndpoints = builder.httpEndpoints != null ? List.copyOf(builder.httpEndpoints) : Collections.emptyList();
+        this.httpSchema = builder.httpSchema;
+        this.httpSchemaVersion = builder.httpSchemaVersion;
+        this.httpSchemaArtifactId = builder.httpSchemaArtifactId;
     }
 
     public String getName() {
@@ -88,6 +94,18 @@ public final class ServiceInfo {
         return httpEndpoints;
     }
 
+    public String getHttpSchema() {
+        return httpSchema;
+    }
+
+    public String getHttpSchemaVersion() {
+        return httpSchemaVersion;
+    }
+
+    public String getHttpSchemaArtifactId() {
+        return httpSchemaArtifactId;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -107,6 +125,8 @@ public final class ServiceInfo {
                 ", tags=" + tags +
                 ", capabilities=" + capabilities +
                 ", httpEndpoints=" + httpEndpoints +
+                ", httpSchemaVersion='" + httpSchemaVersion + '\'' +
+                ", httpSchemaArtifactId='" + httpSchemaArtifactId + '\'' +
                 '}';
     }
 
@@ -123,6 +143,9 @@ public final class ServiceInfo {
         private List<String> tags;
         private List<String> capabilities;
         private List<HttpEndpointInfo> httpEndpoints;
+        private String httpSchema;
+        private String httpSchemaVersion;
+        private String httpSchemaArtifactId;
 
         private Builder() {
         }
@@ -184,6 +207,21 @@ public final class ServiceInfo {
 
         public Builder httpEndpoints(List<HttpEndpointInfo> httpEndpoints) {
             this.httpEndpoints = httpEndpoints;
+            return this;
+        }
+
+        public Builder httpSchema(String httpSchema) {
+            this.httpSchema = httpSchema;
+            return this;
+        }
+
+        public Builder httpSchemaVersion(String httpSchemaVersion) {
+            this.httpSchemaVersion = httpSchemaVersion;
+            return this;
+        }
+
+        public Builder httpSchemaArtifactId(String httpSchemaArtifactId) {
+            this.httpSchemaArtifactId = httpSchemaArtifactId;
             return this;
         }
 

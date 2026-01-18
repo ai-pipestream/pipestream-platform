@@ -295,5 +295,23 @@ public interface RegistrationConfig {
         @WithName("tls-enabled")
         @WithDefault("false")
         boolean tlsEnabled();
+
+        /**
+         * Optional REST/OpenAPI schema (JSON or YAML) to register.
+         */
+        @WithName("schema")
+        Optional<String> schema();
+
+        /**
+         * Optional schema version override (defaults to service version when unset).
+         */
+        @WithName("schema-version")
+        Optional<String> schemaVersion();
+
+        /**
+         * Optional artifact ID override for schema registration.
+         */
+        @WithName("schema-artifact-id")
+        Optional<String> schemaArtifactId();
     }
 }

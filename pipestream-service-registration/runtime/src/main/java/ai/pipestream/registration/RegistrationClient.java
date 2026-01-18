@@ -231,6 +231,16 @@ public class RegistrationClient {
             );
         }
 
+        if (serviceInfo.getHttpSchema() != null && !serviceInfo.getHttpSchema().isBlank()) {
+            requestBuilder.setHttpSchema(serviceInfo.getHttpSchema());
+        }
+        if (serviceInfo.getHttpSchemaVersion() != null && !serviceInfo.getHttpSchemaVersion().isBlank()) {
+            requestBuilder.setHttpSchemaVersion(serviceInfo.getHttpSchemaVersion());
+        }
+        if (serviceInfo.getHttpSchemaArtifactId() != null && !serviceInfo.getHttpSchemaArtifactId().isBlank()) {
+            requestBuilder.setHttpSchemaArtifactId(serviceInfo.getHttpSchemaArtifactId());
+        }
+
         if (serviceInfo.getVersion() != null) {
             requestBuilder.setVersion(serviceInfo.getVersion());
         }

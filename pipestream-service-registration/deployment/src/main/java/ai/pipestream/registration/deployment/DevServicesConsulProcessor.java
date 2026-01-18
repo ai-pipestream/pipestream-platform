@@ -21,7 +21,7 @@ import io.quarkus.runtime.LaunchMode;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
-import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.consul.ConsulContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
@@ -47,7 +47,7 @@ import java.util.function.Supplier;
  * container across multiple Quarkus applications.</li>
  * </ul>
  */
-@BuildSteps(onlyIfNot = IsProduction.class, onlyIf = RegistrationBuildTimeConfig.DevServicesConfig.Enabled.class)
+@BuildSteps(onlyIfNot = IsProduction.class)
 public class DevServicesConsulProcessor {
 
     private static final Logger log = Logger.getLogger(DevServicesConsulProcessor.class);
@@ -66,7 +66,7 @@ public class DevServicesConsulProcessor {
             CONSUL_HTTP_PORT, DEV_SERVICE_LABEL);
 
     // Container state for lifecycle management
-    static volatile GenericContainer<?> runningContainer;
+    static volatile ConsulContainer runningContainer;
     static volatile Map<String, String> runningConfig;
     static volatile String runningContainerId;
     static volatile RegistrationBuildTimeConfig.DevServicesConfig cfg;
@@ -134,7 +134,7 @@ public class DevServicesConsulProcessor {
                 log.info("Dev Services for Consul started.");
             }
 
-            return DevServicesResultBuildItem.started()
+            return DevServicesResultBuildItem.discovered()
                     .name(DEV_SERVICE_NAME)
                     .containerId(result.containerId())
                     .config(result.config())
@@ -151,65 +151,40 @@ public class DevServicesConsulProcessor {
             RegistrationBuildTimeConfig.DevServicesConfig configuration,
             LaunchModeBuildItem launchMode, boolean useSharedNetwork, Optional<Duration> timeout) {
 
-        if (!dockerStatusBuildItem.isDockerAvailable()) {
+        if (!dockerStatusBuildItem.isContainerRuntimeAvailable()) {
             log.warn("Docker isn't working, please configure Consul location.");
             return null;
         }
 
         // Check for shared container
-        String sharedContainerName = configuration.serviceName();
-        String sharedNetworkName = useSharedNetwork ? ConfigureUtil.configureSharedNetwork(configuration, DEV_SERVICE_LABEL) : null;
-
-        Optional<io.quarkus.devservices.common.ContainerAddress> sharedContainer = CONTAINER_LOCATOR.locateContainer(
-                configuration.serviceName(),
-                sharedContainerName,
-                configuration.shared());
-
+        var sharedContainer = CONTAINER_LOCATOR.locateContainer(
+                configuration.serviceName(), configuration.shared(), launchMode.getLaunchMode());
         if (sharedContainer.isPresent()) {
-            io.quarkus.devservices.common.ContainerAddress containerAddress = sharedContainer.get();
-            String host = containerAddress.host();
-            Integer port = containerAddress.port();
-
-            Map<String, String> config = Map.of(
-                CONSUL_HOST_CONFIG, host,
-                CONSUL_PORT_CONFIG, String.valueOf(port)
-            );
-
-            return new StartResult(null, containerAddress.containerId(), config);
+            var address = sharedContainer.get();
+            return new StartResult(null, address.getId(), Map.of(
+                CONSUL_HOST_CONFIG, address.getHost(),
+                CONSUL_PORT_CONFIG, String.valueOf(address.getPort())
+            ));
         }
 
         // Start new container
         DockerImageName dockerImageName = DockerImageName.parse(configuration.imageName())
                 .asCompatibleSubstituteFor(DEFAULT_IMAGE);
 
-        Supplier<GenericContainer<?>> consulContainerSupplier = () -> {
-            GenericContainer<?> container = new GenericContainer<>(dockerImageName)
-                    .withExposedPorts(CONSUL_HTTP_PORT)
-                    .withCommand("consul", "agent", "-dev", "-client=0.0.0.0")
-                    .withStartupTimeout(timeout.orElse(Duration.ofSeconds(60)));
+        ConsulContainer container = new ConsulContainer(dockerImageName)
+                .withStartupTimeout(timeout.orElse(Duration.ofSeconds(60)));
 
-            // Add container environment variables
-            configuration.containerEnv().forEach(container::withEnv);
+        // Add container environment variables
+        configuration.containerEnv().forEach(container::withEnv);
 
-            // Configure shared network if needed
-            if (useSharedNetwork && sharedNetworkName != null) {
-                container.withNetworkAliases(sharedContainerName);
-                container.withNetwork(io.quarkus.containers.SharedNetwork.getSharedNetwork());
-            }
-
-            // Add dev service labels
-            container.withLabel(QUARKUS_DEV_SERVICE, DEV_SERVICE_LABEL);
-            container.withLabel(DEV_SERVICE_LABEL, sharedContainerName);
-
-            return container;
-        };
-
-        GenericContainer<?> container = consulContainerSupplier.get();
+        // Add dev service labels
+        container.withLabel(QUARKUS_DEV_SERVICE, DEV_SERVICE_LABEL);
+        container.withLabel(DEV_SERVICE_LABEL, configuration.serviceName());
 
         container.start();
 
-        String host = ConfigureUtil.getHost(container, useSharedNetwork);
-        Integer port = container.getMappedPort(CONSUL_HTTP_PORT);
+        String host = container.getHost();
+        Integer port = container.getFirstMappedPort();
 
         Map<String, String> config = Map.of(
             CONSUL_HOST_CONFIG, host,
@@ -245,17 +220,17 @@ public class DevServicesConsulProcessor {
      * Result of starting a Consul container.
      */
     private static final class StartResult {
-        private final GenericContainer<?> container;
+        private final ConsulContainer container;
         private final String containerId;
         private final Map<String, String> config;
 
-        StartResult(GenericContainer<?> container, String containerId, Map<String, String> config) {
+        StartResult(ConsulContainer container, String containerId, Map<String, String> config) {
             this.container = container;
             this.containerId = containerId;
             this.config = config;
         }
 
-        GenericContainer<?> container() {
+        ConsulContainer container() {
             return container;
         }
 

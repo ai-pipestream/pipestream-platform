@@ -20,10 +20,16 @@ dependencies {
     api 'io.quarkus:quarkus-arc-deployment'
     api 'io.quarkus:quarkus-grpc-deployment'
     api 'io.quarkus:quarkus-smallrye-health-deployment'
-    
+
+    // Testcontainers for DevServices
+    implementation libs.testcontainers.consul
+
+    // Quarkus DevServices common utilities
+    implementation 'io.quarkus:quarkus-devservices-common'
+
     // Runtime dependency
     api project(':pipestream-service-registration')
-    
+
     // Annotation processor
     annotationProcessor enforcedPlatform(libs.quarkus.bom)
     annotationProcessor 'io.quarkus:quarkus-extension-processor'

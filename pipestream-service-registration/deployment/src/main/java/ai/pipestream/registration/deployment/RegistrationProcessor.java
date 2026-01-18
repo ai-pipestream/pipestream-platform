@@ -33,4 +33,9 @@ public class RegistrationProcessor {
                 .setUnremovable()
                 .build();
     }
+
+    @BuildStep
+    void registerBuildTimeConfig() {
+        // This ensures the build-time config is available during build
+    }
 }

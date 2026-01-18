@@ -1,0 +1,270 @@
+package ai.pipestream.registration.deployment;
+
+import static io.quarkus.devservices.common.ContainerLocator.locateContainerWithLabels;
+import static io.quarkus.devservices.common.Labels.QUARKUS_DEV_SERVICE;
+
+import io.quarkus.deployment.IsProduction;
+import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.annotations.BuildSteps;
+import io.quarkus.deployment.builditem.CuratedApplicationShutdownBuildItem;
+import io.quarkus.deployment.builditem.DevServicesComposeProjectBuildItem;
+import io.quarkus.deployment.builditem.DevServicesResultBuildItem;
+import io.quarkus.deployment.builditem.DevServicesSharedNetworkBuildItem;
+import io.quarkus.deployment.builditem.DockerStatusBuildItem;
+import io.quarkus.deployment.builditem.LaunchModeBuildItem;
+import io.quarkus.deployment.console.ConsoleInstalledBuildItem;
+import io.quarkus.deployment.logging.LoggingSetupBuildItem;
+import io.quarkus.devservices.common.ComposeLocator;
+import io.quarkus.devservices.common.ConfigureUtil;
+import io.quarkus.deployment.dev.devservices.DevServicesConfig;
+import io.quarkus.runtime.LaunchMode;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
+import org.jboss.logging.Logger;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.utility.DockerImageName;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Supplier;
+
+/**
+ * Dev Services processor for Consul.
+ *
+ * <p>
+ * This processor automatically starts a Consul instance in development and test modes
+ * when no Consul configuration is provided. It supports:
+ * </p>
+ *
+ * <ul>
+ * <li><strong>Automatic Startup:</strong> Starts a Consul container
+ * ({@code hashicorp/consul:1.22}) when Consul is not configured.</li>
+ * <li><strong>Configuration Injection:</strong> Automatically configures the
+ * application to use the started Consul instance.</li>
+ * <li><strong>Container Sharing:</strong> Supports sharing the Consul
+ * container across multiple Quarkus applications.</li>
+ * </ul>
+ */
+@BuildSteps(onlyIfNot = IsProduction.class, onlyIf = RegistrationBuildTimeConfig.DevServicesConfig.Enabled.class)
+public class DevServicesConsulProcessor {
+
+    private static final Logger log = Logger.getLogger(DevServicesConsulProcessor.class);
+
+    private static final String DEV_SERVICE_NAME = "consul";
+    private static final int CONSUL_HTTP_PORT = 8500;
+    private static final String CONSUL_HOST_CONFIG = "quarkus.pipestream.service.registration.consul.host";
+    private static final String CONSUL_PORT_CONFIG = "quarkus.pipestream.service.registration.consul.port";
+    private static final String DEV_SERVICE_LABEL = "quarkus-dev-service-consul";
+    private static final String DEFAULT_IMAGE = "hashicorp/consul:1.22";
+
+    /**
+     * Locator for finding shared dev service containers with our label.
+     */
+    private static final io.quarkus.devservices.common.ContainerLocator CONTAINER_LOCATOR = locateContainerWithLabels(
+            CONSUL_HTTP_PORT, DEV_SERVICE_LABEL);
+
+    // Container state for lifecycle management
+    static volatile GenericContainer<?> runningContainer;
+    static volatile Map<String, String> runningConfig;
+    static volatile String runningContainerId;
+    static volatile RegistrationBuildTimeConfig.DevServicesConfig cfg;
+    static volatile boolean first = true;
+
+    /**
+     * Default constructor.
+     */
+    public DevServicesConsulProcessor() {
+    }
+
+    /**
+     * Starts the Consul Dev Service.
+     */
+    @BuildStep
+    public DevServicesResultBuildItem startConsulDevService(
+            LaunchModeBuildItem launchMode,
+            DockerStatusBuildItem dockerStatusBuildItem,
+            DevServicesComposeProjectBuildItem composeProjectBuildItem,
+            List<DevServicesSharedNetworkBuildItem> devServicesSharedNetworkBuildItem,
+            RegistrationBuildTimeConfig config,
+            @SuppressWarnings("OptionalUsedAsFieldOrParameterType") Optional<ConsoleInstalledBuildItem> consoleInstalledBuildItem,
+            CuratedApplicationShutdownBuildItem closeBuildItem,
+            LoggingSetupBuildItem loggingSetupBuildItem,
+            DevServicesConfig devServicesConfig) {
+
+        RegistrationBuildTimeConfig.DevServicesConfig configuration = config.devservices();
+
+        if (runningContainer != null || runningContainerId != null) {
+            boolean restartRequired = !configuration.equals(cfg);
+            if (!restartRequired) {
+                String containerId = runningContainer != null ? runningContainer.getContainerId() : runningContainerId;
+                return DevServicesResultBuildItem.discovered()
+                        .name(DEV_SERVICE_NAME)
+                        .containerId(containerId)
+                        .config(runningConfig)
+                        .build();
+            }
+            shutdownConsul();
+            cfg = null;
+        }
+
+        io.quarkus.deployment.console.StartupLogCompressor compressor = new io.quarkus.deployment.console.StartupLogCompressor(
+                (launchMode.isTest() ? "(test) " : "") + "Consul Dev Services Starting:",
+                consoleInstalledBuildItem, loggingSetupBuildItem);
+        try {
+            boolean useSharedNetwork = DevServicesSharedNetworkBuildItem.isSharedNetworkRequired(
+                    devServicesConfig, devServicesSharedNetworkBuildItem);
+
+            StartResult result = startConsul(dockerStatusBuildItem, composeProjectBuildItem,
+                    configuration, launchMode, useSharedNetwork, devServicesConfig.timeout());
+            compressor.close();
+
+            if (result == null) {
+                return null;
+            }
+
+            runningContainer = result.container();
+            runningContainerId = result.containerId();
+            runningConfig = result.config();
+            cfg = configuration;
+
+            if (first) {
+                first = false;
+                log.info("Dev Services for Consul started.");
+            }
+
+            return DevServicesResultBuildItem.started()
+                    .name(DEV_SERVICE_NAME)
+                    .containerId(result.containerId())
+                    .config(result.config())
+                    .build();
+
+        } catch (Throwable t) {
+            compressor.close();
+            throw new RuntimeException(t);
+        }
+    }
+
+    private StartResult startConsul(DockerStatusBuildItem dockerStatusBuildItem,
+            DevServicesComposeProjectBuildItem composeProjectBuildItem,
+            RegistrationBuildTimeConfig.DevServicesConfig configuration,
+            LaunchModeBuildItem launchMode, boolean useSharedNetwork, Optional<Duration> timeout) {
+
+        if (!dockerStatusBuildItem.isDockerAvailable()) {
+            log.warn("Docker isn't working, please configure Consul location.");
+            return null;
+        }
+
+        // Check for shared container
+        String sharedContainerName = configuration.serviceName();
+        String sharedNetworkName = useSharedNetwork ? ConfigureUtil.configureSharedNetwork(configuration, DEV_SERVICE_LABEL) : null;
+
+        Optional<io.quarkus.devservices.common.ContainerAddress> sharedContainer = CONTAINER_LOCATOR.locateContainer(
+                configuration.serviceName(),
+                sharedContainerName,
+                configuration.shared());
+
+        if (sharedContainer.isPresent()) {
+            io.quarkus.devservices.common.ContainerAddress containerAddress = sharedContainer.get();
+            String host = containerAddress.host();
+            Integer port = containerAddress.port();
+
+            Map<String, String> config = Map.of(
+                CONSUL_HOST_CONFIG, host,
+                CONSUL_PORT_CONFIG, String.valueOf(port)
+            );
+
+            return new StartResult(null, containerAddress.containerId(), config);
+        }
+
+        // Start new container
+        DockerImageName dockerImageName = DockerImageName.parse(configuration.imageName())
+                .asCompatibleSubstituteFor(DEFAULT_IMAGE);
+
+        Supplier<GenericContainer<?>> consulContainerSupplier = () -> {
+            GenericContainer<?> container = new GenericContainer<>(dockerImageName)
+                    .withExposedPorts(CONSUL_HTTP_PORT)
+                    .withCommand("consul", "agent", "-dev", "-client=0.0.0.0")
+                    .withStartupTimeout(timeout.orElse(Duration.ofSeconds(60)));
+
+            // Add container environment variables
+            configuration.containerEnv().forEach(container::withEnv);
+
+            // Configure shared network if needed
+            if (useSharedNetwork && sharedNetworkName != null) {
+                container.withNetworkAliases(sharedContainerName);
+                container.withNetwork(io.quarkus.containers.SharedNetwork.getSharedNetwork());
+            }
+
+            // Add dev service labels
+            container.withLabel(QUARKUS_DEV_SERVICE, DEV_SERVICE_LABEL);
+            container.withLabel(DEV_SERVICE_LABEL, sharedContainerName);
+
+            return container;
+        };
+
+        GenericContainer<?> container = consulContainerSupplier.get();
+
+        container.start();
+
+        String host = ConfigureUtil.getHost(container, useSharedNetwork);
+        Integer port = container.getMappedPort(CONSUL_HTTP_PORT);
+
+        Map<String, String> config = Map.of(
+            CONSUL_HOST_CONFIG, host,
+            CONSUL_PORT_CONFIG, String.valueOf(port)
+        );
+
+        return new StartResult(container, container.getContainerId(), config);
+    }
+
+    /**
+     * Shutdown hook for Consul Dev Service.
+     */
+    @BuildStep
+    void shutdownConsul(CuratedApplicationShutdownBuildItem closeBuildItem) {
+        closeBuildItem.addCloseTask(this::shutdownConsul, true);
+    }
+
+    private void shutdownConsul() {
+        if (runningContainer != null) {
+            try {
+                runningContainer.stop();
+            } catch (Exception e) {
+                log.warn("Failed to stop Consul container", e);
+            }
+            runningContainer = null;
+        }
+        runningContainerId = null;
+        runningConfig = null;
+        cfg = null;
+    }
+
+    /**
+     * Result of starting a Consul container.
+     */
+    private static final class StartResult {
+        private final GenericContainer<?> container;
+        private final String containerId;
+        private final Map<String, String> config;
+
+        StartResult(GenericContainer<?> container, String containerId, Map<String, String> config) {
+            this.container = container;
+            this.containerId = containerId;
+            this.config = config;
+        }
+
+        GenericContainer<?> container() {
+            return container;
+        }
+
+        String containerId() {
+            return containerId;
+        }
+
+        Map<String, String> config() {
+            return config;
+        }
+    }
+}

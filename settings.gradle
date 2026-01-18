@@ -61,3 +61,6 @@ project(':pipestream-service-registration-deployment').projectDir = file('pipest
 include 'pipestream-service-registration-integration-tests'
 project(':pipestream-service-registration-integration-tests').projectDir = file('pipestream-service-registration/integration-tests')
 
+// 5. Shared Test Support
+include 'pipestream-test-support'
+

@@ -1,0 +1,13 @@
+plugins {
+    alias(libs.plugins.java.library)
+    id 'java-test-fixtures'
+}
+
+description = 'Shared test fixtures for Pipestream services'
+
+dependencies {
+    testFixturesImplementation platform(libs.quarkus.bom)
+    testFixturesImplementation libs.quarkus.test.common
+    testFixturesImplementation libs.testcontainers.core
+    testFixturesImplementation 'org.slf4j:slf4j-api'
+}

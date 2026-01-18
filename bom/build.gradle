@@ -59,6 +59,9 @@ dependencies {
         api project(':pipestream-service-registration')
         api project(':pipestream-service-registration-deployment')
 
+        // Shared test fixtures
+        api project(':pipestream-test-support')
+
         // ========================
         // Pipestream Gradle Plugins
         // ========================

@@ -95,9 +95,10 @@ public class DevServicesConsulProcessor {
 
         RegistrationBuildTimeConfig.DevServicesConfig configuration = config.devservices();
 
-        // Check if explicitly disabled
-        if (configuration.enabled().isPresent() && !configuration.enabled().get()) {
-            log.debug("Consul Dev Services explicitly disabled");
+        // Only start Consul DevServices if explicitly enabled
+        // This prevents unnecessary Consul startup for services that don't need registration
+        if (!configuration.enabled().orElse(false)) {
+            log.debug("Consul Dev Services not enabled, skipping. Enable with quarkus.pipestream.service.registration.devservices.consul.enabled=true");
             return null;
         }
 
@@ -108,10 +109,7 @@ public class DevServicesConsulProcessor {
 
         boolean alreadyConfigured = consulHost.isPresent() || consulPort.isPresent();
 
-        // If explicitly enabled, ignore existing config and force start
-        boolean forceStart = configuration.enabled().orElse(false);
-
-        if (alreadyConfigured && !forceStart) {
+        if (alreadyConfigured) {
             log.infof("Consul already configured at %s:%s, skipping Dev Services",
                 consulHost.orElse("localhost"), consulPort.orElse("8500"));
             return null;

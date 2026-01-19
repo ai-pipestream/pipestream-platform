@@ -103,7 +103,7 @@ public class DevServicesApicurioRegistryProtobufProcessor {
     public DevServicesResultBuildItem startApicurioRegistryDevService(
             LaunchModeBuildItem launchMode,
             DockerStatusBuildItem dockerStatusBuildItem,
-            DevServicesComposeProjectBuildItem composeProjectBuildItem,
+            @SuppressWarnings("OptionalUsedAsFieldOrParameterType") Optional<DevServicesComposeProjectBuildItem> composeProjectBuildItem,
             List<DevServicesSharedNetworkBuildItem> devServicesSharedNetworkBuildItem,
             ApicurioRegistryProtobufBuildTimeConfig config,
             ProtobufChannelsBuildItem protobufChannels,
@@ -202,7 +202,7 @@ public class DevServicesApicurioRegistryProtobufProcessor {
 
     private StartResult startApicurioRegistry(
             DockerStatusBuildItem dockerStatusBuildItem,
-            DevServicesComposeProjectBuildItem composeProjectBuildItem,
+            @SuppressWarnings("OptionalUsedAsFieldOrParameterType") Optional<DevServicesComposeProjectBuildItem> composeProjectBuildItem,
             ApicurioRegistryDevServiceCfg config,
             LaunchModeBuildItem launchMode,
             boolean useSharedNetwork,
@@ -255,19 +255,23 @@ public class DevServicesApicurioRegistryProtobufProcessor {
             log.warn("DEBUG: Shared container not found via label: " + config.serviceName);
         }
 
-        // Second, try to locate a container from Compose Dev Services
-        var composeContainer = ComposeLocator.locateContainer(
-                composeProjectBuildItem,
-                List.of(config.imageName, "apicurio"),
-                APICURIO_REGISTRY_PORT,
-                launchMode.getLaunchMode(),
-                useSharedNetwork);
-        if (composeContainer.isPresent()) {
-            var address = composeContainer.get();
-            log.warn("DEBUG: Found Apicurio Registry from Compose Dev Services at " + address.getUrl());
-            return new StartResult(null, address.getId(), getRegistryUrlConfigs("http://" + address.getUrl()));
+        // Second, try to locate a container from Compose Dev Services (only if Compose is available)
+        if (composeProjectBuildItem.isPresent()) {
+            var composeContainer = ComposeLocator.locateContainer(
+                    composeProjectBuildItem.get(),
+                    List.of(config.imageName, "apicurio"),
+                    APICURIO_REGISTRY_PORT,
+                    launchMode.getLaunchMode(),
+                    useSharedNetwork);
+            if (composeContainer.isPresent()) {
+                var address = composeContainer.get();
+                log.warn("DEBUG: Found Apicurio Registry from Compose Dev Services at " + address.getUrl());
+                return new StartResult(null, address.getId(), getRegistryUrlConfigs("http://" + address.getUrl()));
+            } else {
+                log.warn("DEBUG: Container not found in Compose project.");
+            }
         } else {
-            log.warn("DEBUG: Container not found in Compose project.");
+            log.debug("DEBUG: Compose Dev Services not available, skipping Compose container lookup.");
         }
 
         // No existing container found, start our own
@@ -276,7 +280,7 @@ public class DevServicesApicurioRegistryProtobufProcessor {
                 DockerImageName.parse(config.imageName),
                 config.fixedExposedPort,
                 launchMode.getLaunchMode() == LaunchMode.DEVELOPMENT ? config.serviceName : null,
-                composeProjectBuildItem.getDefaultNetworkId(),
+                composeProjectBuildItem.map(DevServicesComposeProjectBuildItem::getDefaultNetworkId).orElse(null),
                 useSharedNetwork);
         timeout.ifPresent(container::withStartupTimeout);
         container.withEnv(config.containerEnv);

@@ -85,7 +85,7 @@ public class DevServicesConsulProcessor {
     public DevServicesResultBuildItem startConsulDevService(
             LaunchModeBuildItem launchMode,
             DockerStatusBuildItem dockerStatusBuildItem,
-            DevServicesComposeProjectBuildItem composeProjectBuildItem,
+            @SuppressWarnings("OptionalUsedAsFieldOrParameterType") Optional<DevServicesComposeProjectBuildItem> composeProjectBuildItem,
             List<DevServicesSharedNetworkBuildItem> devServicesSharedNetworkBuildItem,
             RegistrationBuildTimeConfig config,
             @SuppressWarnings("OptionalUsedAsFieldOrParameterType") Optional<ConsoleInstalledBuildItem> consoleInstalledBuildItem,
@@ -176,7 +176,7 @@ public class DevServicesConsulProcessor {
     }
 
     private StartResult startConsul(DockerStatusBuildItem dockerStatusBuildItem,
-            DevServicesComposeProjectBuildItem composeProjectBuildItem,
+            @SuppressWarnings("OptionalUsedAsFieldOrParameterType") Optional<DevServicesComposeProjectBuildItem> composeProjectBuildItem,
             RegistrationBuildTimeConfig.DevServicesConfig configuration,
             LaunchModeBuildItem launchMode, boolean useSharedNetwork, Optional<Duration> timeout) {
 

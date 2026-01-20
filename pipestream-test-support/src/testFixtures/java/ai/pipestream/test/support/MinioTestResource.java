@@ -2,6 +2,7 @@ package ai.pipestream.test.support;
 
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import org.testcontainers.containers.MinIOContainer;
+import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -10,7 +11,11 @@ import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Map;
+import org.jboss.logging.Logger;
 
 /**
  * Shared test resource for setting up MinIO container to simulate AWS S3 API.
@@ -20,20 +25,27 @@ import java.util.Map;
  */
 public class MinioTestResource implements QuarkusTestResourceLifecycleManager {
 
+    private static final String DEFAULT_IMAGE = "chainguard/minio:latest";
     private static final String ACCESS_KEY = "testuser";
     private static final String SECRET_KEY = "testpassword";
     private static final String BUCKET = "test-bucket";
+    private static final Logger LOG = Logger.getLogger(MinioTestResource.class);
 
     private MinIOContainer minio;
 
     @Override
     public Map<String, String> start() {
-        minio = new MinIOContainer("minio/minio:latest")
+        minio = new MinIOContainer(DockerImageName.parse(DEFAULT_IMAGE).asCompatibleSubstituteFor("minio/minio"))
                 .withUserName(ACCESS_KEY)
                 .withPassword(SECRET_KEY);
         minio.start();
 
         String endpoint = minio.getS3URL();
+
+        // #region agent log
+        debugLog("H1", "MinioTestResource.java:start", "minio_started",
+                "{\"endpoint\":\"" + jsonEscape(endpoint) + "\",\"bucket\":\"" + BUCKET + "\",\"image\":\"" + jsonEscape(DEFAULT_IMAGE) + "\"}");
+        // #endregion
 
         createBucket(endpoint);
 
@@ -56,6 +68,16 @@ public class MinioTestResource implements QuarkusTestResourceLifecycleManager {
                 .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
                 .build()) {
             s3.createBucket(CreateBucketRequest.builder().bucket(BUCKET).build());
+            // #region agent log
+            debugLog("H2", "MinioTestResource.java:createBucket", "bucket_created",
+                    "{\"bucket\":\"" + BUCKET + "\",\"endpoint\":\"" + jsonEscape(endpoint) + "\"}");
+            // #endregion
+        } catch (Exception e) {
+            // #region agent log
+            debugLog("H2", "MinioTestResource.java:createBucket", "bucket_create_failed",
+                    "{\"bucket\":\"" + BUCKET + "\",\"endpoint\":\"" + jsonEscape(endpoint) + "\",\"exception\":\"" + e.getClass().getSimpleName() + "\"}");
+            // #endregion
+            throw e;
         }
     }
 
@@ -103,5 +125,25 @@ public class MinioTestResource implements QuarkusTestResourceLifecycleManager {
         if (minio != null) {
             minio.stop();
         }
+    }
+
+    private static void debugLog(String hypothesisId, String location, String message, String dataJson) {
+        LOG.debugf("debug.%s %s %s", hypothesisId, location, message);
+        String payload = "{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\""
+                + jsonEscape(hypothesisId) + "\",\"location\":\"" + jsonEscape(location)
+                + "\",\"message\":\"" + jsonEscape(message) + "\",\"data\":" + dataJson
+                + ",\"timestamp\":" + System.currentTimeMillis() + "}\n";
+        try {
+            Files.writeString(Path.of("/work/core-services/connector-admin/.cursor/debug.log"),
+                    payload, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static String jsonEscape(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

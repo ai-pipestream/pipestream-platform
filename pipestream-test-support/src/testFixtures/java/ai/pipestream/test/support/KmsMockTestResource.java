@@ -5,11 +5,15 @@ import org.testcontainers.containers.GenericContainer;
 import java.util.Map;
 
 /**
- * WireMock resource for KMS (Key Management Service) tests.
+ * Mock resource for KMS (Key Management Service) tests using WireMock.
  * <p>
- * Provides mock KMS endpoints for testing credential resolution and secret management.
+ * Provides mock KMS endpoints for fast unit testing of credential resolution and secret management.
  * Supports both Infisical-style and AWS KMS-style reference formats.
  * </p>
+ *
+ * <h2>Use Case</h2>
+ * <p><strong>Unit Testing:</strong> Use this for fast, isolated tests that don't need real KMS integration.</p>
+ * <p><strong>For Integration Testing:</strong> Use {@link KmsTestResource} instead.</p>
  *
  * <h2>Mock Endpoints</h2>
  * <ul>
@@ -28,7 +32,7 @@ import java.util.Map;
  *   <li>AWS KMS references → corresponding test values</li>
  * </ul>
  */
-public class KmsWireMockTestResource extends BaseWireMockTestResource {
+public class KmsMockTestResource extends BaseWireMockTestResource {
 
     @Override
     protected void configureContainer(GenericContainer<?> container) {

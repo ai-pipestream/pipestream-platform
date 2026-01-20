@@ -11,6 +11,7 @@ dependencies {
     testFixturesImplementation libs.testcontainers.core
     testFixturesImplementation 'com.redis:testcontainers-redis:2.2.2'
     testFixturesImplementation 'org.testcontainers:testcontainers-minio:2.0.3'
+    testFixturesImplementation "org.testcontainers:testcontainers-postgresql:2.0.2"
     testFixturesImplementation 'org.slf4j:slf4j-api'
 
     // AWS SDK for MinIO test resource (same as s3-connector)
@@ -22,6 +23,11 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation libs.quarkus.test.common
     testImplementation(testFixtures(project(':pipestream-test-support')))
+
+    // AWS SDK for test classes (same as testFixtures)
+    testImplementation platform('io.quarkus.platform:quarkus-amazon-services-bom:3.30.6')
+    testImplementation 'io.quarkiverse.amazonservices:quarkus-amazon-s3'
+    testImplementation 'software.amazon.awssdk:s3'
 }
 
 test {

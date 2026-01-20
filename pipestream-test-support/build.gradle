@@ -9,7 +9,14 @@ dependencies {
     testFixturesImplementation platform(libs.quarkus.bom)
     testFixturesImplementation libs.quarkus.test.common
     testFixturesImplementation libs.testcontainers.core
+    testFixturesImplementation 'com.redis:testcontainers-redis:2.2.2'
+    testFixturesImplementation 'org.testcontainers:testcontainers-minio:2.0.3'
     testFixturesImplementation 'org.slf4j:slf4j-api'
+
+    // AWS SDK for MinIO test resource (same as s3-connector)
+    testFixturesImplementation platform('io.quarkus.platform:quarkus-amazon-services-bom:3.30.6')
+    testFixturesImplementation 'io.quarkiverse.amazonservices:quarkus-amazon-s3'
+    testFixturesImplementation 'software.amazon.awssdk:s3'
 
     testImplementation platform(libs.quarkus.bom)
     testImplementation 'org.junit.jupiter:junit-jupiter'

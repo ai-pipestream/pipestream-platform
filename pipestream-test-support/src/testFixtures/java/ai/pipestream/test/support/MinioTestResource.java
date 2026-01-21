@@ -26,10 +26,13 @@ import org.jboss.logging.Logger;
 public class MinioTestResource implements QuarkusTestResourceLifecycleManager {
 
     private static final String DEFAULT_IMAGE = "chainguard/minio:latest";
-    private static final String ACCESS_KEY = "testuser";
-    private static final String SECRET_KEY = "testpassword";
-    private static final String BUCKET = "test-bucket";
+    public static final String ACCESS_KEY = "testuser";
+    public static final String SECRET_KEY = "testpassword";
+    public static final String BUCKET = "test-bucket";
     private static final Logger LOG = Logger.getLogger(MinioTestResource.class);
+
+    // Static field to share endpoint across all tests
+    private static String sharedEndpoint;
 
     private MinIOContainer minio;
 
@@ -41,6 +44,7 @@ public class MinioTestResource implements QuarkusTestResourceLifecycleManager {
         minio.start();
 
         String endpoint = minio.getS3URL();
+        sharedEndpoint = endpoint;  // Store for static access by tests
 
         // #region agent log
         debugLog("H1", "MinioTestResource.java:start", "minio_started",
@@ -49,13 +53,23 @@ public class MinioTestResource implements QuarkusTestResourceLifecycleManager {
 
         createBucket(endpoint);
 
-        return Map.of(
+        System.out.println("=== MinioTestResource.start() returning config ===");
+        System.out.println("endpoint = " + endpoint);
+
+        // Set as system properties to ensure higher precedence than defaults
+        System.setProperty("quarkus.s3.endpoint-override", endpoint);
+        System.setProperty("quarkus.s3.path-style-access", "true");
+
+        Map<String, String> config = Map.of(
                 "quarkus.s3.endpoint-override", endpoint,
                 "quarkus.s3.aws.region", "us-east-1",
                 "quarkus.s3.aws.credentials.static-provider.access-key-id", ACCESS_KEY,
                 "quarkus.s3.aws.credentials.static-provider.secret-access-key", SECRET_KEY,
                 "quarkus.s3.path-style-access", "true"
         );
+        config.forEach((k, v) -> System.out.println(k + " = " + v));
+        System.out.println("=== End MinioTestResource config ===");
+        return config;
     }
 
     private static void createBucket(String endpoint) {
@@ -82,7 +96,7 @@ public class MinioTestResource implements QuarkusTestResourceLifecycleManager {
     }
 
     /**
-     * Get the MinIO endpoint URL.
+     * Get the MinIO endpoint URL from the running container.
      *
      * @return endpoint URL or null if container is not running
      */
@@ -91,6 +105,15 @@ public class MinioTestResource implements QuarkusTestResourceLifecycleManager {
             return null;
         }
         return minio.getS3URL();
+    }
+
+    /**
+     * Get the shared MinIO endpoint URL (static access for tests).
+     *
+     * @return endpoint URL that was set when the container started
+     */
+    public static String getSharedEndpoint() {
+        return sharedEndpoint;
     }
 
     /**

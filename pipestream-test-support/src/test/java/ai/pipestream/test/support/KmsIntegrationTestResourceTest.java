@@ -11,11 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Integration test for real KMS (Infisical) test resource.
  * This test starts actual Redis + Infisical containers for full integration testing.
- * Only runs when explicitly enabled due to slower startup time.
- *
- * Set system property to enable: -Dtest.kms.integration=true
+ * ENABLED BY DEFAULT - We need real confidence in KMS integration!
  */
-@EnabledIfSystemProperty(named = "test.kms.integration", matches = "true")
 class KmsIntegrationTestResourceTest {
 
     @Test

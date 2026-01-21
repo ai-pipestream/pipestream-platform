@@ -2,6 +2,7 @@ package ai.pipestream.test.support;
 
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.Network;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
@@ -45,6 +46,7 @@ public class KmsTestResource implements QuarkusTestResourceLifecycleManager {
     private static final String AUTH_SECRET = "PgviZ6tQbBwPKgv4JqsjqKec9XEfh0iCFPlSHrnV0jM=";
     private static final Logger LOG = Logger.getLogger(KmsTestResource.class);
 
+    private Network network;
     private GenericContainer<?> infisical;
     private RedisContainer redis;
     private PostgreSQLContainer<?> fallbackPostgres; // Only started if no external PG found
@@ -53,20 +55,41 @@ public class KmsTestResource implements QuarkusTestResourceLifecycleManager {
 
     @Override
     public Map<String, String> start() {
-        // Get PostgreSQL connection from external sources (devservices, environment, etc.)
-        String postgresUrl = getPostgresConnection();
+        // Create shared network for all containers
+        network = Network.newNetwork();
 
-        // Start Redis (required by Infisical)
-        redis = new RedisContainer(DockerImageName.parse("redis:7-alpine"));
+        // Start PostgreSQL with network alias
+        fallbackPostgres = new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"))
+                .withDatabaseName("infisical")
+                .withUsername("pipeline")
+                .withPassword("password")
+                .withNetwork(network)
+                .withNetworkAliases("postgres");
+        fallbackPostgres.start();
+
+        // PostgreSQL connection string FOR INFISICAL (using network alias)
+        String postgresUrlForInfisical = "postgresql://pipeline:password@postgres:5432/infisical";
+
+        // #region agent log
+        debugLog("H3", "KmsTestResource.java:start", "postgres_started",
+                "{\"url\":\"" + jsonEscape(postgresUrlForInfisical) + "\"}");
+        // #endregion
+
+        // Start Redis with network alias (required by Infisical)
+        redis = new RedisContainer(DockerImageName.parse("redis:7-alpine"))
+                .withNetwork(network)
+                .withNetworkAliases("redis");
         redis.start();
 
-        String redisUrl = redis.getRedisURI();
+        // Redis connection string FOR INFISICAL (using network alias)
+        String redisUrlForInfisical = "redis://redis:6379";
 
         // Start Infisical
         infisical = new GenericContainer<>(DockerImageName.parse(DEFAULT_IMAGE))
                 .withExposedPorts(3000, 8080)
-                .withEnv("DB_CONNECTION_URI", postgresUrl + "?sslmode=disable")
-                .withEnv("REDIS_URL", redisUrl)
+                .withNetwork(network)
+                .withEnv("DB_CONNECTION_URI", postgresUrlForInfisical + "?sslmode=disable")
+                .withEnv("REDIS_URL", redisUrlForInfisical)
                 .withEnv("ENCRYPTION_KEY", ENCRYPTION_KEY)
                 .withEnv("AUTH_SECRET", AUTH_SECRET)
                 .withEnv("SITE_URL", "http://infisical:8080")
@@ -78,7 +101,7 @@ public class KmsTestResource implements QuarkusTestResourceLifecycleManager {
 
         // #region agent log
         debugLog("H4", "KmsTestResource.java:start", "infisical_started",
-                "{\"apiUrl\":\"" + jsonEscape(apiUrl) + "\",\"redisUrl\":\"" + jsonEscape(redisUrl) + "\"}");
+                "{\"apiUrl\":\"" + jsonEscape(apiUrl) + "\",\"redisUrl\":\"" + jsonEscape(redisUrlForInfisical) + "\"}");
         // #endregion
 
         // Wait for Infisical to be ready and initialize admin account
@@ -89,68 +112,6 @@ public class KmsTestResource implements QuarkusTestResourceLifecycleManager {
         config.put("kms.api.url", apiUrl);
         config.put("kms.api.token", authToken != null ? authToken : "");
         return config;
-    }
-
-    /**
-     * Get PostgreSQL connection URL from various sources.
-     * Priority order: System Property > Environment Variable > DevServices > Fallback Container
-     */
-    private String getPostgresConnection() {
-        // 1. Check system property (highest priority)
-        String postgresUrl = System.getProperty("test.postgres.url");
-        if (postgresUrl != null && !postgresUrl.isEmpty()) {
-            debugLog("H3", "KmsTestResource.java:getPostgresConnection", "using_system_property",
-                    "{\"url\":\"" + jsonEscape(postgresUrl) + "\"}");
-            return postgresUrl;
-        }
-
-        // 2. Check environment variable
-        postgresUrl = System.getenv("TEST_POSTGRES_URL");
-        if (postgresUrl != null && !postgresUrl.isEmpty()) {
-            debugLog("H3", "KmsTestResource.java:getPostgresConnection", "using_env_var",
-                    "{\"url\":\"" + jsonEscape(postgresUrl) + "\"}");
-            return postgresUrl;
-        }
-
-        // 3. Check for Quarkus devservices (common patterns)
-        postgresUrl = detectDevServicesPostgres();
-        if (postgresUrl != null) {
-            debugLog("H3", "KmsTestResource.java:getPostgresConnection", "using_devservices",
-                    "{\"url\":\"" + jsonEscape(postgresUrl) + "\"}");
-            return postgresUrl;
-        }
-
-        // 4. Fallback: start our own PostgreSQL container (for standalone testing)
-        debugLog("H3", "KmsTestResource.java:getPostgresConnection", "starting_fallback_container", "{}");
-        PostgreSQLContainer<?> fallbackPostgres = new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"))
-                .withDatabaseName("infisical")
-                .withUsername("pipeline")
-                .withPassword("password");
-        fallbackPostgres.start();
-        // Store reference for cleanup (we'll need to update stop() method too)
-        this.fallbackPostgres = fallbackPostgres;
-        return fallbackPostgres.getJdbcUrl();
-    }
-
-    /**
-     * Detect PostgreSQL connection from Quarkus devservices environment.
-     */
-    private String detectDevServicesPostgres() {
-        // Check common Quarkus datasource environment variables
-        String url = System.getenv("QUARKUS_DATASOURCE_JDBC_URL");
-        if (url != null && url.startsWith("jdbc:postgresql://")) {
-            return url;
-        }
-
-        // Check test-specific environment variables used in compose files
-        url = System.getenv("TEST_POSTGRES_URL");
-        if (url != null && !url.isEmpty()) {
-            return url;
-        }
-
-        // Could add more detection logic here for other devservices patterns
-
-        return null;
     }
 
     private void waitForInfisical() {
@@ -294,6 +255,9 @@ public class KmsTestResource implements QuarkusTestResourceLifecycleManager {
         }
         if (fallbackPostgres != null) {
             fallbackPostgres.stop();
+        }
+        if (network != null) {
+            network.close();
         }
     }
 

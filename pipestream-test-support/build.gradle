@@ -20,6 +20,9 @@ dependencies {
     testFixturesImplementation 'io.quarkiverse.amazonservices:quarkus-amazon-s3'
     testFixturesImplementation 'software.amazon.awssdk:s3'
 
+    // Sample data for MinioWithSampleDataTestResource
+    testFixturesImplementation 'ai.pipestream:test-documents:0.2.3-SNAPSHOT'
+
     testImplementation platform(libs.quarkus.bom)
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation libs.quarkus.test.common

@@ -10,14 +10,14 @@ dependencies {
     testFixturesImplementation libs.quarkus.test.common
     testFixturesImplementation libs.quarkus.junit5
     testFixturesImplementation libs.testcontainers.core
-    testFixturesImplementation 'com.redis:testcontainers-redis:2.2.2'
+    testFixturesImplementation 'com.redis:testcontainers-redis:2.2.4'
     testFixturesImplementation 'org.testcontainers:testcontainers-minio:2.0.3'
-    testFixturesImplementation "org.testcontainers:testcontainers-postgresql:2.0.2"
+    testFixturesImplementation "org.testcontainers:testcontainers-postgresql:2.0.3"
     testFixturesImplementation 'org.slf4j:slf4j-api'
     testFixturesImplementation 'com.fasterxml.jackson.core:jackson-databind' // For JSON parsing in KMS integration
 
     // AWS SDK for MinIO test resource (same as s3-connector)
-    testFixturesImplementation platform('io.quarkus.platform:quarkus-amazon-services-bom:3.30.6')
+    testFixturesImplementation platform('io.quarkus.platform:quarkus-amazon-services-bom:3.30.7')
     testFixturesImplementation 'io.quarkiverse.amazonservices:quarkus-amazon-s3'
     testFixturesImplementation 'software.amazon.awssdk:s3'
 
@@ -30,7 +30,7 @@ dependencies {
     testImplementation(testFixtures(project(':pipestream-test-support')))
 
     // AWS SDK for test classes (same as testFixtures)
-    testImplementation platform('io.quarkus.platform:quarkus-amazon-services-bom:3.30.6')
+    testImplementation platform('io.quarkus.platform:quarkus-amazon-services-bom:3.30.7')
     testImplementation 'io.quarkiverse.amazonservices:quarkus-amazon-s3'
     testImplementation 'software.amazon.awssdk:s3'
 }

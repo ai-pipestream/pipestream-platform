@@ -8,6 +8,7 @@ description = 'Shared test fixtures for Pipestream services'
 dependencies {
     testFixturesImplementation platform(libs.quarkus.bom)
     testFixturesImplementation libs.quarkus.test.common
+    testFixturesImplementation libs.quarkus.junit5
     testFixturesImplementation libs.testcontainers.core
     testFixturesImplementation 'com.redis:testcontainers-redis:2.2.2'
     testFixturesImplementation 'org.testcontainers:testcontainers-minio:2.0.3'

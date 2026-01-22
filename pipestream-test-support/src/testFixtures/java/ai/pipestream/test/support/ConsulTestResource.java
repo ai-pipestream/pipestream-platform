@@ -60,26 +60,26 @@ public class ConsulTestResource implements QuarkusTestResourceLifecycleManager {
 
         log.info("Consul container started at: {}", consulUrl);
 
-        return Map.of(
+        return Map.ofEntries(
                 // Quarkus Consul Config
-                "quarkus.consul-config.agent.host-port", hostPort,
-                "quarkus.consul-config.enabled", "true",
+                Map.entry("quarkus.consul-config.agent.host-port", hostPort),
+                Map.entry("quarkus.consul-config.enabled", "true"),
 
                 // Stork service discovery
-                "quarkus.stork.service-discovery.type", "consul",
-                "quarkus.stork.service-discovery.consul-host", host,
-                "quarkus.stork.service-discovery.consul-port", String.valueOf(mappedHttpPort),
+                Map.entry("quarkus.stork.service-discovery.type", "consul"),
+                Map.entry("quarkus.stork.service-discovery.consul-host", host),
+                Map.entry("quarkus.stork.service-discovery.consul-port", String.valueOf(mappedHttpPort)),
 
                 // Service registration
-                "pipestream.registration.consul.host", host,
-                "pipestream.registration.consul.port", String.valueOf(mappedHttpPort),
-                "pipestream.registration.consul.url", consulUrl,
+                Map.entry("pipestream.registration.consul.host", host),
+                Map.entry("pipestream.registration.consul.port", String.valueOf(mappedHttpPort)),
+                Map.entry("pipestream.registration.consul.url", consulUrl),
 
                 // Legacy/generic properties
-                "consul.host", host,
-                "consul.port", String.valueOf(mappedHttpPort),
-                "consul.url", consulUrl,
-                "consul.grpc-port", String.valueOf(mappedGrpcPort)
+                Map.entry("consul.host", host),
+                Map.entry("consul.port", String.valueOf(mappedHttpPort)),
+                Map.entry("consul.url", consulUrl),
+                Map.entry("consul.grpc-port", String.valueOf(mappedGrpcPort))
         );
     }
 

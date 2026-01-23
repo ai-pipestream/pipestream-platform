@@ -141,17 +141,15 @@ public interface RegistrationConfig {
     interface RegistrationServiceConfig {
         /**
          * Host of the platform-registration-service.
-         * Used when discovery-name is not specified.
+         * If not set (and discovery-name is not set), Consul discovery is used.
          */
-        @WithDefault("localhost")
-        String host();
+        Optional<String> host();
 
         /**
          * Port of the platform-registration-service.
-         * Used when discovery-name is not specified.
+         * If not set (and discovery-name is not set), Consul discovery is used.
          */
-        @WithDefault("9090")
-        int port();
+        Optional<Integer> port();
 
         /**
          * Service name in Consul for discovering platform-registration-service.

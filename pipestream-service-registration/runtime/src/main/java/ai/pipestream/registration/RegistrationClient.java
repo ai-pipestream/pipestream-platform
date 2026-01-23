@@ -34,6 +34,9 @@ public class RegistrationClient {
     private static final Logger LOG = Logger.getLogger(RegistrationClient.class);
     private static final int SHUTDOWN_TIMEOUT_SECONDS = 5;
     private static final Duration CONSUL_DISCOVERY_TIMEOUT = Duration.ofSeconds(5);
+    private static final String DEFAULT_REGISTRATION_SERVICE_NAME = "platform-registration-service";
+    private static final String FALLBACK_HOST = "localhost";
+    private static final int FALLBACK_PORT = 9090;
 
     private final RegistrationConfig config;
     private final Vertx vertx;
@@ -51,6 +54,14 @@ public class RegistrationClient {
     /**
      * Ensures the gRPC channel is created, using Consul discovery if configured,
      * otherwise falling back to direct host/port connection.
+     * <p>
+     * Discovery logic:
+     * <ol>
+     *   <li>If discovery-name is explicitly set → use Consul discovery with that name</li>
+     *   <li>If host/port are NOT set → use Consul discovery with default service name</li>
+     *   <li>If host/port ARE set → use direct connection</li>
+     *   <li>If Consul discovery fails → fall back to localhost:9090</li>
+     * </ol>
      */
     private void ensureChannel() {
         if (channel == null) {
@@ -60,23 +71,34 @@ public class RegistrationClient {
                     int port;
                     boolean tlsEnabled = config.registrationService().tlsEnabled();
 
-                    // Try Consul discovery if discovery-name is configured
+                    Optional<String> configuredHost = config.registrationService().host();
+                    Optional<Integer> configuredPort = config.registrationService().port();
                     Optional<String> discoveryName = config.registrationService().discoveryName();
-                    if (discoveryName.isPresent()) {
-                        LOG.infof("Attempting Consul discovery for registration service: %s", discoveryName.get());
-                        var discovered = discoverViaConsul(discoveryName.get());
+
+                    // Determine if we should try Consul discovery:
+                    // 1. discovery-name is explicitly set, OR
+                    // 2. host/port are NOT configured (use Consul by default)
+                    boolean hostPortConfigured = configuredHost.isPresent() && configuredPort.isPresent();
+                    boolean shouldTryConsul = discoveryName.isPresent() || !hostPortConfigured;
+
+                    if (shouldTryConsul) {
+                        String serviceName = discoveryName.orElse(DEFAULT_REGISTRATION_SERVICE_NAME);
+                        LOG.infof("Attempting Consul discovery for registration service: %s", serviceName);
+                        var discovered = discoverViaConsul(serviceName);
                         if (discovered != null) {
                             host = discovered.host();
                             port = discovered.port();
                             LOG.infof("Discovered registration service via Consul: %s:%d", host, port);
                         } else {
-                            LOG.warn("Consul discovery failed, falling back to direct connection");
-                            host = config.registrationService().host();
-                            port = config.registrationService().port();
+                            host = configuredHost.orElse(FALLBACK_HOST);
+                            port = configuredPort.orElse(FALLBACK_PORT);
+                            LOG.warnf("Consul discovery failed for '%s', falling back to %s:%d",
+                                    serviceName, host, port);
                         }
                     } else {
-                        host = config.registrationService().host();
-                        port = config.registrationService().port();
+                        host = configuredHost.get();
+                        port = configuredPort.get();
+                        LOG.infof("Using direct connection to registration service at %s:%d (Consul discovery skipped)", host, port);
                     }
 
                     LOG.infof("Creating gRPC channel to registration service at %s:%d (TLS: %s)", host, port, tlsEnabled);

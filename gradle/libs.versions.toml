@@ -39,7 +39,7 @@ memoryfilesystem = "2.8.2"
 # Apache Tika - using shaded version for Quarkus compatibility
 tika4-shaded = "0.1.14"
 # Sample documents test data
-sample-documents = "0.2.2"
+sample-documents = "0.2.3"
 # DJL (Deep Java Library)
 djl = "0.36.0"
 djl-pytorch-jni = "2.7.1-0.36.0"

@@ -1,6 +1,5 @@
 package ai.pipestream.test.support;
 
-import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import org.jboss.logging.Logger;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -10,15 +9,19 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Enumeration;
+import java.util.Collections;
 import java.util.Map;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
+import java.util.stream.Stream;
 
 /**
  * Extended MinIO test resource that automatically populates MinIO with sample data from jar files.
@@ -136,10 +139,10 @@ public class MinioWithSampleDataTestResource extends MinioTestResource {
     }
 
     /**
-     * Uploads files from a sample-data jar artifact to MinIO.
+     * Uploads files from a sample-data artifact to MinIO by scanning the classpath.
      * <p>
-     * This method locates the jar on the classpath, extracts all files (except build artifacts),
-     * and uploads them to the MinIO test bucket.
+     * This method finds the artifact's resources on the classpath and uploads all files
+     * (except build artifacts and metadata) to the MinIO test bucket.
      * </p>
      *
      * @param s3Client the S3 client to use for uploads
@@ -149,133 +152,102 @@ public class MinioWithSampleDataTestResource extends MinioTestResource {
     protected void uploadSampleData(S3Client s3Client, String artifactName) throws Exception {
         LOG.infof("Loading sample data from artifact: %s", artifactName);
 
-        // Find the jar on the classpath
-        String jarPath = findSampleDataJar(artifactName);
-        if (jarPath == null) {
-            LOG.warnf("Sample data jar not found for artifact: %s. " +
-                    "Make sure to run: cd /work/sample-documents/sample-documents && ./gradlew publishAllToMavenLocal",
-                    artifactName);
+        // Find a known resource to locate the artifact on the classpath
+        // We look for a marker directory that should exist in the sample-data artifacts
+        String markerResource = "sample_text";
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        URL resourceUrl = classLoader.getResource(markerResource);
+
+        if (resourceUrl == null) {
+            LOG.warnf("Sample data not found on classpath for artifact: %s (marker: %s). " +
+                    "Ensure the artifact is declared as a dependency.", artifactName, markerResource);
             return;
         }
 
-        LOG.debugf("Found sample data jar: %s", jarPath);
+        LOG.debugf("Found sample data at: %s", resourceUrl);
 
         int uploadedCount = 0;
-        // Open jar and upload files
-        try (JarFile jarFile = new JarFile(jarPath)) {
-            Enumeration<JarEntry> entries = jarFile.entries();
 
-            while (entries.hasMoreElements()) {
-                JarEntry entry = entries.nextElement();
-                String entryName = entry.getName();
+        try {
+            URI uri = resourceUrl.toURI();
+            Path rootPath;
+            FileSystem fileSystem = null;
 
-                // Skip directories, build files, and metadata
-                if (entry.isDirectory() ||
-                    entryName.startsWith("META-INF/") ||
-                    entryName.startsWith("build/") ||
-                    entryName.contains(".gradle") ||
-                    entryName.endsWith(".class")) {
-                    continue;
+            if ("jar".equals(uri.getScheme())) {
+                // Resource is inside a JAR - need to create a FileSystem to walk it
+                String[] parts = uri.toString().split("!");
+                URI jarUri = URI.create(parts[0]);
+                fileSystem = FileSystems.newFileSystem(jarUri, Collections.emptyMap());
+                rootPath = fileSystem.getPath("/");
+            } else {
+                // Resource is on the file system (e.g., during development)
+                rootPath = Path.of(uri).getParent();
+            }
+
+            try (Stream<Path> paths = Files.walk(rootPath)) {
+                for (Path path : (Iterable<Path>) paths::iterator) {
+                    if (Files.isDirectory(path)) {
+                        continue;
+                    }
+
+                    String relativePath = rootPath.relativize(path).toString();
+
+                    // Skip metadata and build files
+                    if (relativePath.startsWith("META-INF/") ||
+                        relativePath.startsWith("build/") ||
+                        relativePath.contains(".gradle") ||
+                        relativePath.endsWith(".class")) {
+                        continue;
+                    }
+
+                    // Construct S3 key
+                    String s3Key = constructS3Key(relativePath);
+
+                    // Upload file
+                    try (InputStream inputStream = Files.newInputStream(path)) {
+                        byte[] fileContent = inputStream.readAllBytes();
+
+                        PutObjectRequest putRequest = PutObjectRequest.builder()
+                                .bucket(BUCKET)
+                                .key(s3Key)
+                                .contentLength((long) fileContent.length)
+                                .build();
+
+                        s3Client.putObject(putRequest, RequestBody.fromBytes(fileContent));
+                        uploadedCount++;
+                        LOG.debugf("Uploaded: %s -> s3://%s/%s (%d bytes)",
+                                relativePath, BUCKET, s3Key, fileContent.length);
+                    }
                 }
-
-                // Construct S3 key
-                String s3Key = constructS3Key(entryName);
-
-                // Upload file
-                try (InputStream inputStream = jarFile.getInputStream(entry)) {
-                    byte[] fileContent = inputStream.readAllBytes();
-
-                    PutObjectRequest putRequest = PutObjectRequest.builder()
-                            .bucket(BUCKET)
-                            .key(s3Key)
-                            .contentLength((long) fileContent.length)
-                            .build();
-
-                    s3Client.putObject(putRequest, RequestBody.fromBytes(fileContent));
-                    uploadedCount++;
-                    LOG.debugf("Uploaded: %s -> s3://%s/%s (%d bytes)",
-                            entryName, BUCKET, s3Key, fileContent.length);
+            } finally {
+                if (fileSystem != null) {
+                    fileSystem.close();
                 }
             }
+        } catch (URISyntaxException | IOException e) {
+            LOG.errorf(e, "Failed to process sample data from classpath");
+            throw e;
         }
 
         LOG.infof("Uploaded %d files from %s to MinIO", uploadedCount, artifactName);
     }
 
     /**
-     * Constructs the S3 key for a jar entry.
+     * Constructs the S3 key for a resource path.
      */
-    private String constructS3Key(String jarEntryName) {
+    private String constructS3Key(String resourcePath) {
         String prefix = getUploadPrefix();
+        // Normalize path separators
+        String normalizedPath = resourcePath.replace(File.separatorChar, '/');
 
         if (!preserveDirectoryStructure()) {
             // Extract just the filename
-            int lastSlash = jarEntryName.lastIndexOf('/');
-            String fileName = lastSlash >= 0 ? jarEntryName.substring(lastSlash + 1) : jarEntryName;
+            int lastSlash = normalizedPath.lastIndexOf('/');
+            String fileName = lastSlash >= 0 ? normalizedPath.substring(lastSlash + 1) : normalizedPath;
             return prefix.isEmpty() ? fileName : prefix + "/" + fileName;
         }
 
         // Preserve full path
-        return prefix.isEmpty() ? jarEntryName : prefix + "/" + jarEntryName;
-    }
-
-    /**
-     * Finds the sample-data jar file on the classpath.
-     * <p>
-     * This method searches for jars matching the artifact pattern in the classpath.
-     * The jar must be published to mavenLocal first.
-     * </p>
-     *
-     * @param artifactName the artifact name (e.g., "test-documents")
-     * @return the path to the jar file, or null if not found
-     */
-    private String findSampleDataJar(String artifactName) {
-        try {
-            // The jar should be on the classpath after publishToMavenLocal
-            // Pattern: ai/pipestream/{artifactName}/{version}/{artifactName}-{version}.jar
-
-            // Try to find it via classpath resource
-            // The jar should contain a marker file or we can search the classpath URLs
-            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-
-            // Get all URLs from classpath
-            Enumeration<URL> resources = classLoader.getResources("");
-            while (resources.hasMoreElements()) {
-                URL url = resources.nextElement();
-                String path = url.getPath();
-
-                // Check if this is a jar file matching our artifact
-                if (path.contains(artifactName) && path.endsWith(".jar!/")) {
-                    // Extract jar path (remove the !/ suffix)
-                    String jarPath = path.substring("file:".length(), path.length() - 2);
-                    if (jarPath.contains(artifactName)) {
-                        return jarPath;
-                    }
-                }
-            }
-
-            // Alternative: check mavenLocal directly
-            String home = System.getProperty("user.home");
-            Path mavenLocal = Paths.get(home, ".m2", "repository", "ai", "pipestream", artifactName);
-            if (mavenLocal.toFile().exists()) {
-                // Find the latest version directory
-                java.io.File[] versionDirs = mavenLocal.toFile().listFiles(java.io.File::isDirectory);
-                if (versionDirs != null && versionDirs.length > 0) {
-                    // Use the first version found (in production, you'd want to be more specific)
-                    java.io.File versionDir = versionDirs[0];
-                    java.io.File[] jars = versionDir.listFiles((dir, name) ->
-                        name.endsWith(".jar") && !name.endsWith("-sources.jar") && !name.endsWith("-javadoc.jar"));
-
-                    if (jars != null && jars.length > 0) {
-                        return jars[0].getAbsolutePath();
-                    }
-                }
-            }
-
-        } catch (Exception e) {
-            LOG.debugf(e, "Error finding sample data jar for: %s", artifactName);
-        }
-
-        return null;
+        return prefix.isEmpty() ? normalizedPath : prefix + "/" + normalizedPath;
     }
 }

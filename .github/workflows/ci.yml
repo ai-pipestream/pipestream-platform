@@ -17,6 +17,9 @@ jobs:
   build:
     name: Build and Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v6
         with:
@@ -48,6 +51,25 @@ jobs:
           BUF_USER: ${{ secrets.BUF_USER }}
           BUF_API_TOKEN: ${{ secrets.BUF_API_TOKEN }}
         run: ./gradlew build
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-results
+          path: |
+            **/build/reports/tests/
+            **/build/test-results/
+          retention-days: 14
+
+      - name: Publish Test Report
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: JUnit Test Report
+          path: '**/build/test-results/test/*.xml'
+          reporter: java-junit
+          fail-on-error: false
 
   validate-publish:
     name: Validate Publishing Configuration

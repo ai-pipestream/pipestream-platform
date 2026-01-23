@@ -17,8 +17,8 @@ protobufVersion = "4.33.4"
 
 # Quarkiverse extensions
 quinoa = "2.7.1"
-wiremock = "4.0.0-beta.25"
-wiremock-standalone = "4.0.0-beta.25"
+wiremock = "4.0.0-beta.24"
+wiremock-standalone = "4.0.0-beta.24"
 wiremock-grpc-extension = "1.0.0-beta.4"
 hibernate-types = "2.2.0"
 quarkus-mcp-server = "1.8.1"

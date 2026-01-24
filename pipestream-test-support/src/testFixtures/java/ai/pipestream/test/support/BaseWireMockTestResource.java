@@ -12,7 +12,7 @@ public abstract class BaseWireMockTestResource implements QuarkusTestResourceLif
     private static final String IMAGE_PROPERTY = "pipestream.wiremock.image";
     private static final String IMAGE_ENV = "PIPESTREAM_WIREMOCK_IMAGE";
     private static final String IMAGE_ENV_FALLBACK = "WIREMOCK_IMAGE";
-    private static final String DEFAULT_IMAGE = "docker.io/pipestreamai/pipestream-wiremock-server:0.1.30";
+    private static final String DEFAULT_IMAGE = "docker.io/pipestreamai/pipestream-wiremock-server:0.1.31";
 
     protected static final int DEFAULT_HTTP_PORT = 8080;
     protected static final int DEFAULT_GRPC_PORT = 50052;

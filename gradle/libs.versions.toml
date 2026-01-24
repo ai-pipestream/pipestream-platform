@@ -1,5 +1,5 @@
 [versions]
-quarkusVersion = "3.30.7"
+quarkusVersion = "3.30.8"
 jandex-plugin = "2.3.0"
 commons-lang3 = "3.20.0"
 opennlp-tools = "2.5.7"
@@ -61,7 +61,7 @@ consul-client = "1.9.2"
 # ========================
 # External Pipestream Libraries (not part of this monorepo)
 # ========================
-pipestream-wiremock-server = "0.1.30"
+pipestream-wiremock-server = "0.1.31"
 
 # Gradle plugins
 axion-release = "1.21.1"
@@ -69,8 +69,8 @@ nmcp = "1.4.3"
 protobuf-plugin = "0.9.6"
 buf-plugin = "0.10.3"
 shadow-plugin = "9.3.1"
-proto-toolchain = "0.7.11"
-quarkus-buf-grpc-generator = "0.7.11"
+proto-toolchain = "0.7.12"
+quarkus-buf-grpc-generator = "0.7.12"
 
 [libraries]
 # Quarkus BOM

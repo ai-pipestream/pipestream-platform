@@ -70,10 +70,18 @@ public class ConsulTestResource implements QuarkusTestResourceLifecycleManager {
                 Map.entry("quarkus.stork.service-discovery.consul-host", host),
                 Map.entry("quarkus.stork.service-discovery.consul-port", String.valueOf(mappedHttpPort)),
 
-                // Service registration
+                // Service registration (pipestream.registration.* prefix)
                 Map.entry("pipestream.registration.consul.host", host),
                 Map.entry("pipestream.registration.consul.port", String.valueOf(mappedHttpPort)),
                 Map.entry("pipestream.registration.consul.url", consulUrl),
+
+                // Pipeline Consul client (used by platform-registration-service ConsulClientProducer)
+                Map.entry("pipeline.consul.host", host),
+                Map.entry("pipeline.consul.port", String.valueOf(mappedHttpPort)),
+
+                // Dynamic gRPC Consul configuration
+                Map.entry("quarkus.dynamic-grpc.consul.host", host),
+                Map.entry("quarkus.dynamic-grpc.consul.port", String.valueOf(mappedHttpPort)),
 
                 // Legacy/generic properties
                 Map.entry("consul.host", host),

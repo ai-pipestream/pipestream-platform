@@ -29,9 +29,12 @@ apicurio = "3.1.6"
 # Testing
 awaitility = "4.3.0"
 testcontainersVersion = "2.0.3"
+testcontainers-redis = "2.2.4"
 assertj = "3.27.6"
 hamcrest = "3.0"
 json-schema-validator = "3.0.0"
+# Javax annotations
+javax-annotation-api = "1.3.2"
 # Other libraries
 jgrapht = "1.5.2"
 jimfs = "1.3.1"
@@ -128,6 +131,9 @@ awaitility = { module = "org.awaitility:awaitility", version.ref = "awaitility" 
 testcontainers-core = { module = "org.testcontainers:testcontainers", version.ref = "testcontainersVersion" }
 testcontainers-consul = { module = "org.testcontainers:testcontainers-consul", version.ref = "testcontainersVersion" }
 testcontainers-junit = { module = "org.testcontainers:testcontainers-junit-jupiter", version.ref = "testcontainersVersion" }
+testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql", version.ref = "testcontainersVersion" }
+testcontainers-minio = { module = "org.testcontainers:testcontainers-minio", version.ref = "testcontainersVersion" }
+testcontainers-redis = { module = "com.redis:testcontainers-redis", version.ref = "testcontainers-redis" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 hamcrest-core = { module = "org.hamcrest:hamcrest", version.ref = "hamcrest" }
 hamcrest-library = { module = "org.hamcrest:hamcrest-library", version.ref = "hamcrest" }
@@ -186,6 +192,9 @@ password4j = { module = "com.password4j:password4j", version.ref = "password4j" 
 
 # Consul Client
 consul-client = { module = "org.kiwiproject:consul-client", version.ref = "consul-client" }
+
+# Javax annotations
+javax-annotation-api = { module = "javax.annotation:javax.annotation-api", version.ref = "javax-annotation-api" }
 
 # SmallRye Reactive Messaging (for testing)
 # Version managed by Quarkus BOM - do not override

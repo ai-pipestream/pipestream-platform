@@ -42,7 +42,8 @@ public class ConsulTestResource implements QuarkusTestResourceLifecycleManager {
         log.info("Starting Consul container with image: {}", CONSUL_IMAGE);
 
         consulContainer = new ConsulContainer(CONSUL_IMAGE)
-                .withConsulCommand("agent -dev -ui -client=0.0.0.0 -log-level=INFO");
+                // Override the startup command (withCommand) instead of init commands.
+                .withCommand("agent", "-dev", "-ui", "-client=0.0.0.0", "-log-level=INFO");
 
         consulContainer.start();
 

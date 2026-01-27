@@ -24,18 +24,18 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 /**
- * Extended MinIO test resource that automatically populates MinIO with sample data from jar files.
+ * Extended S3 test resource that automatically populates S3 with sample data from jar files.
  * <p>
- * This resource extends {@link MinioTestResource} and adds functionality to upload files from
- * sample-data jar artifacts (like test-documents, sample-doc-types) to MinIO after it starts.
+ * This resource extends {@link S3TestResource} and adds functionality to upload files from
+ * sample-data jar artifacts (like test-documents, sample-doc-types) to S3 after it starts.
  * </p>
  *
  * <h2>Usage</h2>
  * <pre>
  * &#64;QuarkusTest
- * &#64;QuarkusTestResource(MinioWithSampleDataTestResource.class)
+ * &#64;QuarkusTestResource(S3WithSampleDataTestResource.class)
  * class MyTest {
- *     // MinIO is now pre-populated with test-documents
+ *     // S3 is now pre-populated with test-documents
  * }
  * </pre>
  *
@@ -56,12 +56,12 @@ import java.util.stream.Stream;
  *
  * @since 1.0.0
  */
-public class MinioWithSampleDataTestResource extends MinioTestResource {
+public class S3WithSampleDataTestResource extends S3TestResource {
 
-    private static final Logger LOG = Logger.getLogger(MinioWithSampleDataTestResource.class);
+    private static final Logger LOG = Logger.getLogger(S3WithSampleDataTestResource.class);
 
     /**
-     * Returns the list of sample-data artifacts to load into MinIO.
+     * Returns the list of sample-data artifacts to load into S3.
      * <p>
      * Default is just "test-documents". Override to add more artifacts:
      * </p>
@@ -93,16 +93,16 @@ public class MinioWithSampleDataTestResource extends MinioTestResource {
 
     @Override
     public Map<String, String> start() {
-        // Start MinIO first
+        // Start S3 (SeaweedFS) first
         Map<String, String> config = super.start();
 
         // Upload sample data
         String endpoint = getSharedEndpoint();
         if (endpoint != null) {
             try {
-                uploadSampleDataToMinio(endpoint);
+                uploadSampleDataToS3(endpoint);
             } catch (Exception e) {
-                LOG.errorf(e, "Failed to upload sample data to MinIO");
+                LOG.errorf(e, "Failed to upload sample data to S3");
                 // Don't fail the test - just log the error
                 // Tests can still run, they just won't have pre-populated data
             }
@@ -111,8 +111,8 @@ public class MinioWithSampleDataTestResource extends MinioTestResource {
         return config;
     }
 
-    private void uploadSampleDataToMinio(String endpoint) {
-        LOG.infof("Uploading sample data to MinIO at %s", endpoint);
+    private void uploadSampleDataToS3(String endpoint) {
+        LOG.infof("Uploading sample data to S3 at %s", endpoint);
 
         // Create S3 client
         AwsBasicCredentials credentials = AwsBasicCredentials.create(ACCESS_KEY, SECRET_KEY);
@@ -134,15 +134,15 @@ public class MinioWithSampleDataTestResource extends MinioTestResource {
                 }
             }
 
-            LOG.infof("Successfully uploaded sample data to MinIO bucket: %s", BUCKET);
+            LOG.infof("Successfully uploaded sample data to S3 bucket: %s", BUCKET);
         }
     }
 
     /**
-     * Uploads files from a sample-data artifact to MinIO by scanning the classpath.
+     * Uploads files from a sample-data artifact to S3 by scanning the classpath.
      * <p>
      * This method finds the artifact's resources on the classpath and uploads all files
-     * (except build artifacts and metadata) to the MinIO test bucket.
+     * (except build artifacts and metadata) to the S3 test bucket.
      * </p>
      *
      * @param s3Client the S3 client to use for uploads
@@ -229,7 +229,7 @@ public class MinioWithSampleDataTestResource extends MinioTestResource {
             throw e;
         }
 
-        LOG.infof("Uploaded %d files from %s to MinIO", uploadedCount, artifactName);
+        LOG.infof("Uploaded %d files from %s to S3", uploadedCount, artifactName);
     }
 
     /**

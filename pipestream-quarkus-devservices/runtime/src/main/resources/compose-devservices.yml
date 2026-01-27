@@ -16,7 +16,7 @@ volumes:
     driver: local
   kafka-data:
     driver: local
-  minio-data:
+  seaweedfs-data:
     driver: local
 
 services:
@@ -222,25 +222,29 @@ services:
       io.quarkus.devservices.compose.wait_for.ports.disable: "true"
       # No health check dependency - starts after OpenSearch is available but doesn't block startup
 
-  # MinIO for S3-compatible object storage
-  minio:
-    container_name: pipeline-minio
-    image: minio/minio:latest
+  # SeaweedFS for S3-compatible storage & high-performance Filer
+  seaweedfs:
+    container_name: pipeline-seaweedfs
+    image: chrislusf/seaweedfs:latest
     networks:
       - pipeline-test-network
     ports:
-      - "9000:9000"     # MinIO API
-      - "9001:9001"     # MinIO Console
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data --console-address ":9001"
+      - "8333:8333"     # S3 API
+      - "9333:9333"     # Master UI / HTTP API
+      - "8888:8888"     # Filer UI / HTTP API
+      - "18080:18080"   # Volume Server (Internal)
+    command: 'server -s3 -filer -dir=/data'
     volumes:
-      - minio-data:/data
+      - seaweedfs-data:/data
+    environment:
+      # S3 Access Keys (Matching your MinIO defaults for easy transition)
+      WEED_S3_ADMIN_ACCESS_KEY: any
+      WEED_S3_ADMIN_SECRET_KEY: any
     labels:
-      quarkus-dev-service-localstack: default
+      # Map to your Quarkus dev services if needed
+      quarkus-dev-service-s3: shared
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:9333/cluster/status"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -265,43 +269,6 @@ services:
       io.quarkus.devservices.compose.wait_for.ports.disable: "true"
       # No health check dependency - starts after services are available but doesn't block startup
 
-  # Infisical for secret management and KMS
-  infisical:
-    container_name: pipeline-infisical
-    image: infisical/infisical:latest
-    networks:
-      - pipeline-test-network
-    ports:
-      # Only expose frontend for UI access; API (8080) is accessible within Docker network
-      - "3000:3000"     # Infisical Frontend
-    expose:
-      - "8080"          # Infisical API (internal only)
-    environment:
-      # Database configuration (PostgreSQL) - using separate database for Infisical
-      DB_CONNECTION_URI: "postgresql://pipeline:password@postgres:5432/infisical?sslmode=disable"
-      # Redis configuration
-      REDIS_URL: "redis://redis:6379"
-      # Encryption keys (for development - use secure keys in production)
-      # ENCRYPTION_KEY: 16-byte hex string (32 hex characters)
-      ENCRYPTION_KEY: "d57fe96e9ac0b03e50e2e078bb916d63"
-      # AUTH_SECRET: 32-byte base64 string
-      AUTH_SECRET: "PgviZ6tQbBwPKgv4JqsjqKec9XEfh0iCFPlSHrnV0jM="
-      # Site URL (absolute URL for the Infisical instance) - use internal network name
-      SITE_URL: "http://infisical:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    labels:
-      quarkus-dev-service-infisical: shared
-    healthcheck:
-      # Check if Infisical is responding (using root endpoint since /api/v1/health doesn't exist)
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/ || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
 
   # Grafana LGTM (Grafana + OTel Collector + Prometheus + Tempo + Loki)
   lgtm:

@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
-public class MinioDevServiceTest {
+public class S3DevServiceTest {
 
     @Inject
     S3Client s3Client;

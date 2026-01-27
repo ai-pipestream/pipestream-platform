@@ -17,7 +17,6 @@ dependencies {
     // Dependencies needed for the moved tests to compile
     testImplementation libs.quarkus.test.common
     testImplementation libs.testcontainers.core
-    testImplementation libs.testcontainers.minio
     testImplementation platform(libs.quarkus.amazon.services.bom)
     testImplementation 'io.quarkiverse.amazonservices:quarkus-amazon-s3'
     testImplementation 'software.amazon.awssdk:s3'

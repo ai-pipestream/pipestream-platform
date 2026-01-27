@@ -14,11 +14,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class MinioKmsTestResourceTest {
+class S3KmsTestResourceTest {
 
     @Test
-    void startsMinioAndCreatesBucket() {
-        MinioTestResource resource = new MinioTestResource();
+    void startsS3AndCreatesBucket() {
+        S3TestResource resource = new S3TestResource();
         Map<String, String> config = resource.start();
 
         try {

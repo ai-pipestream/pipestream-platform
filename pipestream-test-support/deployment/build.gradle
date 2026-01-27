@@ -13,7 +13,6 @@ dependencies {
     implementation 'io.quarkus:quarkus-devservices-common'
     implementation 'io.quarkus:quarkus-smallrye-context-propagation-deployment'
 
-    implementation libs.testcontainers.minio
     implementation libs.testcontainers.core
 
     annotationProcessor 'io.quarkus:quarkus-extension-processor'

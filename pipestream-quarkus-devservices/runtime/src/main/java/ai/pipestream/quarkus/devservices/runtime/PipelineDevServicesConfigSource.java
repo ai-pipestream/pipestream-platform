@@ -60,6 +60,16 @@ public class PipelineDevServicesConfigSource implements ConfigSource {
         // OpenTelemetry OTLP endpoint (port 5317 for gRPC)
         DEV_SERVICE_PROPERTIES.put("quarkus.otel.exporter.otlp.endpoint", "http://localhost:5317");
 
+        // S3 (SeaweedFS) configuration (port 8333)
+        // Disable default S3 dev service (LocalStack) since we provide our own shared SeaweedFS
+        DEV_SERVICE_PROPERTIES.put("quarkus.s3.devservices.enabled", "false");
+        DEV_SERVICE_PROPERTIES.put("quarkus.s3.endpoint-override", "http://localhost:8333");
+        DEV_SERVICE_PROPERTIES.put("quarkus.s3.path-style-access", "true");
+        DEV_SERVICE_PROPERTIES.put("quarkus.s3.aws.region", "us-east-1");
+        DEV_SERVICE_PROPERTIES.put("quarkus.s3.aws.credentials.type", "static");
+        DEV_SERVICE_PROPERTIES.put("quarkus.s3.aws.credentials.static-provider.access-key-id", "any");
+        DEV_SERVICE_PROPERTIES.put("quarkus.s3.aws.credentials.static-provider.secret-access-key", "any");
+
         // Note: kafka.bootstrap.servers is NOT set here - we let Quarkus Kafka DevServices
         // auto-detect it from the compose container to preserve the Dev UI functionality
     }

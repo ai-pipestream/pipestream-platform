@@ -20,51 +20,36 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Test to verify that {@link MinioWithSampleDataTestResource} correctly uploads
- * sample data from test-documents jar to MinIO.
- * <p>
- * This test validates the fixture itself to ensure it works correctly before
- * being used in other services.
- * </p>
- *
- * <h2>Prerequisites</h2>
- * <p>
- * The sample-documents must be published to mavenLocal first:
- * </p>
- * <pre>
- * cd /work/sample-documents/sample-documents
- * ./gradlew publishAllToMavenLocal
- * </pre>
- *
- * @since 1.0.0
+ * Test to verify that {@link S3WithSampleDataTestResource} correctly uploads
+ * sample data from test-documents jar to S3.
  */
-class MinioWithSampleDataTest {
+class S3WithSampleDataTest {
 
-    private static MinioWithSampleDataTestResource testResource;
+    private static S3WithSampleDataTestResource testResource;
 
     @BeforeAll
-    static void setupMinio() {
-        testResource = new MinioWithSampleDataTestResource();
+    static void setupS3() {
+        testResource = new S3WithSampleDataTestResource();
         testResource.start();
     }
 
     @AfterAll
-    static void teardownMinio() {
+    static void teardownS3() {
         if (testResource != null) {
             testResource.stop();
         }
     }
 
     @Test
-    void testMinioHasSampleData() throws Exception {
-        // Verify MinIO started and has sample data
-        String endpoint = MinioTestResource.getSharedEndpoint();
-        assertNotNull(endpoint, "MinIO endpoint should be available");
+    void testS3HasSampleData() throws Exception {
+        // Verify S3 started and has sample data
+        String endpoint = S3TestResource.getSharedEndpoint();
+        assertNotNull(endpoint, "S3 endpoint should be available");
 
         // Create S3 client
         AwsBasicCredentials credentials = AwsBasicCredentials.create(
-                MinioTestResource.ACCESS_KEY,
-                MinioTestResource.SECRET_KEY
+                testResource.getAccessKey(),
+                testResource.getSecretKey()
         );
 
         try (S3Client s3 = S3Client.builder()
@@ -78,16 +63,16 @@ class MinioWithSampleDataTest {
 
             // List objects in test bucket
             ListObjectsV2Request listRequest = ListObjectsV2Request.builder()
-                    .bucket(MinioTestResource.BUCKET)
+                    .bucket(testResource.getBucket())
                     .build();
 
             ListObjectsV2Response listResponse = s3.listObjectsV2(listRequest);
             List<S3Object> objects = listResponse.contents();
 
             // Verify we have files from test-documents
-            assertFalse(objects.isEmpty(), "MinIO should contain sample files from test-documents jar");
+            assertFalse(objects.isEmpty(), "S3 should contain sample files from test-documents jar");
 
-            System.out.println("=== Sample files in MinIO ===");
+            System.out.println("=== Sample files in S3 ===");
             objects.stream()
                     .limit(10)  // Show first 10 files
                     .forEach(obj -> System.out.printf("  %s (%d bytes)%n", obj.key(), obj.size()));
@@ -112,7 +97,7 @@ class MinioWithSampleDataTest {
 
             // Download and verify content
             GetObjectRequest getRequest = GetObjectRequest.builder()
-                    .bucket(MinioTestResource.BUCKET)
+                    .bucket(testResource.getBucket())
                     .key(expectedKey)
                     .build();
 
@@ -127,12 +112,12 @@ class MinioWithSampleDataTest {
 
     @Test
     void testSpecificSampleFiles() throws Exception {
-        String endpoint = MinioTestResource.getSharedEndpoint();
+        String endpoint = S3TestResource.getSharedEndpoint();
         assertNotNull(endpoint);
 
         AwsBasicCredentials credentials = AwsBasicCredentials.create(
-                MinioTestResource.ACCESS_KEY,
-                MinioTestResource.SECRET_KEY
+                testResource.getAccessKey(),
+                testResource.getSecretKey()
         );
 
         try (S3Client s3 = S3Client.builder()
@@ -154,7 +139,7 @@ class MinioWithSampleDataTest {
             };
 
             ListObjectsV2Request listRequest = ListObjectsV2Request.builder()
-                    .bucket(MinioTestResource.BUCKET)
+                    .bucket(testResource.getBucket())
                     .build();
 
             ListObjectsV2Response listResponse = s3.listObjectsV2(listRequest);
@@ -170,14 +155,6 @@ class MinioWithSampleDataTest {
                 assertTrue(hasFilesInDir,
                         "Should have files in " + dir + " directory. Available keys: " +
                         allKeys.stream().limit(10).toList());
-            }
-
-            System.out.println("=== Verified sample data structure ===");
-            for (String dir : expectedDirectories) {
-                long count = allKeys.stream()
-                        .filter(key -> key.startsWith(dir + "/"))
-                        .count();
-                System.out.printf("  %s: %d files%n", dir, count);
             }
         }
     }

@@ -68,7 +68,7 @@ class PipelineDevServicesConfigSourceTest {
 
         Set<String> names = configSource.getPropertyNames();
 
-        assertThat(names, hasSize(11));
+        assertThat(names, hasSize(18));
         assertThat(names, containsInAnyOrder(
             // Compose devservices configuration properties
             "quarkus.compose.devservices.enabled",
@@ -84,7 +84,15 @@ class PipelineDevServicesConfigSourceTest {
             "opensearch.hosts",
             "CONSUL_HOST",
             "CONSUL_PORT",
-            "quarkus.otel.exporter.otlp.endpoint"
+            "quarkus.otel.exporter.otlp.endpoint",
+            // S3 (SeaweedFS) configuration
+            "quarkus.s3.devservices.enabled",
+            "quarkus.s3.endpoint-override",
+            "quarkus.s3.path-style-access",
+            "quarkus.s3.aws.region",
+            "quarkus.s3.aws.credentials.type",
+            "quarkus.s3.aws.credentials.static-provider.access-key-id",
+            "quarkus.s3.aws.credentials.static-provider.secret-access-key"
         ));
     }
 

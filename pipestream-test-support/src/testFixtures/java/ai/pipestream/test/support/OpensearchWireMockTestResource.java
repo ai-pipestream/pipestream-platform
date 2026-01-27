@@ -24,13 +24,17 @@ public class OpensearchWireMockTestResource extends BaseWireMockTestResource {
         String host = getHost();
         String grpcPort = String.valueOf(getMappedPort(DEFAULT_GRPC_PORT));
 
-        return Map.of(
-                // Disable real service registration
-                "pipestream.registration.enabled", "false",
+        java.util.Map<String, String> config = new java.util.HashMap<>();
+        // Disable real service registration
+        config.put("pipestream.registration.enabled", "false");
 
-                // Route platform-registration client to the mock
-                "pipestream.registration.registration-service.host", host,
-                "pipestream.registration.registration-service.port", grpcPort
-        );
+        // Route platform-registration client to the mock
+        config.put("pipestream.registration.registration-service.host", host);
+        config.put("pipestream.registration.registration-service.port", grpcPort);
+
+        // Ensure AWS S3 devservices (LocalStack) stay disabled for tests
+        config.put("quarkus.s3.devservices.enabled", "false");
+
+        return config;
     }
 }

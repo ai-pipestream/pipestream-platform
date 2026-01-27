@@ -61,3 +61,13 @@ updates:
       service-registration-dependencies:
         patterns:
           - "*"
+
+  # pipestream-test-support
+  - package-ecosystem: "gradle"
+    directory: "/pipestream-test-support"
+    schedule:
+      interval: "weekly"
+    groups:
+      test-support-dependencies:
+        patterns:
+          - "*"

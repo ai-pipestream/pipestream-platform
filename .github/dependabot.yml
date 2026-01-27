@@ -1,5 +1,6 @@
 version: 2
 
+# Dependabot configuration for dependency updates
 updates:
   # GitHub Actions
   - package-ecosystem: "github-actions"

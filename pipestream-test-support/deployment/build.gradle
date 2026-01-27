@@ -26,3 +26,8 @@ dependencies {
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
 }
+
+tasks.named('javadoc') {
+    options.addStringOption('Xdoclint:all', '-Werror')
+    failOnError = true
+}

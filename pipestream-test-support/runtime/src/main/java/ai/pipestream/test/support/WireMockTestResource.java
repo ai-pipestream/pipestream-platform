@@ -4,6 +4,9 @@ import org.testcontainers.containers.GenericContainer;
 
 import java.util.Map;
 
+/**
+ * Generic WireMock test resource for gRPC service mocking.
+ */
 public class WireMockTestResource extends BaseWireMockTestResource {
 
     @Override

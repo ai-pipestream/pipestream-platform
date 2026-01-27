@@ -18,6 +18,9 @@ import io.quarkus.deployment.builditem.RunTimeConfigurationDefaultBuildItem;
 import io.quarkus.deployment.console.ConsoleInstalledBuildItem;
 import io.quarkus.deployment.logging.LoggingSetupBuildItem;
 
+/**
+ * Quarkus build processor that provides MinIO dev services for local development.
+ */
 public class MinioDevServicesProcessor {
 
     private static final String FEATURE = "pipestream-test-support";

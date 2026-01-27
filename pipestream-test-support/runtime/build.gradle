@@ -37,3 +37,9 @@ dependencies {
 tasks.matching { it.name == 'validateExtension' }.configureEach {
     enabled = false
 }
+
+tasks.named('javadoc') {
+    dependsOn tasks.named('jandex')
+    options.addStringOption('Xdoclint:all', '-Werror')
+    failOnError = true
+}

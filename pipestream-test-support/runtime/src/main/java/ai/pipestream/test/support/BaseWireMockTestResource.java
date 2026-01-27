@@ -7,6 +7,10 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.util.Map;
 
+/**
+ * Base class for WireMock test resources that provides common container setup and configuration.
+ * Subclasses should override {@link #buildConfig(GenericContainer)} to provide service-specific configuration.
+ */
 public abstract class BaseWireMockTestResource implements QuarkusTestResourceLifecycleManager {
 
     private static final String IMAGE_PROPERTY = "pipestream.wiremock.image";

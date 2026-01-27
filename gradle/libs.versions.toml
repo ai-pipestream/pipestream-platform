@@ -17,20 +17,20 @@ protobufVersion = "4.33.4"
 
 # Quarkiverse extensions
 quinoa = "2.7.1"
-wiremock = "4.0.0-beta.24"
-wiremock-standalone = "4.0.0-beta.24"
+wiremock = "4.0.0-beta.26"
+wiremock-standalone = "4.0.0-beta.26"
 wiremock-grpc-extension = "1.0.0-beta.4"
 hibernate-types = "2.2.0"
 quarkus-mcp-server = "1.8.1"
 # AWS SDK
-aws-sdk = "2.41.12"
+aws-sdk = "2.41.15"
 # Apicurio
 apicurio = "3.1.6"
 # Testing
 awaitility = "4.3.0"
 testcontainersVersion = "2.0.3"
 testcontainers-redis = "2.2.4"
-assertj = "3.27.6"
+assertj = "3.27.7"
 hamcrest = "3.0"
 json-schema-validator = "3.0.0"
 # Javax annotations
@@ -68,7 +68,7 @@ pipestream-wiremock-server = "0.1.32"
 
 # Gradle plugins
 axion-release = "1.21.1"
-nmcp = "1.4.3"
+nmcp = "1.4.4"
 protobuf-plugin = "0.9.6"
 buf-plugin = "0.10.3"
 shadow-plugin = "9.3.1"

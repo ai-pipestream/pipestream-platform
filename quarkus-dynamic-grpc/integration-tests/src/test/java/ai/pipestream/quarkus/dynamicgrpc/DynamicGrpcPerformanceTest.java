@@ -1,7 +1,7 @@
 package ai.pipestream.quarkus.dynamicgrpc;
 
 import ai.pipestream.quarkus.dynamicgrpc.base.ConsulServiceRegistration;
-import ai.pipestream.quarkus.dynamicgrpc.base.ConsulTestResource;
+import ai.pipestream.test.support.ConsulTestResource;
 import io.quarkus.test.common.WithTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;

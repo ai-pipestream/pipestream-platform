@@ -24,9 +24,11 @@ dependencies {
     testImplementation libs.awaitility
     testImplementation libs.assertj.core
 
-    // TestContainers for Consul - real integration tests, no mocks
+    // Shared test support with Consul container
+    testImplementation project(':pipestream-test-support')
+
+    // TestContainers for integration tests
     testImplementation libs.testcontainers.core
-    testImplementation libs.testcontainers.consul
     testImplementation libs.testcontainers.junit
 
     // Consul client for service registration in tests

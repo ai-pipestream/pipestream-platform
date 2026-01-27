@@ -19,6 +19,7 @@ dependencies {
     implementation libs.quarkus.test.common
     implementation libs.quarkus.junit5
     implementation libs.testcontainers.core
+    implementation libs.testcontainers.consul
     implementation libs.testcontainers.redis
     implementation libs.testcontainers.postgresql
     implementation 'org.slf4j:slf4j-api'

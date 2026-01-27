@@ -1,7 +1,7 @@
 package ai.pipestream.quarkus.dynamicgrpc;
 
 import ai.pipestream.quarkus.dynamicgrpc.base.ConsulServiceRegistration;
-import ai.pipestream.quarkus.dynamicgrpc.base.ConsulTestResource;
+import ai.pipestream.test.support.ConsulTestResource;
 import ai.pipestream.quarkus.dynamicgrpc.it.proto.HelloReply;
 import ai.pipestream.quarkus.dynamicgrpc.it.proto.HelloRequest;
 import ai.pipestream.quarkus.dynamicgrpc.it.proto.MutinyGreeterGrpc;

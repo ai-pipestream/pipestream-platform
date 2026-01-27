@@ -133,14 +133,20 @@ services:
     ports:
       - "8081:8080"
     environment:
-      # Apicurio Registry storage configuration
       APICURIO_STORAGE_KIND: 'sql'
-      APICURIO_STORAGE_SQL_KIND: 'postgresql'
-      # Use standard Quarkus datasource properties for 3.1.4
-      APICURIO_DATASOURCE_URL: 'jdbc:postgresql://postgres:5432/apicurio_registry'
-      APICURIO_DATASOURCE_USERNAME: 'pipeline'
-      APICURIO_DATASOURCE_PASSWORD: 'password'
+      APICURIO_STORAGE_SQL_KIND: 'h2'
+      APICURIO_DATASOURCE_URL: 'jdbc:h2:mem:registry_db;DB_CLOSE_DELAY=-1'
+      APICURIO_DATASOURCE_USERNAME: 'sa'
+      APICURIO_DATASOURCE_PASSWORD: 'sa'
       APICURIO_SQL_INIT: 'true'
+#    Uncomment to use PostgreSQL for storage
+#      APICURIO_STORAGE_KIND: 'sql'
+#      APICURIO_STORAGE_SQL_KIND: 'postgresql'
+#      # Use standard Quarkus datasource properties for 3.1.4
+#      APICURIO_DATASOURCE_URL: 'jdbc:postgresql://postgres:5432/apicurio_registry'
+#      APICURIO_DATASOURCE_USERNAME: 'pipeline'
+#      APICURIO_DATASOURCE_PASSWORD: 'password'
+#      APICURIO_SQL_INIT: 'true'
     depends_on:
       postgres:
         condition: service_healthy
@@ -162,9 +168,9 @@ services:
     networks:
       - pipeline-test-network
     ports:
-      - "8888:8080"
+      - "8890:8080"
     environment:
-      REGISTRY_API_URL: "http://localhost:8081/apis/registry/v3"
+      REGISTRY_API_URL: "http://apicurio-registry:8080/apis/registry/v3"
     depends_on:
       apicurio-registry:
         condition: service_healthy

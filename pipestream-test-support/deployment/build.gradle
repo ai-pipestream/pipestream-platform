@@ -1,0 +1,28 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Pipestream Test Support - Deployment'
+
+dependencies {
+    implementation platform(libs.quarkus.bom)
+
+    implementation project(':pipestream-test-support')
+    implementation 'io.quarkus:quarkus-arc-deployment'
+    implementation 'io.quarkus:quarkus-core-deployment'
+    implementation 'io.quarkus:quarkus-devservices-common'
+    implementation 'io.quarkus:quarkus-smallrye-context-propagation-deployment'
+
+    implementation libs.testcontainers.minio
+    implementation libs.testcontainers.core
+
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+
+    testImplementation 'io.quarkus:quarkus-junit5-internal'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}

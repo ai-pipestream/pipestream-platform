@@ -1,0 +1,30 @@
+plugins {
+    alias(libs.plugins.quarkus)
+}
+
+description = 'Pipestream Test Support - Integration Tests'
+
+dependencies {
+    implementation platform(libs.quarkus.bom)
+    implementation 'io.quarkus:quarkus-arc'
+    implementation 'io.quarkus:quarkus-resteasy'
+
+    implementation project(':pipestream-test-support')
+
+    testImplementation 'io.quarkus:quarkus-junit5'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    
+    // Dependencies needed for the moved tests to compile
+    testImplementation libs.quarkus.test.common
+    testImplementation libs.testcontainers.core
+    testImplementation libs.testcontainers.minio
+    testImplementation platform(libs.quarkus.amazon.services.bom)
+    testImplementation 'io.quarkiverse.amazonservices:quarkus-amazon-s3'
+    testImplementation 'software.amazon.awssdk:s3'
+    testImplementation libs.aws.sdk.url.connection
+    testImplementation libs.pipestream.test.documents
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}

@@ -63,4 +63,11 @@ project(':pipestream-service-registration-integration-tests').projectDir = file(
 
 // 5. Shared Test Support
 include 'pipestream-test-support'
+project(':pipestream-test-support').projectDir = file('pipestream-test-support/runtime')
+
+include 'pipestream-test-support-deployment'
+project(':pipestream-test-support-deployment').projectDir = file('pipestream-test-support/deployment')
+
+include 'pipestream-test-support-integration-tests'
+project(':pipestream-test-support-integration-tests').projectDir = file('pipestream-test-support/integration-tests')
 

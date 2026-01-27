@@ -1,0 +1,39 @@
+plugins {
+    alias(libs.plugins.java.library)
+    alias(libs.plugins.quarkus.extension)
+    alias(libs.plugins.jandex)
+}
+
+description = 'Pipestream Test Support - Runtime'
+
+quarkusExtension {
+    deploymentModule = 'pipestream-test-support-deployment'
+}
+
+dependencies {
+    implementation platform(libs.quarkus.bom)
+    implementation 'io.quarkus:quarkus-core'
+    implementation 'io.quarkus:quarkus-arc'
+
+    // Original dependencies
+    implementation libs.quarkus.test.common
+    implementation libs.quarkus.junit5
+    implementation libs.testcontainers.core
+    implementation libs.testcontainers.redis
+    implementation libs.testcontainers.minio
+    implementation libs.testcontainers.postgresql
+    implementation 'org.slf4j:slf4j-api'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    implementation platform(libs.quarkus.amazon.services.bom)
+    implementation 'io.quarkiverse.amazonservices:quarkus-amazon-s3'
+    implementation 'software.amazon.awssdk:s3'
+
+    implementation libs.pipestream.test.documents
+
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+}
+
+tasks.matching { it.name == 'validateExtension' }.configureEach {
+    enabled = false
+}

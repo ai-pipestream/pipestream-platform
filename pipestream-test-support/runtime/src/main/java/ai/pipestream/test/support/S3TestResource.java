@@ -71,6 +71,7 @@ public class S3TestResource implements QuarkusTestResourceLifecycleManager {
                         Transferable.of(S3_CONFIG_JSON.getBytes(StandardCharsets.UTF_8)),
                         S3_CONFIG_PATH)
                 .withCommand("server", "-s3", "-filer", "-dir=/data",
+                        "-master.volumeSizeLimitMB=128",
                         "-s3.allowEmptyFolder=true", "-s3.config=" + S3_CONFIG_PATH)
                 .waitingFor(Wait.forLogMessage(".*Start Seaweed S3 API Server.*", 1));
 

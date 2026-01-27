@@ -1,6 +1,6 @@
 # Quarkus Pipeline Dev Services Extension
 
-This Quarkus extension provides shared development infrastructure services for pipeline microservices. It enables out-of-the-box (OOTB) startup of a complete development environment including PostgreSQL, Consul, Kafka, Apicurio Registry, OpenSearch, MinIO, Redis, and Infisical (for KMS/secret management).
+This Quarkus extension provides shared development infrastructure services for pipeline microservices. It enables out-of-the-box (OOTB) startup of a complete development environment including PostgreSQL, Consul, Kafka, Apicurio Registry, OpenSearch, SeaweedFS (S3-compatible storage), Redis, and Infisical (for KMS/secret management).
 
 **Important:** This is a development-only feature designed for local microservice development. It provides common infrastructure shared across multiple components to facilitate rapid development workflows. Do not use in production environments.
 
@@ -117,7 +117,7 @@ sequenceDiagram
 | Kafka | Message broker | 9092, 9094 | `quarkus-dev-service-kafka: shared` |
 | Apicurio Registry | Schema registry | 8081, 8888 | - |
 | OpenSearch | Search engine | 9200, 5601 | `quarkus-dev-service-elasticsearch: shared` |
-| MinIO | Object storage | 9000, 9001 | - |
+| SeaweedFS | S3-compatible object storage | 8333, 9333, 8888 | `quarkus-dev-service-s3: shared` |
 | Infisical | Secret management and KMS | 3000 (UI only) | `quarkus-dev-service-infisical: shared` |
 | LGTM Stack | Observability | 3001, 4317, 4318 | `quarkus-dev-service-lgtm: shared` |
 

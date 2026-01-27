@@ -233,13 +233,11 @@ services:
       - "9333:9333"     # Master UI / HTTP API
       - "8888:8888"     # Filer UI / HTTP API
       - "18080:18080"   # Volume Server (Internal)
-    command: 'server -s3 -filer -dir=/data'
+    command: 'server -s3 -filer -dir=/data -s3.allowEmptyFolder=true -s3.config=/etc/seaweedfs/s3.json'
     volumes:
       - seaweedfs-data:/data
-    environment:
-      # S3 Access Keys (Matching your MinIO defaults for easy transition)
-      WEED_S3_ADMIN_ACCESS_KEY: any
-      WEED_S3_ADMIN_SECRET_KEY: any
+      # S3 authentication config (required for signed requests from AWS SDK)
+      - ./seaweedfs-s3-config.json:/etc/seaweedfs/s3.json:ro
     labels:
       # Map to your Quarkus dev services if needed
       quarkus-dev-service-s3: shared

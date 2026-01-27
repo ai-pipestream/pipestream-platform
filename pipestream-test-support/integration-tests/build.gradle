@@ -8,6 +8,7 @@ dependencies {
     implementation platform(libs.quarkus.bom)
     implementation 'io.quarkus:quarkus-arc'
     implementation 'io.quarkus:quarkus-resteasy'
+    implementation platform(libs.quarkus.amazon.services.bom)
     implementation 'io.quarkiverse.amazonservices:quarkus-amazon-s3'
 
     implementation project(':pipestream-test-support')
@@ -18,7 +19,6 @@ dependencies {
     // Dependencies needed for the moved tests to compile
     testImplementation libs.quarkus.test.common
     testImplementation libs.testcontainers.core
-    testImplementation platform(libs.quarkus.amazon.services.bom)
     testImplementation 'software.amazon.awssdk:s3'
     testImplementation libs.aws.sdk.url.connection
     testImplementation libs.pipestream.test.documents

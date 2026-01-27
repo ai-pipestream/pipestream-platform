@@ -22,6 +22,8 @@ dependencies {
     testImplementation 'software.amazon.awssdk:s3'
     testImplementation libs.aws.sdk.url.connection
     testImplementation libs.pipestream.test.documents
+    // Ensure Quarkus can resolve the extension's deployment module locally
+    testImplementation project(':pipestream-test-support-deployment')
 }
 
 tasks.withType(Test).configureEach {

@@ -61,6 +61,7 @@ public class MinioTestResource implements QuarkusTestResourceLifecycleManager {
         System.setProperty("quarkus.s3.path-style-access", "true");
 
         Map<String, String> config = Map.of(
+                "quarkus.s3.devservices.enabled", "false",  // Disable LocalStack - we use MinIO
                 "quarkus.s3.endpoint-override", endpoint,
                 "quarkus.s3.aws.region", "us-east-1",
                 "quarkus.s3.aws.credentials.static-provider.access-key-id", ACCESS_KEY,

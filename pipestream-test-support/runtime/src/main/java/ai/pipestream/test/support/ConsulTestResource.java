@@ -30,7 +30,7 @@ public class ConsulTestResource implements QuarkusTestResourceLifecycleManager {
 
     private static final Logger log = LoggerFactory.getLogger(ConsulTestResource.class);
 
-    private static final String DEFAULT_IMAGE = "hashicorp/consul:1.19";
+    private static final String DEFAULT_IMAGE = "hashicorp/consul:1.22";
     private static final int HTTP_PORT = 8500;
     private static final int GRPC_PORT = 8502;
 

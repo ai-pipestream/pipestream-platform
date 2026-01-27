@@ -16,7 +16,7 @@ public class ConsulTestResource implements QuarkusTestResourceLifecycleManager {
 
     private static final Logger LOG = Logger.getLogger(ConsulTestResource.class);
 
-    private static final DockerImageName CONSUL_IMAGE = DockerImageName.parse("consul:1.15");
+    private static final DockerImageName CONSUL_IMAGE = DockerImageName.parse("hashicorp/consul:1.22");
     private static ConsulContainer consulContainer;
 
     /**

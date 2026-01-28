@@ -61,6 +61,13 @@ project(':pipestream-service-registration-deployment').projectDir = file('pipest
 include 'pipestream-service-registration-integration-tests'
 project(':pipestream-service-registration-integration-tests').projectDir = file('pipestream-service-registration/integration-tests')
 
+// 5. Server Defaults
+include 'pipestream-server'
+project(':pipestream-server').projectDir = file('pipestream-server/runtime')
+
+include 'pipestream-server-deployment'
+project(':pipestream-server-deployment').projectDir = file('pipestream-server/deployment')
+
 // 5. Shared Test Support
 include 'pipestream-test-support'
 project(':pipestream-test-support').projectDir = file('pipestream-test-support/runtime')
@@ -70,4 +77,3 @@ project(':pipestream-test-support-deployment').projectDir = file('pipestream-tes
 
 include 'pipestream-test-support-integration-tests'
 project(':pipestream-test-support-integration-tests').projectDir = file('pipestream-test-support/integration-tests')
-

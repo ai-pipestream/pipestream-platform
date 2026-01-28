@@ -1,0 +1,13 @@
+plugins {
+    alias(libs.plugins.java.library)
+}
+
+dependencies {
+    implementation platform(libs.quarkus.bom)
+    implementation 'io.quarkus:quarkus-arc-deployment'
+    implementation 'io.quarkus:quarkus-vertx-http-deployment'
+
+    implementation project(':pipestream-server')
+
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+}

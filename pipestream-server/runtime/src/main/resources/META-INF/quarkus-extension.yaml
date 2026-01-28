@@ -1,0 +1,13 @@
+name: "Pipestream Server"
+artifact: ${project.groupId}:${project.artifactId}:${project.version}
+description: "Common server defaults for Pipestream services"
+metadata:
+  keywords:
+    - "pipestream"
+    - "server"
+    - "grpc"
+    - "http"
+    - "vertx"
+  categories:
+    - "web"
+  status: "stable"

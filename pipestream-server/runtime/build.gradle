@@ -1,0 +1,22 @@
+plugins {
+    alias(libs.plugins.java.library)
+    alias(libs.plugins.quarkus.extension)
+}
+
+quarkusExtension {
+    deploymentModule = 'pipestream-server-deployment'
+}
+
+// Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution
+tasks.matching { it.name == 'validateExtension' }.configureEach {
+    enabled = false
+}
+
+dependencies {
+    api platform(libs.quarkus.bom)
+    api 'io.quarkus:quarkus-arc'
+    api 'io.quarkus:quarkus-vertx-http'
+
+    annotationProcessor enforcedPlatform(libs.quarkus.bom)
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+}

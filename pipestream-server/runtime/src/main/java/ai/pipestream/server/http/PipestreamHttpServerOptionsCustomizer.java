@@ -34,7 +34,7 @@ public class PipestreamHttpServerOptionsCustomizer implements HttpServerOptionsC
 
         options.setHttp2ConnectionWindowSize(windowSize);
         LOG.infof("Applied HTTP/2 connection window size (%d) to %s server (class=%s, capabilities=%s)",
-                windowSize, serverKind, normalizeClass(config.serverClass()), normalizeCapabilities(config.capabilities()));
+                windowSize, serverKind, normalizeClass(config.serverClass()), normalizeCapabilities(config.capabilities().orElse("")));
     }
 
     private int resolveHttp2WindowSize() {
@@ -51,7 +51,7 @@ public class PipestreamHttpServerOptionsCustomizer implements HttpServerOptionsC
 
     private boolean isLargeGrpcEnabled() {
         String serviceClass = normalizeClass(config.serverClass());
-        String capabilities = normalizeCapabilities(config.capabilities());
+        String capabilities = normalizeCapabilities(config.capabilities().orElse(""));
 
         if (!isKnownClass(serviceClass)) {
             LOG.warnf("Unknown pipestream.server.class '%s'; defaulting to core behavior", serviceClass);

@@ -65,7 +65,7 @@ services:
       # Map PostgreSQL JDBC URL to datasource property
       io.quarkus.devservices.compose.config_map.jdbc_url: quarkus.datasource.jdbc.url
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pipeline"]
+      test: ["CMD-SHELL", "PGPASSWORD=password psql -U pipeline -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='account'\" | grep -q 1 || PGPASSWORD=password psql -U pipeline -d postgres -c \"CREATE DATABASE account\"; pg_isready -U pipeline"]
       interval: 10s
       timeout: 5s
       retries: 5

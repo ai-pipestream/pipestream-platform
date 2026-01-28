@@ -2,7 +2,6 @@
 -- Creates additional databases for services (simple naming convention)
 
 -- Create databases
-CREATE DATABASE infisical;
 CREATE DATABASE apicurio_registry;
 CREATE DATABASE platform_registration;
 CREATE DATABASE connector_intake;
@@ -13,7 +12,6 @@ CREATE DATABASE engine;
 CREATE DATABASE s3_connector;
 
 -- Grant privileges to pipeline user
-GRANT ALL PRIVILEGES ON DATABASE infisical TO pipeline;
 GRANT ALL PRIVILEGES ON DATABASE apicurio_registry TO pipeline;
 GRANT ALL PRIVILEGES ON DATABASE platform_registration TO pipeline;
 GRANT ALL PRIVILEGES ON DATABASE connector_intake TO pipeline;

@@ -145,6 +145,15 @@ public class ServiceMetadataCollector {
         int port = httpConfig.advertisedPort().orElse(httpPort);
         String basePath = httpConfig.basePath().orElse(httpRootPath == null ? "" : httpRootPath);
         String healthPath = httpConfig.healthPath();
+        if (httpConfig.healthUrl().isPresent()) {
+            healthPath = httpConfig.healthUrl().get();
+        } else if (!basePath.isBlank()
+                && !healthPath.isBlank()
+                && !healthPath.equals("/q/health")
+                && healthPath.startsWith("/")
+                && !healthPath.startsWith(basePath)) {
+            LOG.warnf("HTTP health path '%s' does not include base path '%s'; the registration service will prepend it.", healthPath, basePath);
+        }
         boolean tlsEnabled = httpConfig.tlsEnabled();
 
         HttpEndpointInfo endpoint = new HttpEndpointInfo(

@@ -288,6 +288,12 @@ public interface RegistrationConfig {
         String healthPath();
 
         /**
+         * Optional absolute health check URL override.
+         */
+        @WithName("health-url")
+        Optional<String> healthUrl();
+
+        /**
          * Whether TLS is enabled for HTTP endpoints.
          */
         @WithName("tls-enabled")

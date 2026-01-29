@@ -17,18 +17,18 @@ protobufVersion = "4.33.4"
 
 # Quarkiverse extensions
 quinoa = "2.7.1"
-wiremock = "4.0.0-beta.24"
-wiremock-standalone = "4.0.0-beta.24"
-wiremock-grpc-extension = "1.0.0-beta.4"
+wiremock = "4.0.0-beta.27"
+wiremock-standalone = "4.0.0-beta.27"
+wiremock-grpc-extension = "1.0.0-beta.5"
 hibernate-types = "2.2.0"
-quarkus-mcp-server = "1.8.1"
+quarkus-mcp-server = "1.9.0"
 # AWS SDK
-aws-sdk = "2.41.15"
+aws-sdk = "2.41.17"
 # Apicurio
-apicurio = "3.1.6"
+apicurio = "3.1.7"
 # Testing
 awaitility = "4.3.0"
-testcontainersVersion = "1.21.3"
+testcontainersVersion = "2.0.3"
 testcontainers-redis = "2.2.4"
 assertj = "3.27.7"
 hamcrest = "3.0"
@@ -70,10 +70,10 @@ pipestream-wiremock-server = "0.1.33"
 axion-release = "1.21.1"
 nmcp = "1.4.4"
 protobuf-plugin = "0.9.6"
-buf-plugin = "0.10.3"
+buf-plugin = "0.11.0"
 shadow-plugin = "9.3.1"
 proto-toolchain = "0.7.13"
-quarkus-buf-grpc-generator = "0.7.12"
+quarkus-buf-grpc-generator = "0.7.13"
 
 [libraries]
 # Quarkus BOM

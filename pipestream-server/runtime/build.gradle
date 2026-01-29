@@ -16,6 +16,7 @@ dependencies {
     api platform(libs.quarkus.bom)
     api 'io.quarkus:quarkus-arc'
     api 'io.quarkus:quarkus-vertx-http'
+    api 'io.smallrye.config:smallrye-config'
 
     annotationProcessor enforcedPlatform(libs.quarkus.bom)
     annotationProcessor 'io.quarkus:quarkus-extension-processor'

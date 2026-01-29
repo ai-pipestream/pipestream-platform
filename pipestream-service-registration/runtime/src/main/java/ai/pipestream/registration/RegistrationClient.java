@@ -34,7 +34,7 @@ public class RegistrationClient {
     private static final Logger LOG = Logger.getLogger(RegistrationClient.class);
     private static final int SHUTDOWN_TIMEOUT_SECONDS = 5;
     private static final Duration CONSUL_DISCOVERY_TIMEOUT = Duration.ofSeconds(5);
-    private static final String DEFAULT_REGISTRATION_SERVICE_NAME = "platform-registration-service";
+    private static final String DEFAULT_REGISTRATION_SERVICE_NAME = "platform-registration";
     private static final String FALLBACK_HOST = "localhost";
     private static final int FALLBACK_PORT = 9090;
 

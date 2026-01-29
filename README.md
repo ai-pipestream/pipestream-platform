@@ -35,6 +35,7 @@ Monorepo for Pipestream platform libraries - Quarkus extensions, BOM, Gradle plu
    without the need for buildtime configuration or reflection.
 4. **pipestream-service-registration** - Service registration client for registering pipestream services, modules, and connectors into 
    consul registration and apicruio registration for module and connector configuration schema registration.
+5. **pipestream-server** - Server defaults for Pipestream services (shared gRPC/HTTP tuning and platform conventions).
 
 ## Structure
 

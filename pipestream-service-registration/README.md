@@ -14,6 +14,11 @@ The Pipestream Service Registration Extension simplifies service registration in
 
 The extension communicates with the `platform-registration-service` via gRPC, which then handles Consul registration, health check configuration, and event broadcasting to Kafka.
 
+> Note: The `pipestream-server` extension is being designed to own registration defaults
+> (host selection, HTTP/gRPC health defaults, and base paths). When present, it will
+> provide common defaults so each service only needs to set its port and optional overrides.
+> See `pipestream-server/README.md` for the design details.
+
 ## Features
 
 | Feature | Description |

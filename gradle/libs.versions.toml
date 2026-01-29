@@ -1,5 +1,5 @@
 [versions]
-quarkusVersion = "3.30.8"
+quarkusVersion = "3.31.1"
 jandex-plugin = "2.3.0"
 commons-lang3 = "3.20.0"
 opennlp-tools = "2.5.7"
@@ -17,15 +17,15 @@ protobufVersion = "4.33.4"
 
 # Quarkiverse extensions
 quinoa = "2.7.1"
-wiremock = "4.0.0-beta.24"
-wiremock-standalone = "4.0.0-beta.24"
-wiremock-grpc-extension = "1.0.0-beta.4"
+wiremock = "4.0.0-beta.27"
+wiremock-standalone = "4.0.0-beta.27"
+wiremock-grpc-extension = "1.0.0-beta.5"
 hibernate-types = "2.2.0"
-quarkus-mcp-server = "1.8.1"
+quarkus-mcp-server = "1.9.0"
 # AWS SDK
-aws-sdk = "2.41.15"
+aws-sdk = "2.41.17"
 # Apicurio
-apicurio = "3.1.6"
+apicurio = "3.1.7"
 # Testing
 awaitility = "4.3.0"
 testcontainersVersion = "2.0.3"

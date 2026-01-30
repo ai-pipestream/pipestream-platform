@@ -74,7 +74,14 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         String healthRootPath = getOptional(context, "quarkus.smallrye-health.root-path").orElse("");
         String healthPath;
         if (!healthRootPath.isBlank()) {
-            healthPath = normalizePath(healthRootPath);
+            String normalizedHealthRoot = normalizePath(healthRootPath);
+            // If explicitly set to the bare "/health", prefer the standard /q/health under the root path.
+            if ("/health".equals(normalizedHealthRoot)) {
+                healthPath = joinPaths(httpRootPath, "/q/health");
+            } else {
+                // Respect explicit health root as-is (Quarkus already applies root-path when appropriate)
+                healthPath = normalizedHealthRoot;
+            }
         } else if (!httpRootPath.isBlank() && !"/".equals(httpRootPath)) {
             healthPath = joinPaths(httpRootPath, "/q/health");
         } else {

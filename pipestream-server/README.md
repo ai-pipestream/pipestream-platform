@@ -10,6 +10,15 @@ platform conventions.
 - Classifies services with `pipestream.server.class` and `pipestream.server.capabilities`
   to drive defaults for large gRPC payloads.
 
+### Server class and capabilities (implemented)
+
+- Config keys:
+  - `pipestream.server.class` (default: `core`)
+  - `pipestream.server.capabilities` (comma-delimited)
+  - `pipestream.server.http2.connection-window-size` (optional override)
+- Known classes: `core`, `module`, `connector`, `engine`. Unknown classes log a warning and fall back to `core` behavior.
+- Behavior: if the class is `module`, `connector`, or `engine`, or if capabilities include `large-grpc` or `pipedoc`, the HTTP/2 connection window size is set to 104,857,600 (100 MiB) unless explicitly overridden by `pipestream.server.http2.connection-window-size`.
+
 ## Registration Defaults (Design)
 
 Planned behavior is to centralize service registration defaults here so
@@ -36,7 +45,7 @@ individual services only configure their port and optional overrides.
 `pipestream.server.host-mode=auto|linux|mac|windows|custom`
 
 - `auto` (default): use OS detection (mac/windows -> `host.docker.internal`,
-  linux -> `172.17.0.1`). In `prod`, prefer hostname when available.
+  linux -> `172.17.0.1`). In `prod`, prefer hostname when available. In non-prod, if `quarkus.application.name` is set, that name is used as the derived advertised/internal host before falling back to the OS default.
 - `custom`: require explicit `pipestream.server.advertised-host` and
   `pipestream.server.internal-host`.
 - Explicit env overrides always win.

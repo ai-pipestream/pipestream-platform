@@ -23,8 +23,14 @@ import java.util.Map;
 /**
  * Shared test resource for setting up SeaweedFS container to simulate AWS S3 API.
  * <p>
- * Provides S3-compatible instance for testing.
+ * Provides S3-compatible instance for testing. Uses a <strong>singleton container</strong>
+ * per JVM: the first test class to start gets a new SeaweedFS container; subsequent test
+ * classes reuse the same container. This avoids starting many SeaweedFS servers when
+ * running the full test suite.
+ * </p>
+ * <p>
  * Replaces previous MinIO implementation.
+ * </p>
  */
 public class S3TestResource implements QuarkusTestResourceLifecycleManager {
 
@@ -36,6 +42,12 @@ public class S3TestResource implements QuarkusTestResourceLifecycleManager {
     private static final int MASTER_PORT = 9333;
     private static final String S3_CONFIG_PATH = "/etc/seaweedfs/s3.json";
     private static final Logger LOG = Logger.getLogger(S3TestResource.class);
+
+    /** Lock for starting the shared container so parallel test classes don't start multiple. */
+    private static final Object START_LOCK = new Object();
+
+    /** Singleton container shared across all test classes in this JVM. */
+    private static GenericContainer<?> sharedContainer;
 
     /**
      * S3 configuration JSON for SeaweedFS authentication.
@@ -61,35 +73,54 @@ public class S3TestResource implements QuarkusTestResourceLifecycleManager {
     // Static field to share endpoint across all tests
     private static String sharedEndpoint;
 
+    /** Instance reference to the shared container (for getEndpoint() etc.). */
     private GenericContainer<?> s3Container;
 
     @Override
     public Map<String, String> start() {
-        s3Container = new GenericContainer<>(DockerImageName.parse(DEFAULT_IMAGE))
-                .withExposedPorts(S3_PORT, MASTER_PORT)
-                .withCopyToContainer(
-                        Transferable.of(S3_CONFIG_JSON.getBytes(StandardCharsets.UTF_8)),
-                        S3_CONFIG_PATH)
-                .withCommand("server", "-s3", "-filer", "-dir=/data",
-                        "-master.volumeSizeLimitMB=128",
-                        "-s3.allowEmptyFolder=true", "-s3.config=" + S3_CONFIG_PATH)
-                .waitingFor(Wait.forLogMessage(".*Start Seaweed S3 API Server.*", 1));
+        synchronized (START_LOCK) {
+            if (sharedContainer != null && sharedContainer.isRunning()) {
+                s3Container = sharedContainer;
+                String endpoint = "http://" + sharedContainer.getHost() + ":" + sharedContainer.getMappedPort(S3_PORT);
+                sharedEndpoint = endpoint;
+                LOG.info("=== S3TestResource (SeaweedFS) reusing existing container ===");
+                LOG.info("endpoint = " + endpoint);
+                System.setProperty("quarkus.s3.endpoint-override", endpoint);
+                System.setProperty("quarkus.s3.path-style-access", "true");
+                return configMap(endpoint);
+            }
 
-        s3Container.start();
+            GenericContainer<?> container = new GenericContainer<>(DockerImageName.parse(DEFAULT_IMAGE))
+                    .withExposedPorts(S3_PORT, MASTER_PORT)
+                    .withCopyToContainer(
+                            Transferable.of(S3_CONFIG_JSON.getBytes(StandardCharsets.UTF_8)),
+                            S3_CONFIG_PATH)
+                    .withCommand("server", "-s3", "-filer", "-dir=/data",
+                            "-master.volumeSizeLimitMB=128",
+                            "-s3.allowEmptyFolder=true", "-s3.config=" + S3_CONFIG_PATH)
+                    .waitingFor(Wait.forLogMessage(".*Start Seaweed S3 API Server.*", 1));
 
-        String endpoint = "http://" + s3Container.getHost() + ":" + s3Container.getMappedPort(S3_PORT);
-        sharedEndpoint = endpoint;
+            container.start();
+            sharedContainer = container;
+            s3Container = container;
 
-        createBucket(endpoint);
+            String endpoint = "http://" + container.getHost() + ":" + container.getMappedPort(S3_PORT);
+            sharedEndpoint = endpoint;
 
-        LOG.info("=== S3TestResource (SeaweedFS) started ===");
-        LOG.info("endpoint = " + endpoint);
+            createBucket(endpoint);
 
-        // Set as system properties to ensure higher precedence than defaults
-        System.setProperty("quarkus.s3.endpoint-override", endpoint);
-        System.setProperty("quarkus.s3.path-style-access", "true");
+            LOG.info("=== S3TestResource (SeaweedFS) started (singleton) ===");
+            LOG.info("endpoint = " + endpoint);
 
-        Map<String, String> config = Map.of(
+            System.setProperty("quarkus.s3.endpoint-override", endpoint);
+            System.setProperty("quarkus.s3.path-style-access", "true");
+
+            return configMap(endpoint);
+        }
+    }
+
+    private static Map<String, String> configMap(String endpoint) {
+        return Map.of(
                 "quarkus.s3.devservices.enabled", "false",
                 "quarkus.s3.endpoint-override", endpoint,
                 "quarkus.s3.aws.region", "us-east-1",
@@ -98,7 +129,6 @@ public class S3TestResource implements QuarkusTestResourceLifecycleManager {
                 "quarkus.s3.aws.credentials.static-provider.secret-access-key", SECRET_KEY,
                 "quarkus.s3.path-style-access", "true"
         );
-        return config;
     }
 
     private static void createBucket(String endpoint) {
@@ -153,8 +183,7 @@ public class S3TestResource implements QuarkusTestResourceLifecycleManager {
 
     @Override
     public void stop() {
-        if (s3Container != null) {
-            s3Container.stop();
-        }
+        // Intentionally do not stop the container so other test classes in this JVM can reuse it.
+        // The container is cleaned up when the JVM exits (or by Ryuk).
     }
 }

@@ -60,6 +60,11 @@ public class S3WithSampleDataTestResource extends S3TestResource {
 
     private static final Logger LOG = Logger.getLogger(S3WithSampleDataTestResource.class);
 
+    /** Whether sample data has already been uploaded to the shared container (upload once per JVM). */
+    private static volatile boolean sampleDataUploaded;
+
+    private static final Object UPLOAD_LOCK = new Object();
+
     /**
      * Returns the list of sample-data artifacts to load into S3.
      * <p>
@@ -93,18 +98,23 @@ public class S3WithSampleDataTestResource extends S3TestResource {
 
     @Override
     public Map<String, String> start() {
-        // Start S3 (SeaweedFS) first
+        // Start S3 (SeaweedFS) first (or reuse singleton)
         Map<String, String> config = super.start();
 
-        // Upload sample data
+        // Upload sample data once per JVM when using the shared container
         String endpoint = getSharedEndpoint();
         if (endpoint != null) {
-            try {
-                uploadSampleDataToS3(endpoint);
-            } catch (Exception e) {
-                LOG.errorf(e, "Failed to upload sample data to S3");
-                // Don't fail the test - just log the error
-                // Tests can still run, they just won't have pre-populated data
+            synchronized (UPLOAD_LOCK) {
+                if (!sampleDataUploaded) {
+                    try {
+                        uploadSampleDataToS3(endpoint);
+                        sampleDataUploaded = true;
+                    } catch (Exception e) {
+                        LOG.errorf(e, "Failed to upload sample data to S3");
+                        // Don't fail the test - just log the error
+                        // Tests can still run, they just won't have pre-populated data
+                    }
+                }
             }
         }
 

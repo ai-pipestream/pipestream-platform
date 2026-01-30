@@ -10,8 +10,6 @@ networks:
 volumes:
   postgres_data:
     driver: local
-  redis_data:
-    driver: local
   opensearch_data:
     driver: local
   kafka-data:
@@ -71,25 +69,6 @@ services:
       retries: 5
       start_period: 30s
 
-  # Redis for Infisical and caching
-  redis:
-    container_name: pipeline-redis
-    image: redis:7-alpine
-    networks:
-      - pipeline-test-network
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-    labels:
-      quarkus-dev-service-redis: shared
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
 
   # Kafka in KRaft mode (proven configuration)
   kafka:
@@ -252,6 +231,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   # Kafka UI for monitoring and management
   kafka-ui:

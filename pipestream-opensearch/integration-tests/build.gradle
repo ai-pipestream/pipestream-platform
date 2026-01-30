@@ -1,0 +1,31 @@
+plugins {
+    alias(libs.plugins.quarkus)
+}
+
+description = 'Pipestream OpenSearch Extension - Integration Tests'
+
+dependencies {
+    // Quarkus BOM provides platform properties
+    implementation platform(libs.quarkus.bom)
+
+    // Extension runtime dependency
+    implementation project(':pipestream-opensearch')
+
+    // Quarkus test dependencies
+    testImplementation 'io.quarkus:quarkus-junit5'
+    testImplementation libs.rest.assured
+    testImplementation libs.awaitility
+    testImplementation libs.assertj.core
+
+    // Gradle 9 requires explicit JUnit Platform launcher
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        showStandardStreams = true
+    }
+    systemProperty 'java.util.logging.manager', 'org.jboss.logmanager.LogManager'
+}

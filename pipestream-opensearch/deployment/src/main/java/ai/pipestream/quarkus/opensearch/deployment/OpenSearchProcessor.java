@@ -3,7 +3,10 @@ package ai.pipestream.quarkus.opensearch.deployment;
 import ai.pipestream.quarkus.opensearch.client.OpenSearchClientProducer;
 import ai.pipestream.quarkus.opensearch.client.ReactiveOpenSearchClient;
 import ai.pipestream.quarkus.opensearch.config.OpenSearchBuildTimeConfig;
+import ai.pipestream.quarkus.opensearch.grpc.OpenSearchManagerClientProducer;
 import ai.pipestream.quarkus.opensearch.health.OpenSearchHealthCheck;
+import ai.pipestream.quarkus.opensearch.init.IndexTemplateInitializer;
+import ai.pipestream.quarkus.opensearch.init.OpenSearchInitializerService;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -26,8 +29,8 @@ public class OpenSearchProcessor {
     }
 
     @BuildStep
-    void registerBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
-        LOG.debug("Registering OpenSearch CDI beans");
+    void registerClientBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
+        LOG.debug("Registering OpenSearch client CDI beans");
 
         // Register the client producer
         additionalBeans.produce(AdditionalBeanBuildItem.builder()
@@ -38,6 +41,34 @@ public class OpenSearchProcessor {
         // Register the reactive client
         additionalBeans.produce(AdditionalBeanBuildItem.builder()
                 .addBeanClass(ReactiveOpenSearchClient.class)
+                .setUnremovable()
+                .build());
+    }
+
+    @BuildStep
+    void registerGrpcClientBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
+        LOG.debug("Registering OpenSearch Manager gRPC client beans");
+
+        // Register the gRPC client producer
+        additionalBeans.produce(AdditionalBeanBuildItem.builder()
+                .addBeanClass(OpenSearchManagerClientProducer.class)
+                .setUnremovable()
+                .build());
+    }
+
+    @BuildStep
+    void registerInitializerBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
+        LOG.debug("Registering OpenSearch initializer beans");
+
+        // Register the initializer service
+        additionalBeans.produce(AdditionalBeanBuildItem.builder()
+                .addBeanClass(OpenSearchInitializerService.class)
+                .setUnremovable()
+                .build());
+
+        // Register the default index template initializer
+        additionalBeans.produce(AdditionalBeanBuildItem.builder()
+                .addBeanClass(IndexTemplateInitializer.class)
                 .setUnremovable()
                 .build());
     }

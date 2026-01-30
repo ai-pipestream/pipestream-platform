@@ -6,6 +6,7 @@ opennlp-tools = "2.5.7"
 jackson-module-jsonschema = "2.21.0"
 logging-manager = "3.4.1"
 opensearch = "3.5.0"
+opensearch-testcontainers = "4.1.0"
 # Apache HTTP Client
 httpclient5 = "5.6"
 # Caffeine
@@ -141,6 +142,7 @@ quarkus-junit5-mockito = { module = "io.quarkus:quarkus-junit5-mockito" }
 
 # OpenSearch
 opensearch-java = { module = "org.opensearch.client:opensearch-java", version.ref = "opensearch" }
+opensearch-testcontainers = { module = "org.opensearch:opensearch-testcontainers", version.ref = "opensearch-testcontainers" }
 
 # Apache HTTP Client
 httpclient5 = { module = "org.apache.httpcomponents.client5:httpclient5", version.ref = "httpclient5" }

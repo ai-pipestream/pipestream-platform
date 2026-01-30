@@ -64,6 +64,10 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
 
         // Prefer the shared HTTP server for gRPC unless explicitly overridden
         applyIfMissing(context, values, "quarkus.grpc.server.use-separate-server", "false");
+        // gRPC defaults: health + reflection + large messages
+        applyIfMissing(context, values, "quarkus.grpc.server.enable-health-service", "true");
+        applyIfMissing(context, values, "quarkus.grpc.server.enable-reflection-service", "true");
+        applyIfMissing(context, values, "quarkus.grpc.server.max-inbound-message-size", "2147483647");
 
         // Dev profile: compose devservices defaults (shared infra)
         applyIfMissing(context, values, "%dev.quarkus.devservices.enabled", "true");

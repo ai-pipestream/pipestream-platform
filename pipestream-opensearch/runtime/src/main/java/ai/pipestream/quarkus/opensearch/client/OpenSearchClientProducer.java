@@ -8,6 +8,7 @@ import jakarta.inject.Singleton;
 import org.apache.hc.client5.http.auth.AuthScope;
 import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
 import org.apache.hc.client5.http.config.ConnectionConfig;
+import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
 import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManager;
 import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
@@ -115,6 +116,12 @@ public class OpenSearchClientProducer {
                     );
                     httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
                 }
+
+                // Disable content compression to avoid GZIP issues with testcontainers
+                RequestConfig requestConfig = RequestConfig.custom()
+                        .setContentCompressionEnabled(false)
+                        .build();
+                httpClientBuilder.setDefaultRequestConfig(requestConfig);
 
             } catch (Exception e) {
                 throw new RuntimeException("Failed to configure OpenSearch HTTP client", e);

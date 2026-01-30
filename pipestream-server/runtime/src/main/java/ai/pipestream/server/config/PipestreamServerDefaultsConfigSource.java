@@ -14,7 +14,9 @@ import java.util.Optional;
 public class PipestreamServerDefaultsConfigSource implements ConfigSource {
 
     private static final Logger LOG = Logger.getLogger(PipestreamServerDefaultsConfigSource.class);
-    private static final int ORDINAL = 50;
+    // Use higher than application.properties (260) so we can override baked defaults
+    // but still allow env/system properties (300+) to win.
+    private static final int ORDINAL = 265;
     private static final String DEFAULT_LINUX_HOST = "172.17.0.1";
     private static final String DEFAULT_DOCKER_HOST = "host.docker.internal";
 
@@ -57,13 +59,38 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
                 hostDefaults.advertisedHost(), "0.0.0.0");
         applyIfMissingAllowingDefaults(context, values, "pipestream.registration.internal-host",
                 hostDefaults.internalHost(), "0.0.0.0");
+        applyIfMissing(context, values, "pipestream.registration.registration-service.discovery-name", "platform-registration");
+        logDiscoveryDefaults(values.get("pipestream.registration.registration-service.discovery-name"));
+
+        // Prefer the shared HTTP server for gRPC unless explicitly overridden
+        applyIfMissing(context, values, "quarkus.grpc.server.use-separate-server", "false");
+
+        // Dev profile: compose devservices defaults (shared infra)
+        applyIfMissing(context, values, "%dev.quarkus.devservices.enabled", "true");
+        applyIfMissing(context, values, "%dev.quarkus.compose.devservices.enabled", "true");
+        applyIfMissing(context, values, "%dev.quarkus.compose.devservices.files", "${user.home}/.pipeline/compose-devservices.yml");
+        applyIfMissing(context, values, "%dev.quarkus.compose.devservices.project-name", "pipeline-shared-devservices");
+        applyIfMissing(context, values, "%dev.quarkus.compose.devservices.start-services", "true");
+        applyIfMissing(context, values, "%dev.quarkus.compose.devservices.stop-services", "false");
+        applyIfMissing(context, values, "%dev.quarkus.compose.devservices.reuse-project-for-tests", "true");
+        applyIfMissing(context, values, "%dev.quarkus.devservices.timeout", "120s");
+        applyIfMissing(context, values, "%dev.quarkus.compose.devservices.stop-timeout", "30s");
+        // Allow datasource devservices so Quarkus can pick up JDBC from compose mapping
+        applyIfMissing(context, values, "%dev.quarkus.datasource.devservices.enabled", "true");
+        logDevServicesDefaults(values);
 
         Integer registrationPort = resolveRegistrationPort(context);
         if (registrationPort != null) {
             applyIfMissingAllowingDefaults(context, values, "pipestream.registration.advertised-port",
-                    String.valueOf(registrationPort), "0");
+                    String.valueOf(registrationPort), "8080");
             applyIfMissingAllowingDefaults(context, values, "pipestream.registration.internal-port",
-                    String.valueOf(registrationPort), "0");
+                    String.valueOf(registrationPort), "8080");
+            // In dev, prefer the runtime HTTP/grpc port even if a baked default exists
+            applyIfMissing(context, values, "%dev.pipestream.registration.advertised-port",
+                    String.valueOf(registrationPort));
+            applyIfMissing(context, values, "%dev.pipestream.registration.internal-port",
+                    String.valueOf(registrationPort));
+            logRegistrationDefaults(registrationPort, values);
         }
 
         String httpRootPath = normalizePath(getOptional(context, "quarkus.http.root-path").orElse(""));
@@ -189,7 +216,7 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
     private Integer resolveRegistrationPort(ConfigSourceContext context) {
         boolean separateServer = getOptional(context, "quarkus.grpc.server.use-separate-server")
                 .map(Boolean::parseBoolean)
-                .orElse(true);
+                .orElse(false);
         if (separateServer) {
             return resolveGrpcPort(context);
         }
@@ -278,5 +305,39 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
     }
 
     private record HostDefaults(String advertisedHost, String internalHost) {
+    }
+
+    private void logDevServicesDefaults(Map<String, String> values) {
+        if (!LOG.isInfoEnabled()) {
+            return;
+        }
+        String composeFile = values.get("%dev.quarkus.compose.devservices.files");
+        String project = values.get("%dev.quarkus.compose.devservices.project-name");
+        String start = values.get("%dev.quarkus.compose.devservices.start-services");
+        String stop = values.get("%dev.quarkus.compose.devservices.stop-services");
+        String reuse = values.get("%dev.quarkus.compose.devservices.reuse-project-for-tests");
+        String datasourceDevservices = values.get("%dev.quarkus.datasource.devservices.enabled");
+        if (composeFile != null || project != null) {
+            LOG.infof("DevServices defaults applied: compose-file=%s project=%s start=%s stop=%s reuse=%s datasource-devservices=%s",
+                    composeFile, project, start, stop, reuse, datasourceDevservices);
+        }
+    }
+
+    private void logRegistrationDefaults(Integer registrationPort, Map<String, String> values) {
+        if (!LOG.isInfoEnabled() || registrationPort == null) {
+            return;
+        }
+        String advertised = values.getOrDefault("%dev.pipestream.registration.advertised-port",
+                values.get("pipestream.registration.advertised-port"));
+        String internal = values.getOrDefault("%dev.pipestream.registration.internal-port",
+                values.get("pipestream.registration.internal-port"));
+        LOG.infof("Registration defaults applied: resolved-port=%s advertised-port=%s internal-port=%s",
+                registrationPort, advertised, internal);
+    }
+
+    private void logDiscoveryDefaults(String discoveryName) {
+        if (LOG.isInfoEnabled() && discoveryName != null) {
+            LOG.infof("Registration discovery default applied: discovery-name=%s", discoveryName);
+        }
     }
 }

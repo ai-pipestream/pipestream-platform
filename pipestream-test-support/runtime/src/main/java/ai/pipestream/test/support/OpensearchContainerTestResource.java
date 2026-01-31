@@ -15,7 +15,7 @@ import java.util.Map;
 public class OpensearchContainerTestResource implements io.quarkus.test.common.QuarkusTestResourceLifecycleManager {
 
     private static final Logger LOG = Logger.getLogger(OpensearchContainerTestResource.class);
-    private static final String DEFAULT_IMAGE = "opensearchproject/opensearch:3.5.0";
+    private static final String DEFAULT_IMAGE = "opensearchproject/opensearch:3";
 
     private OpenSearchContainer<?> container;
 

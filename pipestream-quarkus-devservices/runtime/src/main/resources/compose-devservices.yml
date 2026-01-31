@@ -106,7 +106,7 @@ services:
   # Apicurio Registry v3
   apicurio-registry:
     container_name: pipeline-apicurio-registry
-    image: apicurio/apicurio-registry:3.1.6
+    image: apicurio/apicurio-registry:3.1.7
     networks:
       - pipeline-test-network
     ports:

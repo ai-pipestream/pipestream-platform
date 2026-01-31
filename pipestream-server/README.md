@@ -68,3 +68,15 @@ services only configure ports and optional overrides.
 - `pipestream.server.internal-host`
 - `pipestream.registration.advertised-host`
 - `pipestream.registration.internal-host`
+
+## OpenAPI Defaults (Current)
+
+This extension enables OpenAPI and Swagger UI by default for services that
+include `pipestream-server`.
+
+- OpenAPI endpoint is enabled (`/q/openapi` by default).
+- Swagger UI is always included (`/q/swagger-ui` by default).
+- Default info fields (override via config or `@OpenAPIDefinition`):
+  - `quarkus.smallrye-openapi.info-title` from `quarkus.application.name`
+  - `quarkus.smallrye-openapi.info-version` from `quarkus.application.version`
+  - `quarkus.smallrye-openapi.info-description` from `pipestream.registration.description`

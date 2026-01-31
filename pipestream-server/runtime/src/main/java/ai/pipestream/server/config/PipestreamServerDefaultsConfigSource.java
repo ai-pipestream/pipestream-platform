@@ -69,6 +69,12 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         applyIfMissing(context, values, "quarkus.grpc.server.enable-reflection-service", "true");
         applyIfMissing(context, values, "quarkus.grpc.server.max-inbound-message-size", "2147483647");
 
+        // OpenAPI defaults
+        applyIfMissing(context, values, "quarkus.swagger-ui.always-include", "true");
+        applyIfMissing(context, values, "quarkus.smallrye-openapi.info-title", resolveOpenApiTitle(context));
+        applyIfMissing(context, values, "quarkus.smallrye-openapi.info-version", resolveOpenApiVersion(context));
+        applyIfMissing(context, values, "quarkus.smallrye-openapi.info-description", resolveOpenApiDescription(context));
+
         // Dev profile: compose devservices defaults (shared infra)
         applyIfMissing(context, values, "%dev.quarkus.devservices.enabled", "true");
         applyIfMissing(context, values, "%dev.quarkus.compose.devservices.enabled", "true");
@@ -160,6 +166,24 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         String internalHost = explicitInternal.orElse(derivedInternal);
 
         return new HostDefaults(advertisedHost, internalHost);
+    }
+
+    private String resolveOpenApiTitle(ConfigSourceContext context) {
+        return firstNonBlank(
+                getOptional(context, "quarkus.application.name"),
+                getOptional(context, "pipestream.registration.service-name"))
+                .orElse(null);
+    }
+
+    private String resolveOpenApiVersion(ConfigSourceContext context) {
+        return firstNonBlank(
+                getOptional(context, "quarkus.application.version"),
+                getOptional(context, "pipestream.registration.version"))
+                .orElse(null);
+    }
+
+    private String resolveOpenApiDescription(ConfigSourceContext context) {
+        return getOptional(context, "pipestream.registration.description").orElse(null);
     }
 
     private String resolveDefaultHost(String mode, ConfigSourceContext context) {

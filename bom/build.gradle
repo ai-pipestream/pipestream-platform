@@ -62,6 +62,9 @@ dependencies {
         api project(':pipestream-server')
         api project(':pipestream-server-deployment')
 
+        api project(':pipestream-opensearch')
+        api project(':pipestream-opensearch-deployment')
+
         // Shared test fixtures
         api project(':pipestream-test-support')
 

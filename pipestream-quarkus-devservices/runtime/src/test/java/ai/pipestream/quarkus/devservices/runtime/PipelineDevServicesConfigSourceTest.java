@@ -68,7 +68,7 @@ class PipelineDevServicesConfigSourceTest {
 
         Set<String> names = configSource.getPropertyNames();
 
-        assertThat(names, hasSize(18));
+        assertThat(names, hasSize(19));
         assertThat(names, containsInAnyOrder(
             // Compose devservices configuration properties
             "quarkus.compose.devservices.enabled",
@@ -92,7 +92,8 @@ class PipelineDevServicesConfigSourceTest {
             "quarkus.s3.aws.region",
             "quarkus.s3.aws.credentials.type",
             "quarkus.s3.aws.credentials.static-provider.access-key-id",
-            "quarkus.s3.aws.credentials.static-provider.secret-access-key"
+            "quarkus.s3.aws.credentials.static-provider.secret-access-key",
+            "kafka.bootstrap.servers"
         ));
     }
 

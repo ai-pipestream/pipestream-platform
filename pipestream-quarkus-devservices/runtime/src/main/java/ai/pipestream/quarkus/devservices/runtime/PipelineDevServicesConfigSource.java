@@ -46,6 +46,9 @@ public class PipelineDevServicesConfigSource implements ConfigSource {
         // Property: quarkus.devservices.launch-on-shared-network (maps to launchOnSharedNetwork())
         DEV_SERVICE_PROPERTIES.put("quarkus.devservices.launch-on-shared-network", "true");
 
+        // Kafka exposed on the host for apps running outside the compose network
+        DEV_SERVICE_PROPERTIES.put("kafka.bootstrap.servers", "localhost:9094");
+
         // Note: Apicurio Schema Registry URL is NOT set here - it is discovered automatically
         // by the quarkus-apicurio-registry-protobuf extension via ComposeLocator from the
         // apicurio-registry container in compose-devservices.yml

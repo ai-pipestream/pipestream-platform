@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import java.net.URI;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -145,16 +146,34 @@ public class ServiceMetadataCollector {
         int port = httpConfig.advertisedPort().orElse(httpPort);
         String basePath = httpConfig.basePath().orElse(httpRootPath == null ? "" : httpRootPath);
         String healthPath = httpConfig.healthPath();
+        boolean tlsEnabled = httpConfig.tlsEnabled();
+
+        HealthUrlOverride override = null;
         if (httpConfig.healthUrl().isPresent()) {
-            healthPath = httpConfig.healthUrl().get();
-        } else if (!basePath.isBlank()
+            String rawHealthUrl = httpConfig.healthUrl().get();
+            override = parseHealthUrl(rawHealthUrl, port);
+            if (override != null) {
+                scheme = override.scheme();
+                host = override.host();
+                port = override.port();
+                healthPath = override.healthPath();
+                if ("https".equalsIgnoreCase(scheme)) {
+                    tlsEnabled = true;
+                }
+            } else {
+                // Treat as a direct health-path override when not a full URL.
+                healthPath = rawHealthUrl;
+            }
+        }
+
+        if (override == null
+                && !basePath.isBlank()
                 && !healthPath.isBlank()
                 && !healthPath.equals("/q/health")
                 && healthPath.startsWith("/")
                 && !healthPath.startsWith(basePath)) {
             LOG.warnf("HTTP health path '%s' does not include base path '%s'; the registration service will prepend it.", healthPath, basePath);
         }
-        boolean tlsEnabled = httpConfig.tlsEnabled();
 
         HttpEndpointInfo endpoint = new HttpEndpointInfo(
             scheme,
@@ -166,6 +185,37 @@ public class ServiceMetadataCollector {
         );
 
         return List.of(endpoint);
+    }
+
+    private HealthUrlOverride parseHealthUrl(String rawHealthUrl, int fallbackPort) {
+        if (rawHealthUrl == null || rawHealthUrl.isBlank()) {
+            return null;
+        }
+        try {
+            URI uri = URI.create(rawHealthUrl);
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+            if (scheme == null || host == null) {
+                return null;
+            }
+            int port = uri.getPort();
+            int resolvedPort = port != -1 ? port : fallbackPort;
+            String path = uri.getRawPath();
+            if (path == null || path.isBlank()) {
+                path = "/";
+            }
+            String query = uri.getRawQuery();
+            if (query != null && !query.isBlank()) {
+                path = path + "?" + query;
+            }
+            return new HealthUrlOverride(scheme, host, resolvedPort, path);
+        } catch (IllegalArgumentException e) {
+            LOG.warnf("Invalid health-url '%s'; treating as health-path override.", rawHealthUrl);
+            return null;
+        }
+    }
+
+    private record HealthUrlOverride(String scheme, String host, int port, String healthPath) {
     }
 
     private String getQuarkusVersion() {

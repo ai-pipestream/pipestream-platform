@@ -38,7 +38,7 @@ services only configure ports and optional overrides.
 - HTTP registration:
   - enabled by default
   - base path: `quarkus.http.root-path`
-  - health path: `/q/health` (root path is prepended when configured)
+  - health path: `/q/health/live` when registration is required (root path is prepended when configured)
 - gRPC registration:
   - shared server by default (`quarkus.grpc.server.use-separate-server=false`)
   - health and reflection services enabled

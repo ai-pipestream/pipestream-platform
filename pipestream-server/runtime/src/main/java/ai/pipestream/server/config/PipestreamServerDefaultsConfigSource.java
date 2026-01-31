@@ -127,6 +127,9 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         } else {
             healthPath = "/q/health";
         }
+        if (isRegistrationRequired(context)) {
+            healthPath = toLivenessPath(healthPath);
+        }
         applyIfMissing(context, values, "pipestream.registration.http.health-path", healthPath);
 
         if (isHttpRegistrationEnabled(context)) {
@@ -220,6 +223,11 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
                 || "production".equalsIgnoreCase(pipelineEnv);
     }
 
+    private boolean isTestProfile(ConfigSourceContext context) {
+        String profile = getOptional(context, "quarkus.profile").orElse("");
+        return "test".equalsIgnoreCase(profile);
+    }
+
     private String resolveHostname(ConfigSourceContext context) {
         String envHostname = getOptional(context, "HOSTNAME").orElse("");
         if (!envHostname.isBlank()) {
@@ -264,6 +272,14 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         return getOptional(context, "quarkus.http.port")
                 .map(Integer::parseInt)
                 .orElse(8080);
+    }
+
+    private boolean isRegistrationRequired(ConfigSourceContext context) {
+        Optional<String> required = getOptional(context, "pipestream.registration.required");
+        if (required.isPresent()) {
+            return Boolean.parseBoolean(required.get());
+        }
+        return !isTestProfile(context);
     }
 
     private boolean isHttpRegistrationEnabled(ConfigSourceContext context) {
@@ -333,6 +349,20 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
             return health;
         }
         return base + health;
+    }
+
+    private String toLivenessPath(String healthPath) {
+        String normalized = normalizePath(healthPath);
+        if (normalized.endsWith("/live")) {
+            return normalized;
+        }
+        if (normalized.endsWith("/health")) {
+            return normalized + "/live";
+        }
+        if (normalized.endsWith("/ready")) {
+            return normalized.replace("/ready", "/live");
+        }
+        return normalized + "/live";
     }
 
     private record HostDefaults(String advertisedHost, String internalHost) {

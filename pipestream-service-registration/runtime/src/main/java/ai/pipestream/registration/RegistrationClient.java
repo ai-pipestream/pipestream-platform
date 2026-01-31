@@ -35,8 +35,6 @@ public class RegistrationClient {
     private static final int SHUTDOWN_TIMEOUT_SECONDS = 5;
     private static final Duration CONSUL_DISCOVERY_TIMEOUT = Duration.ofSeconds(5);
     private static final String DEFAULT_REGISTRATION_SERVICE_NAME = "platform-registration";
-    private static final String FALLBACK_HOST = "localhost";
-    private static final int FALLBACK_PORT = 9090;
 
     private final RegistrationConfig config;
     private final Vertx vertx;
@@ -79,9 +77,19 @@ public class RegistrationClient {
                     // 1. discovery-name is explicitly set, OR
                     // 2. host/port are NOT configured (use Consul by default)
                     boolean hostPortConfigured = configuredHost.isPresent() && configuredPort.isPresent();
-                    boolean shouldTryConsul = discoveryName.isPresent() || !hostPortConfigured;
+                    if (!hostPortConfigured && (configuredHost.isPresent() || configuredPort.isPresent())) {
+                        LOG.warn("Registration service host/port must be set together; ignoring partial configuration.");
+                    }
 
-                    if (shouldTryConsul) {
+                    if (hostPortConfigured) {
+                        host = configuredHost.get();
+                        port = configuredPort.get();
+                        if (discoveryName.isPresent()) {
+                            LOG.infof("Using direct connection to registration service at %s:%d (discovery-name ignored)", host, port);
+                        } else {
+                            LOG.infof("Using direct connection to registration service at %s:%d", host, port);
+                        }
+                    } else {
                         String serviceName = discoveryName.orElse(DEFAULT_REGISTRATION_SERVICE_NAME);
                         LOG.infof("Attempting Consul discovery for registration service: %s", serviceName);
                         var discovered = discoverViaConsul(serviceName);
@@ -90,15 +98,12 @@ public class RegistrationClient {
                             port = discovered.port();
                             LOG.infof("Discovered registration service via Consul: %s:%d", host, port);
                         } else {
-                            host = configuredHost.orElse(FALLBACK_HOST);
-                            port = configuredPort.orElse(FALLBACK_PORT);
-                            LOG.warnf("Consul discovery failed for '%s', falling back to %s:%d",
-                                    serviceName, host, port);
+                            String message = String.format(
+                                    "Consul discovery failed for '%s' and no direct host/port is configured (consul=%s:%d)",
+                                    serviceName, config.consul().host(), config.consul().port());
+                            LOG.warn(message);
+                            throw new IllegalStateException(message);
                         }
-                    } else {
-                        host = configuredHost.get();
-                        port = configuredPort.get();
-                        LOG.infof("Using direct connection to registration service at %s:%d (Consul discovery skipped)", host, port);
                     }
 
                     LOG.infof("Creating gRPC channel to registration service at %s:%d (TLS: %s)", host, port, tlsEnabled);
@@ -216,96 +221,98 @@ public class RegistrationClient {
      * @return Multi of registration responses
      */
     public Multi<RegisterResponse> register(ServiceInfo serviceInfo) {
-        ensureChannel();
+        return Multi.createFrom().deferred(() -> {
+            ensureChannel();
 
-        // Build connectivity
-        Connectivity.Builder connectivityBuilder = Connectivity.newBuilder()
-                .setAdvertisedHost(serviceInfo.getAdvertisedHost())
-                .setAdvertisedPort(serviceInfo.getAdvertisedPort())
-                .setTlsEnabled(serviceInfo.isTlsEnabled());
+            // Build connectivity
+            Connectivity.Builder connectivityBuilder = Connectivity.newBuilder()
+                    .setAdvertisedHost(serviceInfo.getAdvertisedHost())
+                    .setAdvertisedPort(serviceInfo.getAdvertisedPort())
+                    .setTlsEnabled(serviceInfo.isTlsEnabled());
 
-        if (serviceInfo.getInternalHost() != null) {
-            connectivityBuilder.setInternalHost(serviceInfo.getInternalHost());
-        }
-        if (serviceInfo.getInternalPort() != null) {
-            connectivityBuilder.setInternalPort(serviceInfo.getInternalPort());
-        }
+            if (serviceInfo.getInternalHost() != null) {
+                connectivityBuilder.setInternalHost(serviceInfo.getInternalHost());
+            }
+            if (serviceInfo.getInternalPort() != null) {
+                connectivityBuilder.setInternalPort(serviceInfo.getInternalPort());
+            }
 
-        // Build request
-        RegisterRequest.Builder requestBuilder = RegisterRequest.newBuilder()
-                .setName(serviceInfo.getName())
-                .setType(serviceInfo.getType())
-                .setConnectivity(connectivityBuilder.build())
-                .putAllMetadata(serviceInfo.getMetadata())
-                .addAllTags(serviceInfo.getTags())
-                .addAllCapabilities(serviceInfo.getCapabilities());
+            // Build request
+            RegisterRequest.Builder requestBuilder = RegisterRequest.newBuilder()
+                    .setName(serviceInfo.getName())
+                    .setType(serviceInfo.getType())
+                    .setConnectivity(connectivityBuilder.build())
+                    .putAllMetadata(serviceInfo.getMetadata())
+                    .addAllTags(serviceInfo.getTags())
+                    .addAllCapabilities(serviceInfo.getCapabilities());
 
-        if (!serviceInfo.getHttpEndpoints().isEmpty()) {
-            serviceInfo.getHttpEndpoints().forEach(endpoint ->
-                requestBuilder.addHttpEndpoints(HttpEndpoint.newBuilder()
-                    .setScheme(endpoint.getScheme())
-                    .setHost(endpoint.getHost())
-                    .setPort(endpoint.getPort())
-                    .setBasePath(endpoint.getBasePath())
-                    .setHealthPath(endpoint.getHealthPath())
-                    .setTlsEnabled(endpoint.isTlsEnabled())
-                    .build())
-            );
-        }
+            if (!serviceInfo.getHttpEndpoints().isEmpty()) {
+                serviceInfo.getHttpEndpoints().forEach(endpoint ->
+                    requestBuilder.addHttpEndpoints(HttpEndpoint.newBuilder()
+                        .setScheme(endpoint.getScheme())
+                        .setHost(endpoint.getHost())
+                        .setPort(endpoint.getPort())
+                        .setBasePath(endpoint.getBasePath())
+                        .setHealthPath(endpoint.getHealthPath())
+                        .setTlsEnabled(endpoint.isTlsEnabled())
+                        .build())
+                );
+            }
 
-        if (!serviceInfo.getGrpcServices().isEmpty()) {
-            requestBuilder.addAllGrpcServices(serviceInfo.getGrpcServices());
-        }
+            if (!serviceInfo.getGrpcServices().isEmpty()) {
+                requestBuilder.addAllGrpcServices(serviceInfo.getGrpcServices());
+            }
 
-        if (serviceInfo.getHttpSchema() != null && !serviceInfo.getHttpSchema().isBlank()) {
-            requestBuilder.setHttpSchema(serviceInfo.getHttpSchema());
-        }
-        if (serviceInfo.getHttpSchemaVersion() != null && !serviceInfo.getHttpSchemaVersion().isBlank()) {
-            requestBuilder.setHttpSchemaVersion(serviceInfo.getHttpSchemaVersion());
-        }
-        if (serviceInfo.getHttpSchemaArtifactId() != null && !serviceInfo.getHttpSchemaArtifactId().isBlank()) {
-            requestBuilder.setHttpSchemaArtifactId(serviceInfo.getHttpSchemaArtifactId());
-        }
+            if (serviceInfo.getHttpSchema() != null && !serviceInfo.getHttpSchema().isBlank()) {
+                requestBuilder.setHttpSchema(serviceInfo.getHttpSchema());
+            }
+            if (serviceInfo.getHttpSchemaVersion() != null && !serviceInfo.getHttpSchemaVersion().isBlank()) {
+                requestBuilder.setHttpSchemaVersion(serviceInfo.getHttpSchemaVersion());
+            }
+            if (serviceInfo.getHttpSchemaArtifactId() != null && !serviceInfo.getHttpSchemaArtifactId().isBlank()) {
+                requestBuilder.setHttpSchemaArtifactId(serviceInfo.getHttpSchemaArtifactId());
+            }
 
-        if (serviceInfo.getVersion() != null) {
-            requestBuilder.setVersion(serviceInfo.getVersion());
-        }
+            if (serviceInfo.getVersion() != null) {
+                requestBuilder.setVersion(serviceInfo.getVersion());
+            }
 
-        RegisterRequest request = requestBuilder.build();
+            RegisterRequest request = requestBuilder.build();
 
-        LOG.infof("Registering %s: %s", serviceInfo.getType().name(), serviceInfo.getName());
-        LOG.debugf("Registration details - serviceName: %s, advertisedHost: %s, advertisedPort: %d, channelState: %s",
-            serviceInfo.getName(), serviceInfo.getAdvertisedHost(), serviceInfo.getAdvertisedPort(),
-            channel != null ? channel.getState(false).toString() : "null");
+            LOG.infof("Registering %s: %s", serviceInfo.getType().name(), serviceInfo.getName());
+            LOG.debugf("Registration details - serviceName: %s, advertisedHost: %s, advertisedPort: %d, channelState: %s",
+                serviceInfo.getName(), serviceInfo.getAdvertisedHost(), serviceInfo.getAdvertisedPort(),
+                channel != null ? channel.getState(false).toString() : "null");
 
-        return Multi.createFrom().emitter(emitter ->
-                asyncStub.register(request, new StreamObserver<>() {
-                    @Override
-                    public void onNext(RegisterResponse response) {
-                        var event = response.getEvent();
-                        LOG.debugf("Received registration event: type=%s, message=%s",
-                                event.getEventType(), event.getMessage());
-                        emitter.emit(response);
-                    }
+            return Multi.createFrom().emitter(emitter ->
+                    asyncStub.register(request, new StreamObserver<>() {
+                        @Override
+                        public void onNext(RegisterResponse response) {
+                            var event = response.getEvent();
+                            LOG.debugf("Received registration event: type=%s, message=%s",
+                                    event.getEventType(), event.getMessage());
+                            emitter.emit(response);
+                        }
 
-                    @Override
-                    public void onError(Throwable t) {
-                        LOG.errorf(t, "Registration failed for %s: %s",
-                                serviceInfo.getType().name(), serviceInfo.getName());
-                        LOG.debugf("Registration error details - errorClass: %s, errorMessage: %s, cause: %s, channelState: %s",
-                            t.getClass().getName(), t.getMessage(),
-                            t.getCause() != null ? t.getCause().getClass().getName() : "null",
-                            channel != null ? channel.getState(false).toString() : "null");
-                        emitter.fail(t);
-                    }
+                        @Override
+                        public void onError(Throwable t) {
+                            LOG.errorf(t, "Registration failed for %s: %s",
+                                    serviceInfo.getType().name(), serviceInfo.getName());
+                            LOG.debugf("Registration error details - errorClass: %s, errorMessage: %s, cause: %s, channelState: %s",
+                                t.getClass().getName(), t.getMessage(),
+                                t.getCause() != null ? t.getCause().getClass().getName() : "null",
+                                channel != null ? channel.getState(false).toString() : "null");
+                            emitter.fail(t);
+                        }
 
-                    @Override
-                    public void onCompleted() {
-                        LOG.infof("Registration stream completed for %s: %s",
-                                serviceInfo.getType().name(), serviceInfo.getName());
-                        emitter.complete();
-                    }
-                }));
+                        @Override
+                        public void onCompleted() {
+                            LOG.infof("Registration stream completed for %s: %s",
+                                    serviceInfo.getType().name(), serviceInfo.getName());
+                            emitter.complete();
+                        }
+                    }));
+        });
     }
 
     /**

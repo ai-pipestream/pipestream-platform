@@ -4,6 +4,7 @@ import ai.pipestream.platform.registration.v1.ServiceType;
 import ai.pipestream.registration.config.RegistrationConfig;
 import ai.pipestream.registration.model.HttpEndpointInfo;
 import ai.pipestream.registration.model.ServiceInfo;
+import io.quarkus.grpc.runtime.GrpcServerRecorder;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -14,6 +15,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Collects service metadata for registration.
@@ -25,6 +28,11 @@ import java.util.Map;
 public class ServiceMetadataCollector {
 
     private static final Logger LOG = Logger.getLogger(ServiceMetadataCollector.class);
+    private static final Set<String> RESERVED_GRPC_SERVICES = Set.of(
+            "grpc.health.v1.Health",
+            "grpc.reflection.v1.ServerReflection",
+            "grpc.reflection.v1alpha.ServerReflection"
+    );
 
     private final RegistrationConfig config;
 
@@ -66,6 +74,7 @@ public class ServiceMetadataCollector {
         List<String> tags = config.tags().orElse(Collections.emptyList());
         List<String> capabilities = config.capabilities().orElse(Collections.emptyList());
         List<HttpEndpointInfo> httpEndpoints = collectHttpEndpoints(advertisedHost);
+        List<String> grpcServices = collectGrpcServices();
         String httpSchema = config.http().schema().orElse(null);
         String httpSchemaVersion = config.http().schemaVersion().orElse(null);
         String httpSchemaArtifactId = config.http().schemaArtifactId().orElse(null);
@@ -83,6 +92,7 @@ public class ServiceMetadataCollector {
                 .tags(tags)
                 .capabilities(capabilities)
                 .httpEndpoints(httpEndpoints)
+                .grpcServices(grpcServices)
                 .httpSchema(httpSchema)
                 .httpSchemaVersion(httpSchemaVersion)
                 .httpSchemaArtifactId(httpSchemaArtifactId)
@@ -185,6 +195,25 @@ public class ServiceMetadataCollector {
         );
 
         return List.of(endpoint);
+    }
+
+    private List<String> collectGrpcServices() {
+        try {
+            List<GrpcServerRecorder.GrpcServiceDefinition> definitions = GrpcServerRecorder.getServices();
+            if (definitions == null || definitions.isEmpty()) {
+                return Collections.emptyList();
+            }
+            return definitions.stream()
+                    .map(definition -> definition.definition.getServiceDescriptor().getName())
+                    .filter(name -> name != null && !name.isBlank())
+                    .filter(name -> !RESERVED_GRPC_SERVICES.contains(name))
+                    .distinct()
+                    .sorted()
+                    .collect(Collectors.toList());
+        } catch (Exception | NoClassDefFoundError e) {
+            LOG.debug("gRPC services are unavailable for registration", e);
+            return Collections.emptyList();
+        }
     }
 
     private HealthUrlOverride parseHealthUrl(String rawHealthUrl, int fallbackPort) {

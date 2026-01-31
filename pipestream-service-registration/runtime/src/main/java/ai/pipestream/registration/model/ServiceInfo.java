@@ -24,6 +24,7 @@ public final class ServiceInfo {
     private final List<String> tags;
     private final List<String> capabilities;
     private final List<HttpEndpointInfo> httpEndpoints;
+    private final List<String> grpcServices;
     private final String httpSchema;
     private final String httpSchemaVersion;
     private final String httpSchemaArtifactId;
@@ -41,6 +42,7 @@ public final class ServiceInfo {
         this.tags = builder.tags != null ? List.copyOf(builder.tags) : Collections.emptyList();
         this.capabilities = builder.capabilities != null ? List.copyOf(builder.capabilities) : Collections.emptyList();
         this.httpEndpoints = builder.httpEndpoints != null ? List.copyOf(builder.httpEndpoints) : Collections.emptyList();
+        this.grpcServices = builder.grpcServices != null ? List.copyOf(builder.grpcServices) : Collections.emptyList();
         this.httpSchema = builder.httpSchema;
         this.httpSchemaVersion = builder.httpSchemaVersion;
         this.httpSchemaArtifactId = builder.httpSchemaArtifactId;
@@ -94,6 +96,10 @@ public final class ServiceInfo {
         return httpEndpoints;
     }
 
+    public List<String> getGrpcServices() {
+        return grpcServices;
+    }
+
     public String getHttpSchema() {
         return httpSchema;
     }
@@ -125,6 +131,7 @@ public final class ServiceInfo {
                 ", tags=" + tags +
                 ", capabilities=" + capabilities +
                 ", httpEndpoints=" + httpEndpoints +
+                ", grpcServices=" + grpcServices +
                 ", httpSchemaVersion='" + httpSchemaVersion + '\'' +
                 ", httpSchemaArtifactId='" + httpSchemaArtifactId + '\'' +
                 '}';
@@ -143,6 +150,7 @@ public final class ServiceInfo {
         private List<String> tags;
         private List<String> capabilities;
         private List<HttpEndpointInfo> httpEndpoints;
+        private List<String> grpcServices;
         private String httpSchema;
         private String httpSchemaVersion;
         private String httpSchemaArtifactId;
@@ -207,6 +215,11 @@ public final class ServiceInfo {
 
         public Builder httpEndpoints(List<HttpEndpointInfo> httpEndpoints) {
             this.httpEndpoints = httpEndpoints;
+            return this;
+        }
+
+        public Builder grpcServices(List<String> grpcServices) {
+            this.grpcServices = grpcServices;
             return this;
         }
 

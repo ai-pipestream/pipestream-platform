@@ -253,6 +253,10 @@ public class RegistrationClient {
             );
         }
 
+        if (!serviceInfo.getGrpcServices().isEmpty()) {
+            requestBuilder.addAllGrpcServices(serviceInfo.getGrpcServices());
+        }
+
         if (serviceInfo.getHttpSchema() != null && !serviceInfo.getHttpSchema().isBlank()) {
             requestBuilder.setHttpSchema(serviceInfo.getHttpSchema());
         }

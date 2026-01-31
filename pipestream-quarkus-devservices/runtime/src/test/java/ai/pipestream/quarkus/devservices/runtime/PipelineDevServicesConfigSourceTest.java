@@ -1,5 +1,6 @@
 package ai.pipestream.quarkus.devservices.runtime;
 
+import io.quarkus.runtime.LaunchMode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,10 +16,13 @@ import static org.hamcrest.Matchers.*;
 class PipelineDevServicesConfigSourceTest {
 
     private PipelineDevServicesConfigSource configSource;
+    private LaunchMode previousLaunchMode;
 
     @BeforeEach
     void setUp() {
         configSource = new PipelineDevServicesConfigSource();
+        previousLaunchMode = LaunchMode.current();
+        LaunchMode.set(LaunchMode.DEVELOPMENT);
         // Clear system properties
         System.clearProperty("pipeline.devservices.enabled");
         System.clearProperty("pipeline.devservices.files");
@@ -30,6 +34,7 @@ class PipelineDevServicesConfigSourceTest {
 
     @AfterEach
     void tearDown() {
+        LaunchMode.set(previousLaunchMode);
         // Clear system properties
         System.clearProperty("pipeline.devservices.enabled");
         System.clearProperty("pipeline.devservices.files");
@@ -102,6 +107,17 @@ class PipelineDevServicesConfigSourceTest {
         // When enabled is not set, ConfigSource should return null for all properties
         assertThat(configSource.getValue("quarkus.compose.devservices.files"), is(nullValue()));
         assertThat(configSource.getValue("quarkus.compose.devservices.enabled"), is(nullValue()));
+    }
+
+    @Test
+    void getPropertyNames_excludesKafkaBootstrapInTestMode() {
+        System.setProperty("pipeline.devservices.enabled", "true");
+        LaunchMode.set(LaunchMode.TEST);
+
+        Set<String> names = configSource.getPropertyNames();
+
+        assertThat(names, not(hasItem("kafka.bootstrap.servers")));
+        assertThat(configSource.getValue("kafka.bootstrap.servers"), is(nullValue()));
     }
 
     @Test

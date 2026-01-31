@@ -47,7 +47,7 @@ import java.util.Optional;
  * <li><strong>Automatic Startup:</strong> Starts an Apicurio Registry container
  * if no URL is configured.</li>
  * <li><strong>Version Support:</strong> Defaults to Apicurio Registry v3
- * ({@code apicurio/apicurio-registry:3.1.6}).</li>
+ * ({@code apicurio/apicurio-registry:3.1.7}).</li>
  * <li><strong>Configuration Injection:</strong> Automatically configures the
  * application to use the started registry.</li>
  * <li><strong>Container Sharing:</strong> Supports sharing the registry
@@ -64,7 +64,7 @@ public class DevServicesApicurioRegistryProtobufProcessor {
     private static final String APICURIO_REGISTRY_URL_CONFIG = "mp.messaging.connector.smallrye-kafka.apicurio.registry.url";
     private static final String APICURIO_REGISTRY_URL_SIMPLE = "apicurio.registry.url";
     private static final String DEV_SERVICE_LABEL = "quarkus-dev-service-apicurio-registry-protobuf";
-    private static final String DEFAULT_IMAGE = "apicurio/apicurio-registry:3.1.6";
+    private static final String DEFAULT_IMAGE = "apicurio/apicurio-registry:3.1.7";
 
     /**
      * Locator for finding shared dev service containers with our label.

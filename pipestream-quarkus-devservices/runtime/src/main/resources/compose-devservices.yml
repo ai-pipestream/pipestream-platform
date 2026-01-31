@@ -106,7 +106,7 @@ services:
   # Apicurio Registry v3
   apicurio-registry:
     container_name: pipeline-apicurio-registry
-    image: apicurio/apicurio-registry:3.1.6
+    image: apicurio/apicurio-registry:3.1.7
     networks:
       - pipeline-test-network
     ports:
@@ -121,7 +121,7 @@ services:
 #    Uncomment to use PostgreSQL for storage
 #      APICURIO_STORAGE_KIND: 'sql'
 #      APICURIO_STORAGE_SQL_KIND: 'postgresql'
-#      # Use standard Quarkus datasource properties for 3.1.4
+#      # Use standard Quarkus datasource properties for 3.1.7
 #      APICURIO_DATASOURCE_URL: 'jdbc:postgresql://postgres:5432/apicurio_registry'
 #      APICURIO_DATASOURCE_USERNAME: 'pipeline'
 #      APICURIO_DATASOURCE_PASSWORD: 'password'
@@ -143,7 +143,7 @@ services:
   # Apicurio Registry UI
   apicurio-registry-ui:
     container_name: pipeline-apicurio-registry-ui
-    image: apicurio/apicurio-registry-ui:latest
+    image: apicurio/apicurio-registry-ui:3.1.7
     networks:
       - pipeline-test-network
     ports:

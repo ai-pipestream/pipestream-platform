@@ -55,7 +55,7 @@ public interface ApicurioRegistryProtobufBuildTimeConfig {
          * The Apicurio Registry image to use.
          *
          * <p>
-         * Defaults to {@code apicurio/apicurio-registry:3.1.6} if not
+         * Defaults to {@code apicurio/apicurio-registry:3.1.7} if not
          * specified.
          * </p>
          *

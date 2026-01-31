@@ -345,7 +345,7 @@ mp.messaging.connector.smallrye-kafka.apicurio.registry.artifact-resolver-strate
 | Property | Default | Description |
 |----------|---------|-------------|
 | `quarkus.apicurio-registry.protobuf.devservices.enabled` | `true` | Enable/disable DevServices |
-| `quarkus.apicurio-registry.protobuf.devservices.image-name` | `apicurio/apicurio-registry:3.1.4` | Container image |
+| `quarkus.apicurio-registry.protobuf.devservices.image-name` | `apicurio/apicurio-registry:3.1.7` | Container image |
 | `quarkus.apicurio-registry.protobuf.devservices.port` | Random | Fixed port (optional) |
 
 ### Compose Dev Services
@@ -367,7 +367,7 @@ Create a `compose-devservices.yaml` (or `docker-compose-devservices.yaml`) in yo
 ```yaml
 services:
   apicurio-registry:
-    image: apicurio/apicurio-registry:3.1.4
+    image: apicurio/apicurio-registry:3.1.7
     ports:
       - "8080"                                          # (1)
     environment:
@@ -408,7 +408,7 @@ services:
       LOG_DIR: "/tmp/logs"
 
   apicurio-registry:
-    image: apicurio/apicurio-registry:3.1.4
+    image: apicurio/apicurio-registry:3.1.7
     ports:
       - "8080"
     environment:
@@ -428,7 +428,7 @@ If you have an Apicurio Registry in your compose file but want the extension to 
 ```yaml
 services:
   apicurio-registry:
-    image: apicurio/apicurio-registry:3.1.4
+    image: apicurio/apicurio-registry:3.1.7
     labels:
       io.quarkus.devservices.compose.ignore: "true"     # Extension will start its own
 ```
@@ -453,7 +453,7 @@ services:
       LOG_DIR: "/tmp/logs"
 
   apicurio-registry:
-    image: apicurio/apicurio-registry:3.1.4
+    image: apicurio/apicurio-registry:3.1.7
     ports:
       - "8081:8080"
     environment:

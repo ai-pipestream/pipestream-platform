@@ -111,21 +111,14 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
             applyIfMissing(context, values, "pipestream.registration.http.base-path", httpRootPath);
         }
 
-        String healthRootPath = getOptional(context, "quarkus.smallrye-health.root-path").orElse("");
+        String healthRootPathRaw = getOptional(context, "quarkus.smallrye-health.root-path").orElse("health");
+        String healthBasePath = resolveHealthBasePath(context, httpRootPath);
         String healthPath;
-        if (!healthRootPath.isBlank()) {
-            String normalizedHealthRoot = normalizePath(healthRootPath);
-            // If explicitly set to the bare "/health", prefer the standard /q/health under the root path.
-            if ("/health".equals(normalizedHealthRoot)) {
-                healthPath = joinPaths(httpRootPath, "/q/health");
-            } else {
-                // Respect explicit health root as-is (Quarkus already applies root-path when appropriate)
-                healthPath = normalizedHealthRoot;
-            }
-        } else if (!httpRootPath.isBlank() && !"/".equals(httpRootPath)) {
-            healthPath = joinPaths(httpRootPath, "/q/health");
+        if (!healthRootPathRaw.isBlank() && healthRootPathRaw.startsWith("/")) {
+            healthPath = normalizePath(healthRootPathRaw);
         } else {
-            healthPath = "/q/health";
+            String normalizedHealthRoot = normalizePath(healthRootPathRaw);
+            healthPath = joinPaths(healthBasePath, normalizedHealthRoot);
         }
         if (isRegistrationRequired(context)) {
             healthPath = toLivenessPath(healthPath);
@@ -272,6 +265,29 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         return getOptional(context, "quarkus.http.port")
                 .map(Integer::parseInt)
                 .orElse(8080);
+    }
+
+    private String resolveHealthBasePath(ConfigSourceContext context, String httpRootPath) {
+        boolean managementEnabled = getOptional(context, "quarkus.management.enabled")
+                .map(Boolean::parseBoolean)
+                .orElse(false);
+        if (managementEnabled) {
+            String managementRoot = getOptional(context, "quarkus.management.root-path").orElse("/q");
+            return normalizePath(managementRoot);
+        }
+
+        String nonAppRootRaw = getOptional(context, "quarkus.http.non-application-root-path").orElse("q");
+        if (nonAppRootRaw.isBlank()) {
+            return "";
+        }
+        if (nonAppRootRaw.startsWith("/")) {
+            return normalizePath(nonAppRootRaw);
+        }
+        String normalizedNonApp = normalizePath(nonAppRootRaw);
+        if (httpRootPath == null || httpRootPath.isBlank() || "/".equals(httpRootPath)) {
+            return normalizedNonApp;
+        }
+        return joinPaths(httpRootPath, normalizedNonApp);
     }
 
     private boolean isRegistrationRequired(ConfigSourceContext context) {

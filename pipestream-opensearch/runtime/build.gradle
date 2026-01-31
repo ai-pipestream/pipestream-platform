@@ -1,0 +1,49 @@
+plugins {
+    alias(libs.plugins.java.library)
+    alias(libs.plugins.quarkus.extension)
+}
+
+description = 'Pipestream OpenSearch Extension - Runtime'
+
+quarkusExtension {
+    deploymentModule = 'pipestream-opensearch-deployment'
+}
+
+dependencies {
+    // Quarkus BOM provides platform properties
+    implementation platform(libs.quarkus.bom)
+
+    // Quarkus core
+    implementation 'io.quarkus:quarkus-core'
+    implementation 'io.quarkus:quarkus-arc'
+    implementation 'io.quarkus:quarkus-mutiny'
+    implementation 'io.quarkus:quarkus-smallrye-health'
+
+    // OpenSearch Java Client
+    implementation libs.opensearch.java
+    implementation libs.httpclient5
+
+    // Annotation processor for extension metadata
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+
+    // Test dependencies
+    testImplementation 'io.quarkus:quarkus-test-common'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+    testImplementation 'org.hamcrest:hamcrest'
+
+    // Gradle 9 requires explicit JUnit Platform launcher
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+    }
+}
+
+// Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution
+tasks.matching { it.name == 'validateExtension' }.configureEach {
+    enabled = false
+}

@@ -77,3 +77,13 @@ project(':pipestream-test-support-deployment').projectDir = file('pipestream-tes
 
 include 'pipestream-test-support-integration-tests'
 project(':pipestream-test-support-integration-tests').projectDir = file('pipestream-test-support/integration-tests')
+
+// 6. OpenSearch Extension
+include 'pipestream-opensearch'
+project(':pipestream-opensearch').projectDir = file('pipestream-opensearch/runtime')
+
+include 'pipestream-opensearch-deployment'
+project(':pipestream-opensearch-deployment').projectDir = file('pipestream-opensearch/deployment')
+
+include 'pipestream-opensearch-integration-tests'
+project(':pipestream-opensearch-integration-tests').projectDir = file('pipestream-opensearch/integration-tests')

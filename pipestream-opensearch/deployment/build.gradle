@@ -1,0 +1,44 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Pipestream OpenSearch Extension - Deployment'
+
+dependencies {
+    // Quarkus BOM provides platform properties
+    implementation platform(libs.quarkus.bom)
+
+    // Runtime module dependency
+    implementation project(':pipestream-opensearch')
+
+    // Quarkus deployment dependencies
+    implementation 'io.quarkus:quarkus-arc-deployment'
+    implementation 'io.quarkus:quarkus-core-deployment'
+    implementation 'io.quarkus:quarkus-smallrye-health-deployment'
+
+    // DevServices common utilities
+    implementation 'io.quarkus:quarkus-devservices-common'
+
+    // OpenSearch testcontainers for DevServices
+    implementation libs.opensearch.testcontainers
+    implementation libs.testcontainers.core
+
+    // Annotation processor for extension metadata
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+
+    // Test dependencies
+    testImplementation 'io.quarkus:quarkus-junit5-internal'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+    testImplementation 'org.hamcrest:hamcrest'
+
+    // Gradle 9 requires explicit JUnit Platform launcher
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+    }
+}

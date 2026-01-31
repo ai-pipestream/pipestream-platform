@@ -5,9 +5,11 @@ import ai.pipestream.platform.registration.v1.PlatformEventType;
 import ai.pipestream.registration.config.RegistrationConfig;
 import ai.pipestream.registration.model.RegistrationState;
 import ai.pipestream.registration.model.ServiceInfo;
+import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import io.smallrye.mutiny.subscription.Cancellable;
+import io.vertx.mutiny.core.Vertx;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
@@ -32,18 +34,23 @@ public class ServiceRegistrationManager {
     private final RegistrationClient registrationClient;
     private final ServiceMetadataCollector metadataCollector;
     private final RegistrationConfig config;
+    private final Vertx vertx;
 
     private final AtomicReference<String> serviceId = new AtomicReference<>();
     private final AtomicReference<RegistrationState> state = new AtomicReference<>(RegistrationState.UNREGISTERED);
     private volatile Cancellable registrationSubscription;
+    private final Object timeoutLock = new Object();
+    private volatile Long requiredTimeoutTimerId;
 
     @Inject
     public ServiceRegistrationManager(RegistrationClient registrationClient,
                                        ServiceMetadataCollector metadataCollector,
-                                       RegistrationConfig config) {
+                                       RegistrationConfig config,
+                                       Vertx vertx) {
         this.registrationClient = registrationClient;
         this.metadataCollector = metadataCollector;
         this.config = config;
+        this.vertx = vertx;
     }
 
     void onStart(@Observes StartupEvent ev) {
@@ -53,6 +60,7 @@ public class ServiceRegistrationManager {
         }
 
         LOG.info("Starting service registration");
+        scheduleRequiredTimeout();
         registerWithRetry();
     }
 
@@ -62,6 +70,7 @@ public class ServiceRegistrationManager {
         }
 
         LOG.info("Shutting down service registration");
+        cancelRequiredTimeout();
 
         // Cancel any ongoing registration
         if (registrationSubscription != null) {
@@ -79,7 +88,7 @@ public class ServiceRegistrationManager {
         state.set(RegistrationState.REGISTERING);
         ServiceInfo serviceInfo = metadataCollector.collect();
 
-        int maxAttempts = config.retry().maxAttempts();
+        long maxAttempts = config.required() ? Long.MAX_VALUE : config.retry().maxAttempts();
         Duration initialDelay = config.retry().initialDelay();
         Duration maxDelay = config.retry().maxDelay();
 
@@ -134,6 +143,7 @@ public class ServiceRegistrationManager {
             String newServiceId = event.getServiceId();
             serviceId.set(newServiceId);
             state.set(RegistrationState.REGISTERED);
+            cancelRequiredTimeout();
             LOG.infof("Service registered successfully with ID: %s", newServiceId);
         } else if (event.getEventType() == PlatformEventType.PLATFORM_EVENT_TYPE_FAILED) {
             LOG.errorf("Registration failed: %s", event.getErrorDetail());
@@ -208,6 +218,62 @@ public class ServiceRegistrationManager {
         // Use a simple delay mechanism - in a real implementation, you might want
         // to use a scheduler, but for now we'll trigger it immediately with retry logic
         // The retry logic in registerWithRetry will handle the backoff
+        scheduleRequiredTimeout();
         registerWithRetry();
+    }
+
+    private void scheduleRequiredTimeout() {
+        if (!config.required()) {
+            return;
+        }
+        Duration timeout = config.requiredTimeout();
+        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
+            LOG.warn("Registration required but required-timeout is not positive; skipping timeout enforcement");
+            return;
+        }
+        synchronized (timeoutLock) {
+            if (requiredTimeoutTimerId != null) {
+                return;
+            }
+            requiredTimeoutTimerId = vertx.setTimer(timeout.toMillis(), id -> handleRequiredTimeout(timeout));
+        }
+        LOG.infof("Registration required: waiting up to %s for platform-registration", timeout);
+    }
+
+    private void cancelRequiredTimeout() {
+        Long timerId;
+        synchronized (timeoutLock) {
+            timerId = requiredTimeoutTimerId;
+            requiredTimeoutTimerId = null;
+        }
+        if (timerId != null) {
+            vertx.cancelTimer(timerId);
+        }
+    }
+
+    private void handleRequiredTimeout(Duration timeout) {
+        synchronized (timeoutLock) {
+            requiredTimeoutTimerId = null;
+        }
+        if (state.get() == RegistrationState.REGISTERED) {
+            return;
+        }
+        String diagnostics = buildRegistrationDiagnostics();
+        LOG.errorf("Registration required but not completed within %s. " +
+                        "Ensure platform-registration-service is reachable or set pipestream.registration.required=false. %s",
+                timeout, diagnostics);
+        if (registrationSubscription != null) {
+            registrationSubscription.cancel();
+        }
+        state.set(RegistrationState.FAILED);
+        Quarkus.asyncExit(1);
+    }
+
+    private String buildRegistrationDiagnostics() {
+        String discoveryName = config.registrationService().discoveryName().orElse("platform-registration");
+        String host = config.registrationService().host().orElse("<unset>");
+        String port = config.registrationService().port().map(String::valueOf).orElse("<unset>");
+        return String.format("Discovery=%s Consul=%s:%d Host=%s Port=%s",
+                discoveryName, config.consul().host(), config.consul().port(), host, port);
     }
 }

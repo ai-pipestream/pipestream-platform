@@ -479,6 +479,12 @@ All settings have sensible defaults. Override as needed in your `application.pro
 # Enable/disable registration (default: true)
 pipestream.registration.enabled=true
 
+# Require successful registration before readiness (default: false)
+pipestream.registration.required=false
+# Timeout for required registration before shutdown (default: 10m)
+pipestream.registration.required-timeout=10m
+# When required, readiness stays DOWN until registration succeeds.
+
 # Service identity (auto-detected from quarkus.application.name/version)
 pipestream.registration.service-name=my-service
 pipestream.registration.version=1.0.0

@@ -32,6 +32,9 @@ services only configure ports and optional overrides.
 - Registration service discovery (all environments):
   - `pipestream.registration.registration-service.discovery-name=platform-registration`
   - Consul defaults: `localhost:8500` unless overridden
+- Registration requirement:
+  - `pipestream.registration.required=true` (dev/prod default)
+  - `%test.pipestream.registration.required=false`
 - HTTP registration:
   - enabled by default
   - base path: `quarkus.http.root-path`

@@ -61,11 +61,14 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
                 hostDefaults.internalHost(), "0.0.0.0");
         applyIfMissing(context, values, "pipestream.registration.registration-service.discovery-name", "platform-registration");
         logDiscoveryDefaults(values.get("pipestream.registration.registration-service.discovery-name"));
+        applyIfMissing(context, values, "pipestream.registration.required", "true");
+        applyIfMissing(context, values, "%test.pipestream.registration.required", "false");
 
         // Prefer the shared HTTP server for gRPC unless explicitly overridden
         applyIfMissing(context, values, "quarkus.grpc.server.use-separate-server", "false");
         // gRPC defaults: health + reflection + large messages
-        applyIfMissing(context, values, "quarkus.grpc.server.enable-health-service", "true");
+        applyIfMissing(context, values, "quarkus.grpc.server.health.enabled", "true");
+        applyIfMissing(context, values, "quarkus.grpc.server.grpc-health.enabled", "true");
         applyIfMissing(context, values, "quarkus.grpc.server.enable-reflection-service", "true");
         applyIfMissing(context, values, "quarkus.grpc.server.max-inbound-message-size", "2147483647");
 

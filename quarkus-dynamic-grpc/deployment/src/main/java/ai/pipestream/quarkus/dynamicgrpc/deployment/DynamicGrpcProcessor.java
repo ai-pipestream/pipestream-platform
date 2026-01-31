@@ -13,7 +13,9 @@ import ai.pipestream.quarkus.dynamicgrpc.discovery.StandaloneServiceDiscoveryPro
 import ai.pipestream.quarkus.dynamicgrpc.discovery.StandaloneVertxProducer;
 import ai.pipestream.quarkus.dynamicgrpc.metrics.DynamicGrpcMetrics;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 
@@ -26,6 +28,8 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 public class DynamicGrpcProcessor {
 
     private static final String FEATURE = "dynamic-grpc";
+    private static final String GROUP_ID = "ai.pipestream";
+    private static final String ARTIFACT_ID = "quarkus-dynamic-grpc";
 
     /**
      * Registers the extension feature.
@@ -35,6 +39,11 @@ public class DynamicGrpcProcessor {
     @BuildStep
     FeatureBuildItem feature() {
         return new FeatureBuildItem(FEATURE);
+    }
+
+    @BuildStep
+    void indexDependencies(BuildProducer<IndexDependencyBuildItem> indexDependencies) {
+        indexDependencies.produce(new IndexDependencyBuildItem(GROUP_ID, ARTIFACT_ID));
     }
 
     /**

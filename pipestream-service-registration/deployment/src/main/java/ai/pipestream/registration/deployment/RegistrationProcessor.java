@@ -4,7 +4,9 @@ import ai.pipestream.registration.RegistrationClient;
 import ai.pipestream.registration.ServiceMetadataCollector;
 import ai.pipestream.registration.ServiceRegistrationManager;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 
 /**
@@ -16,10 +18,17 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 public class RegistrationProcessor {
 
     private static final String FEATURE = "pipestream-service-registration";
+    private static final String GROUP_ID = "ai.pipestream";
+    private static final String ARTIFACT_ID = "pipestream-service-registration";
 
     @BuildStep
     FeatureBuildItem feature() {
         return new FeatureBuildItem(FEATURE);
+    }
+
+    @BuildStep
+    void indexDependencies(BuildProducer<IndexDependencyBuildItem> indexDependencies) {
+        indexDependencies.produce(new IndexDependencyBuildItem(GROUP_ID, ARTIFACT_ID));
     }
 
     @BuildStep

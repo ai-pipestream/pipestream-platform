@@ -4,15 +4,19 @@ import ai.pipestream.platform.registration.v1.ServiceType;
 import ai.pipestream.registration.config.RegistrationConfig;
 import ai.pipestream.registration.model.HttpEndpointInfo;
 import ai.pipestream.registration.model.ServiceInfo;
+import io.quarkus.grpc.runtime.GrpcServerRecorder;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import java.net.URI;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Collects service metadata for registration.
@@ -24,6 +28,11 @@ import java.util.Map;
 public class ServiceMetadataCollector {
 
     private static final Logger LOG = Logger.getLogger(ServiceMetadataCollector.class);
+    private static final Set<String> RESERVED_GRPC_SERVICES = Set.of(
+            "grpc.health.v1.Health",
+            "grpc.reflection.v1.ServerReflection",
+            "grpc.reflection.v1alpha.ServerReflection"
+    );
 
     private final RegistrationConfig config;
 
@@ -65,6 +74,7 @@ public class ServiceMetadataCollector {
         List<String> tags = config.tags().orElse(Collections.emptyList());
         List<String> capabilities = config.capabilities().orElse(Collections.emptyList());
         List<HttpEndpointInfo> httpEndpoints = collectHttpEndpoints(advertisedHost);
+        List<String> grpcServices = collectGrpcServices();
         String httpSchema = config.http().schema().orElse(null);
         String httpSchemaVersion = config.http().schemaVersion().orElse(null);
         String httpSchemaArtifactId = config.http().schemaArtifactId().orElse(null);
@@ -82,6 +92,7 @@ public class ServiceMetadataCollector {
                 .tags(tags)
                 .capabilities(capabilities)
                 .httpEndpoints(httpEndpoints)
+                .grpcServices(grpcServices)
                 .httpSchema(httpSchema)
                 .httpSchemaVersion(httpSchemaVersion)
                 .httpSchemaArtifactId(httpSchemaArtifactId)
@@ -145,16 +156,34 @@ public class ServiceMetadataCollector {
         int port = httpConfig.advertisedPort().orElse(httpPort);
         String basePath = httpConfig.basePath().orElse(httpRootPath == null ? "" : httpRootPath);
         String healthPath = httpConfig.healthPath();
+        boolean tlsEnabled = httpConfig.tlsEnabled();
+
+        HealthUrlOverride override = null;
         if (httpConfig.healthUrl().isPresent()) {
-            healthPath = httpConfig.healthUrl().get();
-        } else if (!basePath.isBlank()
+            String rawHealthUrl = httpConfig.healthUrl().get();
+            override = parseHealthUrl(rawHealthUrl, port);
+            if (override != null) {
+                scheme = override.scheme();
+                host = override.host();
+                port = override.port();
+                healthPath = override.healthPath();
+                if ("https".equalsIgnoreCase(scheme)) {
+                    tlsEnabled = true;
+                }
+            } else {
+                // Treat as a direct health-path override when not a full URL.
+                healthPath = rawHealthUrl;
+            }
+        }
+
+        if (override == null
+                && !basePath.isBlank()
                 && !healthPath.isBlank()
                 && !healthPath.equals("/q/health")
                 && healthPath.startsWith("/")
                 && !healthPath.startsWith(basePath)) {
             LOG.warnf("HTTP health path '%s' does not include base path '%s'; the registration service will prepend it.", healthPath, basePath);
         }
-        boolean tlsEnabled = httpConfig.tlsEnabled();
 
         HttpEndpointInfo endpoint = new HttpEndpointInfo(
             scheme,
@@ -166,6 +195,56 @@ public class ServiceMetadataCollector {
         );
 
         return List.of(endpoint);
+    }
+
+    private List<String> collectGrpcServices() {
+        try {
+            List<GrpcServerRecorder.GrpcServiceDefinition> definitions = GrpcServerRecorder.getServices();
+            if (definitions == null || definitions.isEmpty()) {
+                return Collections.emptyList();
+            }
+            return definitions.stream()
+                    .map(definition -> definition.definition.getServiceDescriptor().getName())
+                    .filter(name -> name != null && !name.isBlank())
+                    .filter(name -> !RESERVED_GRPC_SERVICES.contains(name))
+                    .distinct()
+                    .sorted()
+                    .collect(Collectors.toList());
+        } catch (Exception | NoClassDefFoundError e) {
+            LOG.debug("gRPC services are unavailable for registration", e);
+            return Collections.emptyList();
+        }
+    }
+
+    private HealthUrlOverride parseHealthUrl(String rawHealthUrl, int fallbackPort) {
+        if (rawHealthUrl == null || rawHealthUrl.isBlank()) {
+            return null;
+        }
+        try {
+            URI uri = URI.create(rawHealthUrl);
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+            if (scheme == null || host == null) {
+                return null;
+            }
+            int port = uri.getPort();
+            int resolvedPort = port != -1 ? port : fallbackPort;
+            String path = uri.getRawPath();
+            if (path == null || path.isBlank()) {
+                path = "/";
+            }
+            String query = uri.getRawQuery();
+            if (query != null && !query.isBlank()) {
+                path = path + "?" + query;
+            }
+            return new HealthUrlOverride(scheme, host, resolvedPort, path);
+        } catch (IllegalArgumentException e) {
+            LOG.warnf("Invalid health-url '%s'; treating as health-path override.", rawHealthUrl);
+            return null;
+        }
+    }
+
+    private record HealthUrlOverride(String scheme, String host, int port, String healthPath) {
     }
 
     private String getQuarkusVersion() {

@@ -81,17 +81,17 @@ There are two ways to connect to the platform-registration-service:
 
 If you have Consul running, the extension will automatically discover the registration service. With default settings (no explicit host/port configured), it will:
 1. Connect to Consul at `localhost:8500`
-2. Look up the service named `platform-registration-service`
+2. Look up the service named `platform-registration`
 3. Use the discovered host/port for gRPC connection
 
 ```properties
-# Zero-config: Uses Consul at localhost:8500 to discover "platform-registration-service"
+# Zero-config: Uses Consul at localhost:8500 to discover "platform-registration"
 # (No configuration needed - this is the default behavior)
 
 # Or explicitly configure Consul and/or service name:
 pipestream.registration.consul.host=consul.example.com
 pipestream.registration.consul.port=8500
-pipestream.registration.registration-service.discovery-name=platform-registration-service
+pipestream.registration.registration-service.discovery-name=platform-registration
 ```
 
 **Option B: Direct Connection**
@@ -104,7 +104,7 @@ pipestream.registration.registration-service.host=platform-registration-service.
 pipestream.registration.registration-service.port=9090
 ```
 
-> **Note:** If `host` and `port` are not configured, the extension assumes Consul is available and attempts service discovery first. To use direct connection, set both `host` and `port` explicitly.
+> **Note:** If `host` and `port` are not configured, the extension assumes Consul is available and attempts service discovery. To use direct connection, set both `host` and `port` explicitly (any `discovery-name` will be ignored).
 
 **Step 4: Configure network settings**
 
@@ -452,7 +452,7 @@ Or for Maven:
 
 ### 2. Configure the registration service connection (optional)
 
-By default, the extension discovers the registration service via Consul at `localhost:8500`. If Consul is running with `platform-registration-service` registered, no configuration is needed.
+By default, the extension discovers the registration service via Consul at `localhost:8500`. If Consul is running with `platform-registration` registered, no configuration is needed.
 
 For non-Consul environments, specify the endpoint directly in `application.properties`:
 
@@ -478,6 +478,12 @@ All settings have sensible defaults. Override as needed in your `application.pro
 ```properties
 # Enable/disable registration (default: true)
 pipestream.registration.enabled=true
+
+# Require successful registration before readiness (default: false)
+pipestream.registration.required=false
+# Timeout for required registration before shutdown (default: 10m)
+pipestream.registration.required-timeout=10m
+# When required, readiness stays DOWN until registration succeeds.
 
 # Service identity (auto-detected from quarkus.application.name/version)
 pipestream.registration.service-name=my-service
@@ -509,15 +515,15 @@ The extension supports two methods for locating the platform-registration-servic
 
 **Method 1: Consul Service Discovery (Default)**
 
-When `host` and `port` are not configured, or when `discovery-name` is set, the extension automatically attempts Consul service discovery:
+When `host` and `port` are not configured, the extension automatically attempts Consul service discovery (using `discovery-name` when set):
 
 ```properties
 # Consul client configuration (defaults shown)
 pipestream.registration.consul.host=localhost
 pipestream.registration.consul.port=8500
 
-# Service name to look up in Consul (default: platform-registration-service)
-pipestream.registration.registration-service.discovery-name=platform-registration-service
+# Service name to look up in Consul (default: platform-registration)
+pipestream.registration.registration-service.discovery-name=platform-registration
 ```
 
 **Method 2: Direct Connection**
@@ -538,20 +544,16 @@ pipestream.registration.registration-service.tls-enabled=false
 
 ```mermaid
 flowchart TD
-    A[Start] --> B{discovery-name set?}
-    B -->|Yes| C["Try Consul with<br/>specified name"]
-    B -->|No| D{host AND port set?}
-    D -->|No| E["Try Consul with<br/>'platform-registration-service'"]
-    D -->|Yes| F[Use direct connection]
-    C --> G{Consul success?}
-    E --> G
-    G -->|Yes| H[Use discovered host:port]
-    G -->|No| I["Fall back to localhost:9090"]
-    F --> J[Connect to configured host:port]
+    A[Start] --> B{host AND port set?}
+    B -->|Yes| C[Use direct connection]
+    B -->|No| D["Try Consul with<br/>discovery-name or default"]
+    D --> E{Consul success?}
+    E -->|Yes| F[Use discovered host:port]
+    E -->|No| G["No discovery result<br/>and no host/port"]
 
-    H --> K[gRPC Channel Created]
-    I --> K
-    J --> K
+    C --> H[gRPC Channel Created]
+    F --> H
+    G --> I[Registration retries (or fails if required timeout expires)]
 
     style H fill:#c8e6c9
     style I fill:#fff3e0

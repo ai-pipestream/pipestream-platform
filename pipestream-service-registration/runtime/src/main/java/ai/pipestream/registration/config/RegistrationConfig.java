@@ -27,6 +27,19 @@ public interface RegistrationConfig {
     boolean enabled();
 
     /**
+     * Whether successful registration is required for readiness.
+     */
+    @WithDefault("false")
+    boolean required();
+
+    /**
+     * Maximum time to wait for required registration before failing startup.
+     */
+    @WithName("required-timeout")
+    @WithDefault("10m")
+    Duration requiredTimeout();
+
+    /**
      * The name of the service to register.
      * Defaults to the value of quarkus.application.name if not specified.
      */

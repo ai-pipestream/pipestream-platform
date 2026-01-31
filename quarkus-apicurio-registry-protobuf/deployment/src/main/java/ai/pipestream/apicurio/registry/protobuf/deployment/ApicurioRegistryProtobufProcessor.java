@@ -11,6 +11,7 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigurationDefaultBuildItem;
@@ -31,6 +32,8 @@ class ApicurioRegistryProtobufProcessor {
     private static final Logger LOGGER = Logger.getLogger(ApicurioRegistryProtobufProcessor.class);
 
     private static final String FEATURE = "apicurio-registry-protobuf";
+    private static final String APICURIO_GROUP_ID = "io.apicurio";
+    private static final String APICURIO_ARTIFACT_ID = "apicurio-registry-protobuf-serde-kafka";
 
     private static final DotName MESSAGE_LITE = DotName.createSimple("com.google.protobuf.MessageLite");
     private static final DotName GENERATED_MESSAGE = DotName.createSimple("com.google.protobuf.GeneratedMessage");
@@ -46,6 +49,11 @@ class ApicurioRegistryProtobufProcessor {
     @BuildStep
     FeatureBuildItem feature() {
         return new FeatureBuildItem(FEATURE);
+    }
+
+    @BuildStep
+    void indexDependencies(BuildProducer<IndexDependencyBuildItem> indexDependencies) {
+        indexDependencies.produce(new IndexDependencyBuildItem(APICURIO_GROUP_ID, APICURIO_ARTIFACT_ID));
     }
 
     @BuildStep

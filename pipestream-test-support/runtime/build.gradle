@@ -22,6 +22,7 @@ dependencies {
     implementation libs.testcontainers.consul
     implementation libs.testcontainers.redis
     implementation libs.testcontainers.postgresql
+    implementation libs.opensearch.testcontainers
     implementation 'org.slf4j:slf4j-api'
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 

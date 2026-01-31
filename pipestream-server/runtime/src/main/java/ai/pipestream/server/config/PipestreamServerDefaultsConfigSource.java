@@ -61,13 +61,22 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
                 hostDefaults.internalHost(), "0.0.0.0");
         applyIfMissing(context, values, "pipestream.registration.registration-service.discovery-name", "platform-registration");
         logDiscoveryDefaults(values.get("pipestream.registration.registration-service.discovery-name"));
+        applyIfMissing(context, values, "pipestream.registration.required", "true");
+        applyIfMissing(context, values, "%test.pipestream.registration.required", "false");
 
         // Prefer the shared HTTP server for gRPC unless explicitly overridden
         applyIfMissing(context, values, "quarkus.grpc.server.use-separate-server", "false");
         // gRPC defaults: health + reflection + large messages
-        applyIfMissing(context, values, "quarkus.grpc.server.enable-health-service", "true");
+        applyIfMissing(context, values, "quarkus.grpc.server.health.enabled", "true");
+        applyIfMissing(context, values, "quarkus.grpc.server.grpc-health.enabled", "true");
         applyIfMissing(context, values, "quarkus.grpc.server.enable-reflection-service", "true");
         applyIfMissing(context, values, "quarkus.grpc.server.max-inbound-message-size", "2147483647");
+
+        // OpenAPI defaults
+        applyIfMissing(context, values, "quarkus.swagger-ui.always-include", "true");
+        applyIfMissing(context, values, "quarkus.smallrye-openapi.info-title", resolveOpenApiTitle(context));
+        applyIfMissing(context, values, "quarkus.smallrye-openapi.info-version", resolveOpenApiVersion(context));
+        applyIfMissing(context, values, "quarkus.smallrye-openapi.info-description", resolveOpenApiDescription(context));
 
         // Dev profile: compose devservices defaults (shared infra)
         applyIfMissing(context, values, "%dev.quarkus.devservices.enabled", "true");
@@ -102,21 +111,17 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
             applyIfMissing(context, values, "pipestream.registration.http.base-path", httpRootPath);
         }
 
-        String healthRootPath = getOptional(context, "quarkus.smallrye-health.root-path").orElse("");
+        String healthRootPathRaw = getOptional(context, "quarkus.smallrye-health.root-path").orElse("health");
+        String healthBasePath = resolveHealthBasePath(context, httpRootPath);
         String healthPath;
-        if (!healthRootPath.isBlank()) {
-            String normalizedHealthRoot = normalizePath(healthRootPath);
-            // If explicitly set to the bare "/health", prefer the standard /q/health under the root path.
-            if ("/health".equals(normalizedHealthRoot)) {
-                healthPath = joinPaths(httpRootPath, "/q/health");
-            } else {
-                // Respect explicit health root as-is (Quarkus already applies root-path when appropriate)
-                healthPath = normalizedHealthRoot;
-            }
-        } else if (!httpRootPath.isBlank() && !"/".equals(httpRootPath)) {
-            healthPath = joinPaths(httpRootPath, "/q/health");
+        if (!healthRootPathRaw.isBlank() && healthRootPathRaw.startsWith("/")) {
+            healthPath = normalizePath(healthRootPathRaw);
         } else {
-            healthPath = "/q/health";
+            String normalizedHealthRoot = normalizePath(healthRootPathRaw);
+            healthPath = joinPaths(healthBasePath, normalizedHealthRoot);
+        }
+        if (isRegistrationRequired(context)) {
+            healthPath = toLivenessPath(healthPath);
         }
         applyIfMissing(context, values, "pipestream.registration.http.health-path", healthPath);
 
@@ -162,6 +167,24 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         return new HostDefaults(advertisedHost, internalHost);
     }
 
+    private String resolveOpenApiTitle(ConfigSourceContext context) {
+        return firstNonBlank(
+                getOptional(context, "quarkus.application.name"),
+                getOptional(context, "pipestream.registration.service-name"))
+                .orElse(null);
+    }
+
+    private String resolveOpenApiVersion(ConfigSourceContext context) {
+        return firstNonBlank(
+                getOptional(context, "quarkus.application.version"),
+                getOptional(context, "pipestream.registration.version"))
+                .orElse(null);
+    }
+
+    private String resolveOpenApiDescription(ConfigSourceContext context) {
+        return getOptional(context, "pipestream.registration.description").orElse(null);
+    }
+
     private String resolveDefaultHost(String mode, ConfigSourceContext context) {
         boolean prod = isProdProfile(context);
 
@@ -191,6 +214,11 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
                 || "production".equalsIgnoreCase(profile)
                 || "prod".equalsIgnoreCase(pipelineEnv)
                 || "production".equalsIgnoreCase(pipelineEnv);
+    }
+
+    private boolean isTestProfile(ConfigSourceContext context) {
+        String profile = getOptional(context, "quarkus.profile").orElse("");
+        return "test".equalsIgnoreCase(profile);
     }
 
     private String resolveHostname(ConfigSourceContext context) {
@@ -237,6 +265,37 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         return getOptional(context, "quarkus.http.port")
                 .map(Integer::parseInt)
                 .orElse(8080);
+    }
+
+    private String resolveHealthBasePath(ConfigSourceContext context, String httpRootPath) {
+        boolean managementEnabled = getOptional(context, "quarkus.management.enabled")
+                .map(Boolean::parseBoolean)
+                .orElse(false);
+        if (managementEnabled) {
+            String managementRoot = getOptional(context, "quarkus.management.root-path").orElse("/q");
+            return normalizePath(managementRoot);
+        }
+
+        String nonAppRootRaw = getOptional(context, "quarkus.http.non-application-root-path").orElse("q");
+        if (nonAppRootRaw.isBlank()) {
+            return "";
+        }
+        if (nonAppRootRaw.startsWith("/")) {
+            return normalizePath(nonAppRootRaw);
+        }
+        String normalizedNonApp = normalizePath(nonAppRootRaw);
+        if (httpRootPath == null || httpRootPath.isBlank() || "/".equals(httpRootPath)) {
+            return normalizedNonApp;
+        }
+        return joinPaths(httpRootPath, normalizedNonApp);
+    }
+
+    private boolean isRegistrationRequired(ConfigSourceContext context) {
+        Optional<String> required = getOptional(context, "pipestream.registration.required");
+        if (required.isPresent()) {
+            return Boolean.parseBoolean(required.get());
+        }
+        return !isTestProfile(context);
     }
 
     private boolean isHttpRegistrationEnabled(ConfigSourceContext context) {
@@ -306,6 +365,20 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
             return health;
         }
         return base + health;
+    }
+
+    private String toLivenessPath(String healthPath) {
+        String normalized = normalizePath(healthPath);
+        if (normalized.endsWith("/live")) {
+            return normalized;
+        }
+        if (normalized.endsWith("/health")) {
+            return normalized + "/live";
+        }
+        if (normalized.endsWith("/ready")) {
+            return normalized.replace("/ready", "/live");
+        }
+        return normalized + "/live";
     }
 
     private record HostDefaults(String advertisedHost, String internalHost) {

@@ -189,7 +189,6 @@ services:
       retries: 5
       start_period: 60s
 
-  # OpenSearch Dashboards
   opensearch-dashboards:
     container_name: pipeline-opensearch-dashboards
     image: opensearchproject/opensearch-dashboards:3.4.0
@@ -200,12 +199,12 @@ services:
     environment:
       OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
       DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+    # Change to service_started so it doesn't wait for the 60s OpenSearch health check
     depends_on:
       opensearch:
         condition: service_started
     labels:
       io.quarkus.devservices.compose.wait_for.ports.disable: "true"
-      # No health check dependency - starts after OpenSearch is available but doesn't block startup
 
   # SeaweedFS for S3-compatible storage & high-performance Filer
   seaweedfs:
@@ -218,7 +217,7 @@ services:
       - "9333:9333"     # Master UI / HTTP API
       - "8888:8888"     # Filer UI / HTTP API
       - "18080:18080"   # Volume Server (Internal)
-    command: 'server -s3 -filer -dir=/data -s3.allowEmptyFolder=true -s3.config=/etc/seaweedfs/s3.json'
+    command: 'server -s3 -filer -dir=/data -s3.allowEmptyFolder=true -volume.max=5 -s3.config=/etc/seaweedfs/s3.json'
     volumes:
       - seaweedfs-data:/data
       # S3 authentication config (required for signed requests from AWS SDK)
@@ -228,10 +227,10 @@ services:
       quarkus-dev-service-s3: shared
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9333/cluster/status"]
-      interval: 10s
-      timeout: 5s
+      interval: 2s        # Check every 2 seconds instead of 10
+      timeout: 2s
       retries: 5
-      start_period: 30s
+      start_period: 5s    # Start checking almost immediately
 
   # Kafka UI for monitoring and management
   kafka-ui:
@@ -246,12 +245,14 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
       KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://apicurio-registry:8080/apis/ccompat/v7
       DYNAMIC_CONFIG_ENABLED: 'true'
+    # Remove the dependency check or set to service_started
     depends_on:
-      - kafka
-      - apicurio-registry
+      kafka:
+        condition: service_started
+      apicurio-registry:
+        condition: service_started
     labels:
       io.quarkus.devservices.compose.wait_for.ports.disable: "true"
-      # No health check dependency - starts after services are available but doesn't block startup
 
 
   # Grafana LGTM (Grafana + OTel Collector + Prometheus + Tempo + Loki)

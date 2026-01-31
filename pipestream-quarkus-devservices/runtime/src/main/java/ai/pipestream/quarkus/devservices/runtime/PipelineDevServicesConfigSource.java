@@ -1,6 +1,5 @@
 package ai.pipestream.quarkus.devservices.runtime;
 
-import io.quarkus.runtime.LaunchMode;
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.jboss.logging.Logger;
 
@@ -15,7 +14,6 @@ import java.util.Set;
  *
  * <p>This enables zero-config development by automatically configuring:</p>
  * <ul>
- *   <li>Kafka bootstrap servers</li>
  *   <li>OpenSearch connection</li>
  *   <li>Consul service discovery</li>
  *   <li>OTLP observability endpoints</li>
@@ -33,8 +31,6 @@ public class PipelineDevServicesConfigSource implements ConfigSource {
 
     private static final Logger LOG = Logger.getLogger(PipelineDevServicesConfigSource.class);
     private static final String PREFIX = "quarkus.compose.devservices.";
-    private static final String KAFKA_BOOTSTRAP_SERVERS = "kafka.bootstrap.servers";
-    private static final String KAFKA_BOOTSTRAP_DEFAULT = "localhost:9094";
 
     /**
      * Standard service connection properties for local development.
@@ -63,18 +59,7 @@ public class PipelineDevServicesConfigSource implements ConfigSource {
         // OpenTelemetry OTLP endpoint (port 5317 for gRPC)
         DEV_SERVICE_PROPERTIES.put("quarkus.otel.exporter.otlp.endpoint", "http://localhost:5317");
 
-        // S3 (SeaweedFS) configuration (port 8333)
-        // Disable default S3 dev service (LocalStack) since we provide our own shared SeaweedFS
-        DEV_SERVICE_PROPERTIES.put("quarkus.s3.devservices.enabled", "false");
-        DEV_SERVICE_PROPERTIES.put("quarkus.s3.endpoint-override", "http://localhost:8333");
-        DEV_SERVICE_PROPERTIES.put("quarkus.s3.path-style-access", "true");
-        DEV_SERVICE_PROPERTIES.put("quarkus.s3.aws.region", "us-east-1");
-        DEV_SERVICE_PROPERTIES.put("quarkus.s3.aws.credentials.type", "static");
-        DEV_SERVICE_PROPERTIES.put("quarkus.s3.aws.credentials.static-provider.access-key-id", "any");
-        DEV_SERVICE_PROPERTIES.put("quarkus.s3.aws.credentials.static-provider.secret-access-key", "any");
-
-        // Note: Kafka bootstrap servers are injected only in dev mode (see shouldInjectKafkaBootstrap()).
-        // Tests rely on Kafka DevServices to configure the bootstrap servers dynamically.
+        // Note: Kafka/S3 properties are supplied via Compose DevServices config mapping.
     }
 
     @Override
@@ -92,9 +77,6 @@ public class PipelineDevServicesConfigSource implements ConfigSource {
 
             // Auto-injected service connection properties
             names.addAll(DEV_SERVICE_PROPERTIES.keySet());
-            if (shouldInjectKafkaBootstrap()) {
-                names.add(KAFKA_BOOTSTRAP_SERVERS);
-            }
         }
         return names;
     }
@@ -115,14 +97,6 @@ public class PipelineDevServicesConfigSource implements ConfigSource {
                 LOG.infof("Pipeline DevServices config: %s = %s", propKey, value);
             }
             return value;
-        }
-
-        if (KAFKA_BOOTSTRAP_SERVERS.equals(propertyName)) {
-            if (shouldInjectKafkaBootstrap()) {
-                LOG.infof("Auto-injecting dev service property: %s = %s", propertyName, KAFKA_BOOTSTRAP_DEFAULT);
-                return KAFKA_BOOTSTRAP_DEFAULT;
-            }
-            return null;
         }
 
         // Handle auto-injected service connection properties
@@ -146,9 +120,5 @@ public class PipelineDevServicesConfigSource implements ConfigSource {
         // but can still be overridden by application.properties (ordinal 260+)
         // and environment variables (ordinal 300)
         return 250;
-    }
-
-    private static boolean shouldInjectKafkaBootstrap() {
-        return LaunchMode.current() == LaunchMode.DEVELOPMENT;
     }
 }

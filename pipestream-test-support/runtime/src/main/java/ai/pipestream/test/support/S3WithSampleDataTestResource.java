@@ -98,7 +98,7 @@ public class S3WithSampleDataTestResource extends S3TestResource {
 
     @Override
     public Map<String, String> start() {
-        // Start S3 (SeaweedFS) first (or reuse singleton)
+        // Start S3 (LocalStack/DevServices) first (or reuse singleton)
         Map<String, String> config = super.start();
 
         // Upload sample data once per JVM when using the shared container

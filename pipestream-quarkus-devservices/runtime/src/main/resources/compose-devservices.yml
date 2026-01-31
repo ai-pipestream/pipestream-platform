@@ -92,10 +92,12 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_HEAP_OPTS: -Xmx4096M
+      KAFKA_BOOTSTRAP_SERVERS: "localhost:9094"
     volumes:
       - kafka-data:/var/lib/kafka/data
     labels:
       quarkus-dev-service-kafka: shared
+      io.quarkus.devservices.compose.config_map.env.KAFKA_BOOTSTRAP_SERVERS: kafka.bootstrap.servers
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
       interval: 10s
@@ -217,6 +219,14 @@ services:
       - "9333:9333"     # Master UI / HTTP API
       - "8888:8888"     # Filer UI / HTTP API
       - "18080:18080"   # Volume Server (Internal)
+    environment:
+      S3_DEVSERVICES_ENABLED: "false"
+      SEAWEEDFS_S3_ENDPOINT: "http://localhost:8333"
+      S3_PATH_STYLE_ACCESS: "true"
+      S3_AWS_REGION: "us-east-1"
+      S3_CREDENTIALS_TYPE: "static"
+      S3_ACCESS_KEY_ID: "any"
+      S3_SECRET_ACCESS_KEY: "any"
     command: 'server -s3 -filer -dir=/data -s3.allowEmptyFolder=true -volume.max=5 -s3.config=/etc/seaweedfs/s3.json'
     volumes:
       - seaweedfs-data:/data
@@ -225,6 +235,13 @@ services:
     labels:
       # Map to your Quarkus dev services if needed
       quarkus-dev-service-s3: shared
+      io.quarkus.devservices.compose.config_map.env.S3_DEVSERVICES_ENABLED: quarkus.s3.devservices.enabled
+      io.quarkus.devservices.compose.config_map.env.SEAWEEDFS_S3_ENDPOINT: quarkus.s3.endpoint-override
+      io.quarkus.devservices.compose.config_map.env.S3_PATH_STYLE_ACCESS: quarkus.s3.path-style-access
+      io.quarkus.devservices.compose.config_map.env.S3_AWS_REGION: quarkus.s3.aws.region
+      io.quarkus.devservices.compose.config_map.env.S3_CREDENTIALS_TYPE: quarkus.s3.aws.credentials.type
+      io.quarkus.devservices.compose.config_map.env.S3_ACCESS_KEY_ID: quarkus.s3.aws.credentials.static-provider.access-key-id
+      io.quarkus.devservices.compose.config_map.env.S3_SECRET_ACCESS_KEY: quarkus.s3.aws.credentials.static-provider.secret-access-key
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9333/cluster/status"]
       interval: 2s        # Check every 2 seconds instead of 10

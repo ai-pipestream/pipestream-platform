@@ -1,6 +1,5 @@
 package ai.pipestream.quarkus.devservices.runtime;
 
-import io.quarkus.runtime.LaunchMode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,13 +15,10 @@ import static org.hamcrest.Matchers.*;
 class PipelineDevServicesConfigSourceTest {
 
     private PipelineDevServicesConfigSource configSource;
-    private LaunchMode previousLaunchMode;
 
     @BeforeEach
     void setUp() {
         configSource = new PipelineDevServicesConfigSource();
-        previousLaunchMode = LaunchMode.current();
-        LaunchMode.set(LaunchMode.DEVELOPMENT);
         // Clear system properties
         System.clearProperty("pipeline.devservices.enabled");
         System.clearProperty("pipeline.devservices.files");
@@ -34,7 +30,6 @@ class PipelineDevServicesConfigSourceTest {
 
     @AfterEach
     void tearDown() {
-        LaunchMode.set(previousLaunchMode);
         // Clear system properties
         System.clearProperty("pipeline.devservices.enabled");
         System.clearProperty("pipeline.devservices.files");
@@ -73,7 +68,7 @@ class PipelineDevServicesConfigSourceTest {
 
         Set<String> names = configSource.getPropertyNames();
 
-        assertThat(names, hasSize(19));
+        assertThat(names, hasSize(11));
         assertThat(names, containsInAnyOrder(
             // Compose devservices configuration properties
             "quarkus.compose.devservices.enabled",
@@ -89,16 +84,7 @@ class PipelineDevServicesConfigSourceTest {
             "opensearch.hosts",
             "CONSUL_HOST",
             "CONSUL_PORT",
-            "quarkus.otel.exporter.otlp.endpoint",
-            // S3 (SeaweedFS) configuration
-            "quarkus.s3.devservices.enabled",
-            "quarkus.s3.endpoint-override",
-            "quarkus.s3.path-style-access",
-            "quarkus.s3.aws.region",
-            "quarkus.s3.aws.credentials.type",
-            "quarkus.s3.aws.credentials.static-provider.access-key-id",
-            "quarkus.s3.aws.credentials.static-provider.secret-access-key",
-            "kafka.bootstrap.servers"
+            "quarkus.otel.exporter.otlp.endpoint"
         ));
     }
 
@@ -107,17 +93,6 @@ class PipelineDevServicesConfigSourceTest {
         // When enabled is not set, ConfigSource should return null for all properties
         assertThat(configSource.getValue("quarkus.compose.devservices.files"), is(nullValue()));
         assertThat(configSource.getValue("quarkus.compose.devservices.enabled"), is(nullValue()));
-    }
-
-    @Test
-    void getPropertyNames_excludesKafkaBootstrapInTestMode() {
-        System.setProperty("pipeline.devservices.enabled", "true");
-        LaunchMode.set(LaunchMode.TEST);
-
-        Set<String> names = configSource.getPropertyNames();
-
-        assertThat(names, not(hasItem("kafka.bootstrap.servers")));
-        assertThat(configSource.getValue("kafka.bootstrap.servers"), is(nullValue()));
     }
 
     @Test

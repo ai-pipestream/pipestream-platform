@@ -1,0 +1,9 @@
+{
+  "service": {
+    "id": "opensearch",
+    "name": "opensearch",
+    "address": "opensearch",
+    "port": 9200,
+    "tags": ["opensearch", "search", "elasticsearch"]
+  }
+}

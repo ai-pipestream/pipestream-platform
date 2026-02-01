@@ -7,6 +7,7 @@ jackson-module-jsonschema = "2.21.0"
 logging-manager = "3.4.1"
 opensearch = "3.5.0"
 opensearch-testcontainers = "4.1.0"
+opensearch-protobufs = "1.2.0"
 # Apache HTTP Client
 httpclient5 = "5.6"
 # Caffeine
@@ -73,8 +74,8 @@ nmcp = "1.4.4"
 protobuf-plugin = "0.9.6"
 buf-plugin = "0.11.0"
 shadow-plugin = "9.3.1"
-proto-toolchain = "0.7.13"
-quarkus-buf-grpc-generator = "0.7.13"
+proto-toolchain = "0.7.14"
+quarkus-buf-grpc-generator = "0.7.14"
 
 [libraries]
 # Quarkus BOM
@@ -143,6 +144,7 @@ quarkus-junit5-mockito = { module = "io.quarkus:quarkus-junit5-mockito" }
 # OpenSearch
 opensearch-java = { module = "org.opensearch.client:opensearch-java", version.ref = "opensearch" }
 opensearch-testcontainers = { module = "org.opensearch:opensearch-testcontainers", version.ref = "opensearch-testcontainers" }
+opensearch-protobufs = { module = "org.opensearch:protobufs", version.ref = "opensearch-protobufs" }
 
 # Apache HTTP Client
 httpclient5 = { module = "org.apache.httpcomponents.client5:httpclient5", version.ref = "httpclient5" }

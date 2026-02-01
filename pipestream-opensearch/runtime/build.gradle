@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.java.library)
     alias(libs.plugins.quarkus.extension)
+    alias(libs.plugins.proto.toolchain)
 }
 
 description = 'Pipestream OpenSearch Extension - Runtime'
@@ -8,6 +9,27 @@ description = 'Pipestream OpenSearch Extension - Runtime'
 quarkusExtension {
     deploymentModule = 'pipestream-opensearch-deployment'
 }
+
+// ============================================================
+// PROTOBUF CONFIGURATION - OpenSearch gRPC APIs (Mutiny stubs)
+// ============================================================
+
+pipestreamProtos {
+    sourceMode = 'git-proto-workspace'
+
+    gitRepo = "https://github.com/opensearch-project/opensearch-protobufs.git"
+    gitRef = "1.2.0"
+
+    modules {
+        register("opensearch-protobufs") {
+            gitSubdir = "protos"  // Only protos/ - excludes tools/ test fixtures
+        }
+    }
+}
+
+// ============================================================
+// END PROTOBUF CONFIGURATION
+// ============================================================
 
 dependencies {
     // Quarkus BOM provides platform properties
@@ -18,10 +40,19 @@ dependencies {
     implementation 'io.quarkus:quarkus-arc'
     implementation 'io.quarkus:quarkus-mutiny'
     implementation 'io.quarkus:quarkus-smallrye-health'
+    implementation 'io.quarkus:quarkus-grpc'  // Required for generated Mutiny stubs (MutinyStub, etc.)
 
     // OpenSearch Java Client
     implementation libs.opensearch.java
     implementation libs.httpclient5
+
+    // gRPC and Protobuf runtime (generated code depends on these)
+    implementation libs.grpc.stub
+    implementation libs.grpc.protobuf
+    implementation libs.protobuf.java
+
+    // Dynamic gRPC for OpenSearch gRPC client
+    implementation project(':quarkus-dynamic-grpc')
 
     // Annotation processor for extension metadata
     annotationProcessor 'io.quarkus:quarkus-extension-processor'

@@ -19,7 +19,7 @@ import java.util.Map;
 public class OpenSearchSinkWireMockTestResource implements QuarkusTestResourceLifecycleManager {
 
     private static final Logger LOG = Logger.getLogger(OpenSearchSinkWireMockTestResource.class);
-    private static final String OPENSEARCH_IMAGE = "opensearchproject/opensearch:3";
+    private static final String OPENSEARCH_IMAGE = "opensearchproject/opensearch:3.4.0";
     private static final String WIREMOCK_IMAGE = System.getProperty("pipestream.wiremock.image",
             System.getenv().getOrDefault("PIPESTREAM_WIREMOCK_IMAGE", "ghcr.io/ai-pipestream/pipestream-wiremock-server:0.1.35"));
 
@@ -31,17 +31,21 @@ public class OpenSearchSinkWireMockTestResource implements QuarkusTestResourceLi
     public Map<String, String> start() {
         network = Network.newNetwork();
 
-        // Start OpenSearch
+        // Start OpenSearch (HTTP 9200 + gRPC 9400 for DocumentService bulk indexing)
         opensearchContainer = new OpenSearchContainer<>(DockerImageName.parse(OPENSEARCH_IMAGE))
                 .withNetwork(network)
                 .withNetworkAliases("opensearch")
+                .withExposedPorts(9200, 9400)
                 .withEnv("DISABLE_SECURITY_PLUGIN", "true")
                 .withEnv("discovery.type", "single-node")
-                .withEnv("bootstrap.memory_lock", "true")
-                .withEnv("OPENSEARCH_JAVA_OPTS", "-Xms512m -Xmx512m");
+                .withEnv("OPENSEARCH_JAVA_OPTS", "-Xms512m -Xmx512m")
+                // JSON array format for list setting (must be valid JSON for parseableStringToList)
+                .withEnv("aux.transport.types", "[\"experimental-transport-grpc\"]");
         opensearchContainer.start();
         String osHost = opensearchContainer.getHttpHostAddress();
-        LOG.infof("Started OpenSearch at %s", osHost);
+        int osGrpcPort = opensearchContainer.getMappedPort(9400);
+        String osGrpcAddress = opensearchContainer.getHost() + ":" + osGrpcPort;
+        LOG.infof("Started OpenSearch at %s, gRPC at %s", osHost, osGrpcAddress);
 
         // Start WireMock with OpenSearch host so the mock can create indices
         String osHostForWiremock = "http://opensearch:9200";
@@ -65,14 +69,22 @@ public class OpenSearchSinkWireMockTestResource implements QuarkusTestResourceLi
         config.put("quarkus.compose.devservices.enabled", "false");
         config.put("pipestream.registration.enabled", "false");
 
-        // Route opensearch-manager gRPC client to WireMock
-        config.put("stork.opensearch-manager.service-discovery.type", "static");
-        config.put("stork.opensearch-manager.service-discovery.address-list", wiremockHost + ":" + grpcPort);
+        String wiremockAddress = wiremockHost + ":" + grpcPort;
+
+        // Override Stork to use static discovery pointing at WireMock (avoids Consul)
+        // host stays as service name (opensearch-manager, registration-service) for Stork lookup
+        config.put("quarkus.stork.opensearch-manager.service-discovery.type", "static");
+        config.put("quarkus.stork.opensearch-manager.service-discovery.address-list", wiremockAddress);
+        config.put("quarkus.stork.registration-service.service-discovery.type", "static");
+        config.put("quarkus.stork.registration-service.service-discovery.address-list", wiremockAddress);
 
         // Use opensearch-manager (WireMock) for schema
         config.put("opensearch.sink.use-opensearch-manager", "true");
 
-        LOG.infof("OpenSearchSinkWireMockTestResource: OpenSearch=%s, WireMock gRPC=%s:%d", sinkOsHost, wiremockHost, grpcPort);
+        // OpenSearch native gRPC (DocumentService bulk) - point at real OpenSearch
+        config.put("quarkus.dynamic-grpc.service.opensearch-grpc.address", osGrpcAddress);
+
+        LOG.infof("OpenSearchSinkWireMockTestResource: OpenSearch=%s, gRPC=%s, WireMock=%s:%d", sinkOsHost, osGrpcAddress, wiremockHost, grpcPort);
         return config;
     }
 

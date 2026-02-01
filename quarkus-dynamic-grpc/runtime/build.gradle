@@ -37,6 +37,15 @@ dependencies {
 
     // Annotation processor for extension metadata
     annotationProcessor 'io.quarkus:quarkus-extension-processor'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation platform(libs.quarkus.bom)
+    testImplementation libs.assertj.core
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
 }
 
 // Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution

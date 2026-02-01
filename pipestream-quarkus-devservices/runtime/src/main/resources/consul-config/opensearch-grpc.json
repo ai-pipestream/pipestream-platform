@@ -1,0 +1,9 @@
+{
+  "service": {
+    "id": "opensearch-grpc",
+    "name": "opensearch-grpc",
+    "address": "opensearch",
+    "port": 9400,
+    "tags": ["opensearch", "grpc", "search"]
+  }
+}

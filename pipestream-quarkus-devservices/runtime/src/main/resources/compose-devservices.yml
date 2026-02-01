@@ -1,5 +1,10 @@
 # This file defines the infrastructure services for the LOCAL DEVELOPMENT environment.
 # The canonical port allocation strategy is defined in /docs/architecture/endpoints/Port_allocations.md
+#
+# Consul connectivity:
+#   - Host-based apps (quarkus dev): localhost:8500 via port mapping
+#   - Container-to-container: consul:8500 on pipeline-test-network (bridge)
+#   - Container-to-host (if needed): host.docker.internal (Win/Mac) or 172.17.0.1 (Linux bridge)
 
 name: pipeline-shared-devservices
 
@@ -19,9 +24,11 @@ volumes:
 
 services:
   # Consul for service discovery
+  # Host apps use localhost:8500 (port mapping). Containers use consul:8500 (bridge network).
   consul:
     container_name: pipeline-consul
     image: hashicorp/consul:latest
+    hostname: consul
     networks:
       - pipeline-test-network
     ports:
@@ -31,6 +38,11 @@ services:
     command: "agent -dev -client=0.0.0.0 -enable-local-script-checks=true"
     environment:
       CONSUL_BIND_INTERFACE: eth0
+      # For host-based Quarkus apps (quarkus dev): use localhost:8500
+      CONSUL_HOST: localhost
+      CONSUL_PORT: "8500"
+      # Register OpenSearch REST + gRPC via env (no volume mount - works from any compose path)
+      CONSUL_LOCAL_CONFIG: '{"services":[{"id":"opensearch","name":"opensearch","address":"opensearch","port":9200,"tags":["opensearch","search"]},{"id":"opensearch-grpc","name":"opensearch-grpc","address":"opensearch","port":9400,"tags":["opensearch","grpc","search"]}]}'
     labels:
       quarkus-dev-service-consul: shared
     healthcheck:
@@ -157,9 +169,10 @@ services:
     labels:
       io.quarkus.devservices.compose.wait_for.ports.disable: "true"
 
-  # OpenSearch 3
+  # OpenSearch 3 (registered in Consul: opensearch REST:9200, opensearch-grpc:9400)
   opensearch:
     container_name: pipeline-opensearch
+    hostname: opensearch
     image: opensearchproject/opensearch:3.4.0
     networks:
       - pipeline-test-network
@@ -169,6 +182,9 @@ services:
       - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
       - "DISABLE_SECURITY_PLUGIN=true"
       - bootstrap.memory_lock=true
+      # Enable gRPC API (port 9400) for bulk, search, k-NN
+      - aux.transport.types=[experimental-transport-grpc]
+      - aux.transport.experimental-transport-grpc.port=9400-9400
     ulimits:
       memlock:
         soft: -1
@@ -180,6 +196,7 @@ services:
       - opensearch_data:/usr/share/opensearch/data
     ports:
       - "9200:9200"
+      - "9400:9400"   # gRPC API
       - "9600:9600"
     labels:
       quarkus-dev-service-elasticsearch: shared

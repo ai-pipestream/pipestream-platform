@@ -1,5 +1,6 @@
 package ai.pipestream.quarkus.dynamicgrpc;
 
+import ai.pipestream.quarkus.dynamicgrpc.discovery.HostPort;
 import ai.pipestream.quarkus.dynamicgrpc.exception.ServiceDiscoveryException;
 import ai.pipestream.quarkus.dynamicgrpc.exception.ServiceNotFoundException;
 import ai.pipestream.quarkus.dynamicgrpc.metrics.DynamicGrpcMetrics;
@@ -107,6 +108,33 @@ public class ServiceDiscoveryManager {
         }
 
         final Config config = ConfigProvider.getConfig();
+
+        // Check for host:port style direct address (avoids Consul discovery)
+        Optional<String> addressOpt = config.getOptionalValue(
+                "quarkus.dynamic-grpc.service." + storkServiceName + ".address", String.class);
+        if (addressOpt.isEmpty()) {
+            addressOpt = config.getOptionalValue(
+                    "quarkus.grpc.clients." + storkServiceName + ".host", String.class);
+        }
+        Optional<HostPort> hostPort = addressOpt.flatMap(HostPort::parse);
+        if (hostPort.isPresent()) {
+            String address = hostPort.get().toAddress();
+            LOG.infof("Using direct address for %s: %s (skipping Consul)", storkServiceName, address);
+            Map<String, String> staticParams = Map.of("address-list", address);
+            var staticConfig = new SimpleServiceConfig.SimpleServiceDiscoveryConfig("static", staticParams);
+            ServiceDefinition definition = ServiceDefinition.of(staticConfig);
+            try {
+                Stork.getInstance().defineIfAbsent(storkServiceName, definition);
+                LOG.infof("Successfully defined Stork service %s with static discovery", storkServiceName);
+                return Uni.createFrom().voidItem();
+            } catch (Exception e) {
+                LOG.errorf(e, "Failed to define Stork service %s with direct address", storkServiceName);
+                metrics.recordException(e.getClass().getSimpleName(), storkServiceName, "service_definition");
+                return Uni.createFrom().failure(
+                        new ServiceDiscoveryException(storkServiceName, "Failed to define service from host:port", e)
+                );
+            }
+        }
 
         // Check if service is configured via MicroProfile Config (e.g., stork.repo-service.service-discovery.type)
         // This supports static discovery, Kubernetes, or any other Stork provider configured via properties

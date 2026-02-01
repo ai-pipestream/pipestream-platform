@@ -20,3 +20,6 @@ GRANT ALL PRIVILEGES ON DATABASE account TO pipeline;
 GRANT ALL PRIVILEGES ON DATABASE repository TO pipeline;
 GRANT ALL PRIVILEGES ON DATABASE engine TO pipeline;
 GRANT ALL PRIVILEGES ON DATABASE s3_connector TO pipeline;
+
+CREATE DATABASE opensearch_manager;
+GRANT ALL PRIVILEGES ON DATABASE opensearch_manager TO pipeline;

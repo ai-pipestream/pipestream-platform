@@ -15,7 +15,7 @@ dependencies {
     implementation project(':quarkus-dynamic-grpc')
 
     // Deployment module needed for tests (Quarkus extension mechanism)
-    testRuntimeOnly project(':quarkus-dynamic-grpc-deployment')
+    testImplementation project(':quarkus-dynamic-grpc-deployment')
 
     // Need OpenSearch client directly for test code
     testImplementation libs.opensearch.java

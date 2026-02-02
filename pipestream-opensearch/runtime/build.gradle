@@ -76,6 +76,7 @@ tasks.withType(Test).configureEach {
 
 configurations.all {
     exclude group: 'io.quarkus', module: 'quarkus-virtual-threads'
+    exclude group: 'io.quarkus', module: 'quarkus-virtual-threads-deployment'
 }
 
 // Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution

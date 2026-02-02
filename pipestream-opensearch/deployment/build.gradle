@@ -11,6 +11,9 @@ dependencies {
     // Runtime module dependency
     implementation project(':pipestream-opensearch')
 
+    // Dynamic gRPC deployment (extension chain: OpenSearch extension brings in dynamic gRPC)
+    implementation project(':quarkus-dynamic-grpc-deployment')
+
     // Quarkus deployment dependencies
     implementation 'io.quarkus:quarkus-arc-deployment'
     implementation 'io.quarkus:quarkus-core-deployment'

@@ -8,14 +8,8 @@ dependencies {
     // Quarkus BOM provides platform properties
     implementation platform(libs.quarkus.bom)
 
-    // Extension runtime dependency (brings in OpenSearch client transitively)
+    // Extension (brings OpenSearch + dynamic gRPC transitively; deployment chain in pipestream-opensearch-deployment)
     implementation project(':pipestream-opensearch')
-
-    // Dynamic gRPC (required by OpenSearchGrpcClientProducer)
-    implementation project(':quarkus-dynamic-grpc')
-
-    // Deployment module needed for tests (Quarkus extension mechanism)
-    testImplementation project(':quarkus-dynamic-grpc-deployment')
 
     // Need OpenSearch client directly for test code
     testImplementation libs.opensearch.java
@@ -31,6 +25,12 @@ dependencies {
 
     // Gradle 9 requires explicit JUnit Platform launcher
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// Exclude virtual threads (not used); matches pipestream-opensearch runtime
+configurations.all {
+    exclude group: 'io.quarkus', module: 'quarkus-virtual-threads'
+    exclude group: 'io.quarkus', module: 'quarkus-virtual-threads-deployment'
 }
 
 tasks.withType(Test).configureEach {

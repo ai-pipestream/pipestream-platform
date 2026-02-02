@@ -24,6 +24,7 @@ wiremock-standalone = "4.0.0-beta.27"
 wiremock-grpc-extension = "1.0.0-beta.5"
 hibernate-types = "2.2.0"
 quarkus-mcp-server = "1.9.0"
+quarkus-docling = "1.2.2"
 # AWS SDK
 aws-sdk = "2.41.17"
 # Apicurio
@@ -66,7 +67,7 @@ consul-client = "1.9.2"
 # ========================
 # External Pipestream Libraries (not part of this monorepo)
 # ========================
-pipestream-wiremock-server = "0.1.35"
+pipestream-wiremock-server = "0.1.36"
 
 # Gradle plugins
 axion-release = "1.21.1"
@@ -156,6 +157,7 @@ caffeine = { module = "com.github.ben-manes.caffeine:caffeine", version.ref = "c
 quarkus-quinoa = { module = "io.quarkiverse.quinoa:quarkus-quinoa", version.ref = "quinoa" }
 quarkus-hibernate-types = { module = "io.quarkiverse.hibernatetypes:quarkus-hibernate-types", version.ref = "hibernate-types" }
 quarkus-mcp-server-sse = { module = "io.quarkiverse.mcp:quarkus-mcp-server-sse", version.ref = "quarkus-mcp-server" }
+quarkus-docling = { module = "io.quarkiverse.docling:quarkus-docling", version.ref = "quarkus-docling" }
 
 # WireMock Standalone (for grpc-wiremock library)
 wiremock-standalone = { module = "org.wiremock:wiremock-standalone", version.ref = "wiremock-standalone" }

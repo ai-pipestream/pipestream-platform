@@ -182,9 +182,9 @@ services:
       - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
       - "DISABLE_SECURITY_PLUGIN=true"
       - bootstrap.memory_lock=true
-      # Enable gRPC API (port 9400) for bulk, search, k-NN
-      - aux.transport.types=[experimental-transport-grpc]
-      - aux.transport.experimental-transport-grpc.port=9400-9400
+      # Enable gRPC API (port 9400) for bulk, search, k-NN (3.4: transport-grpc, not experimental-transport-grpc)
+      - 'aux.transport.types=["transport-grpc"]'
+      - aux.transport.transport-grpc.port=9400-9400
     ulimits:
       memlock:
         soft: -1
@@ -206,6 +206,32 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+
+  # DJL Serving for embeddings (CPU + MiniLM). Used by module-embedder with backend=DJL_SERVING.
+  djl-serving:
+    container_name: pipeline-djl-serving
+    hostname: djl-serving
+    image: pipestreamai/djl-serving-embedder:latest
+    networks:
+      - pipeline-test-network
+    ports:
+      - "8090:8080"   # Host 8090 (avoid 8080 - Quarkus default)
+    environment:
+      # Host (quarkus dev) connects via localhost:8090
+      EMBEDDER_BACKEND: DJL_SERVING
+      EMBEDDER_DJL_SERVING_URL: http://localhost:8090
+      EMBEDDER_DJL_SERVING_MODEL_NAME: all_MiniLM_L6_v2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    labels:
+      quarkus-dev-service-djl-serving: shared
+      io.quarkus.devservices.compose.config_map.env.EMBEDDER_BACKEND: embedder.backend
+      io.quarkus.devservices.compose.config_map.env.EMBEDDER_DJL_SERVING_URL: embedder.djl-serving.url
+      io.quarkus.devservices.compose.config_map.env.EMBEDDER_DJL_SERVING_MODEL_NAME: embedder.djl-serving.model-name
 
   opensearch-dashboards:
     container_name: pipeline-opensearch-dashboards

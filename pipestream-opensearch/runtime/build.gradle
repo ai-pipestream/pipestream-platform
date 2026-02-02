@@ -52,7 +52,7 @@ dependencies {
     implementation libs.protobuf.java
 
     // Dynamic gRPC for OpenSearch gRPC client
-    implementation project(':quarkus-dynamic-grpc')
+    api project(':quarkus-dynamic-grpc')
 
     // Annotation processor for extension metadata
     annotationProcessor 'io.quarkus:quarkus-extension-processor'
@@ -72,6 +72,10 @@ tasks.withType(Test).configureEach {
     testLogging {
         events 'passed', 'failed', 'skipped'
     }
+}
+
+configurations.all {
+    exclude group: 'io.quarkus', module: 'quarkus-virtual-threads'
 }
 
 // Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution

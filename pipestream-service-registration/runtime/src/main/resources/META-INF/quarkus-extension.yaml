@@ -1,0 +1,17 @@
+name: "Pipestream Service Registration"
+artifact: ${project.groupId}:${project.artifactId}:${project.version}
+description: "Automatic gRPC service registration with health checks and metadata"
+metadata:
+  keywords:
+    - "grpc"
+    - "service-registration"
+    - "health-check"
+    - "metadata"
+    - "pipestream"
+  categories:
+    - "grpc"
+    - "observability"
+  status: "stable"
+  guide: "https://github.com/krickert/pipestream-platform"
+  config:
+    - "pipestream.service.registration.*"

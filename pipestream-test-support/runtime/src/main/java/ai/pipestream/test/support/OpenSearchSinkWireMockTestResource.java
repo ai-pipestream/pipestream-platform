@@ -21,7 +21,7 @@ public class OpenSearchSinkWireMockTestResource implements QuarkusTestResourceLi
     private static final Logger LOG = Logger.getLogger(OpenSearchSinkWireMockTestResource.class);
     private static final String OPENSEARCH_IMAGE = "opensearchproject/opensearch:3.4.0";
     private static final String WIREMOCK_IMAGE = System.getProperty("pipestream.wiremock.image",
-            System.getenv().getOrDefault("PIPESTREAM_WIREMOCK_IMAGE", "ghcr.io/ai-pipestream/pipestream-wiremock-server:0.1.35"));
+            System.getenv().getOrDefault("PIPESTREAM_WIREMOCK_IMAGE", "ghcr.io/ai-pipestream/pipestream-wiremock-server:0.1.36"));
 
     private OpenSearchContainer<?> opensearchContainer;
     private GenericContainer<?> wiremockContainer;
@@ -39,8 +39,9 @@ public class OpenSearchSinkWireMockTestResource implements QuarkusTestResourceLi
                 .withEnv("DISABLE_SECURITY_PLUGIN", "true")
                 .withEnv("discovery.type", "single-node")
                 .withEnv("OPENSEARCH_JAVA_OPTS", "-Xms512m -Xmx512m")
-                // JSON array format for list setting (must be valid JSON for parseableStringToList)
-                .withEnv("aux.transport.types", "[\"experimental-transport-grpc\"]");
+                // OpenSearch 3.4: transport-grpc (no longer experimental- prefix)
+                .withEnv("aux.transport.types", "[\"transport-grpc\"]")
+                .withEnv("aux.transport.transport-grpc.port", "9400-9400");
         opensearchContainer.start();
         String osHost = opensearchContainer.getHttpHostAddress();
         int osGrpcPort = opensearchContainer.getMappedPort(9400);

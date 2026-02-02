@@ -11,6 +11,9 @@ dependencies {
     // Extension runtime dependency (brings in OpenSearch client transitively)
     implementation project(':pipestream-opensearch')
 
+    // Dynamic gRPC (required by OpenSearchGrpcClientProducer)
+    implementation project(':quarkus-dynamic-grpc')
+
     // Need OpenSearch client directly for test code
     testImplementation libs.opensearch.java
 

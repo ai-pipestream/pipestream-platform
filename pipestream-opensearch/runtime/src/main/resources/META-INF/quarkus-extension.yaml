@@ -1,5 +1,6 @@
 name: Pipestream OpenSearch
 artifact: ${project.groupId}:${project.artifactId}:${project.version}
+description: "OpenSearch integration for Pipestream with gRPC client support"
 metadata:
   keywords:
     - opensearch

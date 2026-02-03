@@ -78,6 +78,13 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         applyIfMissing(context, values, "quarkus.smallrye-openapi.info-version", resolveOpenApiVersion(context));
         applyIfMissing(context, values, "quarkus.smallrye-openapi.info-description", resolveOpenApiDescription(context));
 
+        // OpenAPI/Swagger/Health paths: use relative values (no leading slash) so they inherit root-path.
+        // When root-path is set (e.g. /modules/parser), /q/openapi, /q/swagger-ui, /q/health nest under it.
+        // See https://quarkus.io/blog/path-resolution-in-quarkus/
+        applyIfMissing(context, values, "quarkus.http.non-application-root-path", "q");
+        applyIfMissing(context, values, "quarkus.smallrye-openapi.path", "openapi");
+        applyIfMissing(context, values, "quarkus.swagger-ui.path", "swagger-ui");
+
         // Dev profile: compose devservices defaults (shared infra)
         applyIfMissing(context, values, "%dev.quarkus.devservices.enabled", "true");
         applyIfMissing(context, values, "%dev.quarkus.compose.devservices.enabled", "true");
@@ -109,6 +116,7 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         String httpRootPath = normalizePath(getOptional(context, "quarkus.http.root-path").orElse(""));
         if (!httpRootPath.isBlank() && !"/".equals(httpRootPath)) {
             applyIfMissing(context, values, "pipestream.registration.http.base-path", httpRootPath);
+            applyIfMissing(context, values, "quarkus.smallrye-openapi.servers", httpRootPath);
         }
 
         String healthRootPathRaw = getOptional(context, "quarkus.smallrye-health.root-path").orElse("health");
@@ -292,10 +300,7 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
 
     private boolean isRegistrationRequired(ConfigSourceContext context) {
         Optional<String> required = getOptional(context, "pipestream.registration.required");
-        if (required.isPresent()) {
-            return Boolean.parseBoolean(required.get());
-        }
-        return !isTestProfile(context);
+        return required.map(Boolean::parseBoolean).orElseGet(() -> !isTestProfile(context));
     }
 
     private boolean isHttpRegistrationEnabled(ConfigSourceContext context) {

@@ -83,3 +83,22 @@ include `pipestream-server`.
   - `quarkus.smallrye-openapi.info-title` from `quarkus.application.name`
   - `quarkus.smallrye-openapi.info-version` from `quarkus.application.version`
   - `quarkus.smallrye-openapi.info-description` from `pipestream.registration.description`
+
+### Path Resolution and root-path
+
+OpenAPI, Swagger UI, and health endpoints use **relative paths** (no leading slash)
+so they nest under `quarkus.http.root-path`. When `root-path` is set (e.g.
+`/modules/parser`), these endpoints are served at:
+
+- `{root-path}/q/openapi`
+- `{root-path}/q/swagger-ui`
+- `{root-path}/q/health`, etc.
+
+Defaults applied (via `applyIfMissing`):
+
+- `quarkus.http.non-application-root-path=q` (relative)
+- `quarkus.smallrye-openapi.path=openapi` (relative)
+- `quarkus.swagger-ui.path=swagger-ui` (relative)
+- `quarkus.smallrye-openapi.servers={root-path}` when `root-path` is set (so Swagger UI "Try it out" uses the correct base URL)
+
+See [Path resolution in Quarkus](https://quarkus.io/blog/path-resolution-in-quarkus/).

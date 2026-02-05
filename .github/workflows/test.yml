@@ -12,6 +12,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -75,9 +78,11 @@ jobs:
         if: always()
         with:
           name: Test Results
-          path: "**/build/test-results/test/TEST-*.xml"
+          # Match all modules and parallel test worker dirs (test-results/test, test-results/test-worker-*)
+          path: "**/build/test-results/**/*.xml"
           reporter: java-junit
           fail-on-error: false
+          fail-on-empty: false
 
       - name: Upload test results
         if: always()

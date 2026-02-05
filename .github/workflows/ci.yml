@@ -67,9 +67,11 @@ jobs:
         uses: dorny/test-reporter@v2
         with:
           name: JUnit Test Report
-          path: '**/build/test-results/test/*.xml'
+          # Match all modules and parallel test worker dirs (test-results/test, test-results/test-worker-*)
+          path: "**/build/test-results/**/*.xml"
           reporter: java-junit
           fail-on-error: false
+          fail-on-empty: false
 
   validate-publish:
     name: Validate Publishing Configuration

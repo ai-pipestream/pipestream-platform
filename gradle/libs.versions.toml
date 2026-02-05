@@ -1,5 +1,5 @@
 [versions]
-quarkusVersion = "3.31.1"
+quarkusVersion = "3.31.2"
 jandex-plugin = "2.3.0"
 commons-lang3 = "3.20.0"
 opennlp-tools = "2.5.7"
@@ -67,7 +67,7 @@ consul-client = "1.9.2"
 # ========================
 # External Pipestream Libraries (not part of this monorepo)
 # ========================
-pipestream-wiremock-server = "0.1.36"
+pipestream-wiremock-server = "0.1.37"
 
 # Gradle plugins
 axion-release = "1.21.1"

@@ -14,19 +14,19 @@ httpclient5 = "5.6"
 caffeine = "3.2.3"
 # gRPC and Protobuf versions - match Quarkus defaults
 
-grpc = "1.78.0"
-protobufVersion = "4.33.4"
+grpc = "1.79.0"
+protobufVersion = "4.33.5"
 
 # Quarkiverse extensions
 quinoa = "2.7.1"
-wiremock = "4.0.0-beta.27"
-wiremock-standalone = "4.0.0-beta.27"
+wiremock = "4.0.0-beta.28"
+wiremock-standalone = "4.0.0-beta.28"
 wiremock-grpc-extension = "1.0.0-beta.5"
 hibernate-types = "2.2.0"
 quarkus-mcp-server = "1.9.0"
 quarkus-docling = "1.2.2"
 # AWS SDK
-aws-sdk = "2.41.17"
+aws-sdk = "2.41.22"
 # Apicurio
 apicurio = "3.1.7"
 # Testing
@@ -43,7 +43,7 @@ jgrapht = "1.5.2"
 jimfs = "1.3.1"
 memoryfilesystem = "2.8.2"
 # Apache Tika - using shaded version for Quarkus compatibility
-tika4-shaded = "0.1.14"
+tika4-shaded = "0.1.16"
 # Sample documents test data
 sample-documents = "0.2.3"
 # DJL (Deep Java Library)

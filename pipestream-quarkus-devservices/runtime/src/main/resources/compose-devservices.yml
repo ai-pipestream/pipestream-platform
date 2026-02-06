@@ -211,7 +211,7 @@ services:
   djl-serving:
     container_name: pipeline-djl-serving
     hostname: djl-serving
-    image: pipestreamai/djl-serving-embedder:latest
+    image: deepjavalibrary/djl-serving:latest
     networks:
       - pipeline-test-network
     ports:

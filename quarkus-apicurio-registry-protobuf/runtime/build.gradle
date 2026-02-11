@@ -25,6 +25,9 @@ dependencies {
 
     // Annotation processor for extension metadata
     annotationProcessor 'io.quarkus:quarkus-extension-processor'
+
+    // Testing
+    testImplementation 'io.quarkus:quarkus-junit5'
 }
 
 // Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution

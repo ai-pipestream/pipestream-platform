@@ -18,20 +18,15 @@ tasks.matching { it.name == 'validateExtension' }.configureEach {
 // ============================================================
 
 pipestreamProtos {
-    // Fetch from Git (default) or BSR via: -PprotoSource=bsr
-    sourceMode = providers.gradleProperty('protoSource').orElse('git')
+    // git-proto-workspace clones the repo directly (no buf export / no BSR auth needed)
+    sourceMode = 'git-proto-workspace'
+    gitRepo = System.getenv('PROTO_GIT_REPO') ?: "https://github.com/ai-pipestream/pipestream-protos.git"
+    gitRef = System.getenv('PROTO_GIT_REF') ?: "main"
 
     modules {
-        register("registration") {
-            // BSR (rate-limited, use -PprotoSource=bsr if needed)
-            // bsr = "buf.build/pipestreamai/registration"
-
-            // Git source (default - no rate limiting)
-            // Allow override via env vars for CI/CD (e.g. passing tokens)
-            gitRepo = System.getenv('PROTO_GIT_REPO') ?: "https://github.com/ai-pipestream/pipestream-protos.git"
-            gitRef = System.getenv('PROTO_GIT_REF') ?: "main"
-            gitSubdir = "registration"
-        }
+        register("common")
+        register("pipeline-module")
+        register("registration")
     }
 }
 

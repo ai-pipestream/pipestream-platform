@@ -20,8 +20,10 @@ import jakarta.inject.Qualifier;
 import org.jboss.jandex.*;
 import org.jboss.logging.Logger;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -99,7 +101,7 @@ class ApicurioRegistryProtobufProcessor {
             BuildProducer<ProtobufChannelsBuildItem> channelsBuildItem) {
 
         IndexView index = combinedIndex.getIndex();
-        Set<String> configuredIncoming = new HashSet<>();
+        Map<String, String> configuredIncoming = new HashMap<>();
         Set<String> configuredOutgoing = new HashSet<>();
 
         // === Scan our custom @ProtobufChannel annotations (always configure as outgoing) ===
@@ -119,8 +121,10 @@ class ApicurioRegistryProtobufProcessor {
                 // Check method parameters for Protobuf types
                 for (MethodParameterInfo param : method.parameters()) {
                     if (isProtobufType(index, param.type())) {
-                        if (configuredIncoming.add(channelName)) {
-                            LOGGER.debugf("Auto-detected Protobuf type for @Incoming channel: %s", channelName);
+                        if (!configuredIncoming.containsKey(channelName)) {
+                            String protobufClass = extractProtobufClassName(index, param.type());
+                            configuredIncoming.put(channelName, protobufClass);
+                            LOGGER.debugf("Auto-detected Protobuf type %s for @Incoming channel: %s", protobufClass, channelName);
                         }
                         break;
                     }
@@ -173,7 +177,7 @@ class ApicurioRegistryProtobufProcessor {
         LOGGER.infof("Outgoing Channels: %s", configuredOutgoing);
 
         // Inject connector defaults via BuildItem (needed for DevServices to see at build time)
-        for (String channelName : configuredIncoming) {
+        for (String channelName : configuredIncoming.keySet()) {
             String prefix = "mp.messaging.incoming." + channelName + ".";
             defaults.produce(new RunTimeConfigurationDefaultBuildItem(prefix + "connector", "smallrye-kafka"));
         }
@@ -215,7 +219,7 @@ class ApicurioRegistryProtobufProcessor {
                 
                 if (isValueProtobuf) {
                     // STRICT REQUIREMENT: Key must be UUID
-                    Type keyType = args.get(0);
+                    Type keyType = args.getFirst();
                     if (!UUID.equals(keyType.name())) {
                         throw new ProtobufConfigurationException(
                             "Invalid Kafka Record Key type: " + keyType.name() + 
@@ -290,6 +294,48 @@ class ApicurioRegistryProtobufProcessor {
     }
 
     /**
+     * Extract the concrete Protobuf class name from a type, unwrapping generic wrappers
+     * like Message&lt;T&gt;, Multi&lt;T&gt;, Record&lt;K, V&gt;.
+     */
+    private String extractProtobufClassName(IndexView index, Type type) {
+        if (type == null) {
+            return null;
+        }
+
+        if (type.kind() == Type.Kind.PARAMETERIZED_TYPE) {
+            ParameterizedType paramType = type.asParameterizedType();
+            DotName rawTypeName = paramType.name();
+            List<Type> args = paramType.arguments();
+
+            // Record<K, V> - the value (second arg) is the protobuf type
+            if (RECORD.equals(rawTypeName) && args.size() >= 2) {
+                return extractProtobufClassName(index, args.get(1));
+            }
+
+            // Other wrappers (Message<T>, Multi<T>, etc.) - first arg
+            if (!args.isEmpty()) {
+                return extractProtobufClassName(index, args.getFirst());
+            }
+            return null;
+        }
+
+        if (type.kind() != Type.Kind.CLASS) {
+            return null;
+        }
+
+        DotName typeName = type.name();
+        // Don't return abstract base classes - we need concrete protobuf types
+        if (MESSAGE_LITE.equals(typeName) || GENERATED_MESSAGE.equals(typeName)) {
+            return null;
+        }
+
+        if (isProtobufType(index, type)) {
+            return typeName.toString();
+        }
+        return null;
+    }
+
+    /**
      * Register Apicurio and Protobuf classes for reflection (needed for native image).
      */
     @BuildStep
@@ -300,7 +346,8 @@ class ApicurioRegistryProtobufProcessor {
                 "io.apicurio.registry.serde.protobuf.ProtobufSerdeHeaders",
                 "io.apicurio.registry.serde.strategy.SimpleTopicIdStrategy",
                 "io.apicurio.registry.serde.strategy.TopicIdStrategy",
-                "io.apicurio.registry.serde.strategy.RecordIdStrategy"
+                "io.apicurio.registry.serde.strategy.RecordIdStrategy",
+                "ai.pipestream.apicurio.registry.protobuf.runtime.PipestreamProtobufDeserializer"
         ).methods().fields().build());
 
         reflectiveClasses.produce(ReflectiveClassBuildItem.builder(

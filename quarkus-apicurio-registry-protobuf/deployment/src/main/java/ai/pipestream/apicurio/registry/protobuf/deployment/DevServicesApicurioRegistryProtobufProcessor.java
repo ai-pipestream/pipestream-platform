@@ -209,23 +209,21 @@ public class DevServicesApicurioRegistryProtobufProcessor {
             @SuppressWarnings("OptionalUsedAsFieldOrParameterType") Optional<Duration> timeout,
             ProtobufChannelsBuildItem protobufChannels) {
 
-        log.warn("DEBUG: Starting Apicurio Registry Dev Services check...");
-
         if (!config.devServicesEnabled) {
-            log.warn("DEBUG: Not starting dev services for Apicurio Registry, as it has been disabled in the config.");
+            log.debug("Not starting dev services for Apicurio Registry, as it has been disabled in the config.");
             return null;
         }
 
         // Check both the connector-level URL and the simpler apicurio.registry.url property
         if (isPropertySet(APICURIO_REGISTRY_URL_CONFIG)) {
-            log.warn("DEBUG: Not starting dev services for Apicurio Registry, " + APICURIO_REGISTRY_URL_CONFIG
-                    + " is configured.");
+            log.debugf("Not starting dev services for Apicurio Registry, %s is configured.",
+                    APICURIO_REGISTRY_URL_CONFIG);
             return null;
         }
 
         if (isPropertySet(APICURIO_REGISTRY_URL_SIMPLE)) {
-            log.warn("DEBUG: Not starting dev services for Apicurio Registry, " + APICURIO_REGISTRY_URL_SIMPLE
-                    + " is configured.");
+            log.debugf("Not starting dev services for Apicurio Registry, %s is configured.",
+                    APICURIO_REGISTRY_URL_SIMPLE);
             return null;
         }
 
@@ -234,8 +232,7 @@ public class DevServicesApicurioRegistryProtobufProcessor {
         boolean hasDetectedProtobufChannels = protobufChannels.hasChannels();
 
         if (!hasKafkaChannelWithoutRegistry() && !hasDetectedProtobufChannels) {
-            log.warn(
-                    "DEBUG: Not starting dev services for Apicurio Registry, all the channels have a registry URL configured.");
+            log.debug("Not starting dev services for Apicurio Registry, all channels have a registry URL configured.");
             return null;
         }
 
@@ -249,10 +246,8 @@ public class DevServicesApicurioRegistryProtobufProcessor {
                 config.serviceName, config.shared, launchMode.getLaunchMode());
         if (sharedContainer.isPresent()) {
             var address = sharedContainer.get();
-            log.warn("DEBUG: Found existing shared Apicurio Registry dev service at " + address.getUrl());
+            log.debugf("Found existing shared Apicurio Registry dev service at %s", address.getUrl());
             return new StartResult(null, address.getId(), getRegistryUrlConfigs("http://" + address.getUrl()));
-        } else {
-            log.warn("DEBUG: Shared container not found via label: " + config.serviceName);
         }
 
         // Second, try to locate a container from Compose Dev Services (only if Compose is available)
@@ -265,17 +260,13 @@ public class DevServicesApicurioRegistryProtobufProcessor {
                     useSharedNetwork);
             if (composeContainer.isPresent()) {
                 var address = composeContainer.get();
-                log.warn("DEBUG: Found Apicurio Registry from Compose Dev Services at " + address.getUrl());
+                log.debugf("Found Apicurio Registry from Compose Dev Services at %s", address.getUrl());
                 return new StartResult(null, address.getId(), getRegistryUrlConfigs("http://" + address.getUrl()));
-            } else {
-                log.warn("DEBUG: Container not found in Compose project.");
             }
-        } else {
-            log.debug("DEBUG: Compose Dev Services not available, skipping Compose container lookup.");
         }
 
         // No existing container found, start our own
-        log.warn("DEBUG: No existing container found, starting new ApicurioRegistryContainer...");
+        log.info("Starting Apicurio Registry container for Dev Services...");
         ApicurioRegistryContainer container = new ApicurioRegistryContainer(
                 DockerImageName.parse(config.imageName),
                 config.fixedExposedPort,

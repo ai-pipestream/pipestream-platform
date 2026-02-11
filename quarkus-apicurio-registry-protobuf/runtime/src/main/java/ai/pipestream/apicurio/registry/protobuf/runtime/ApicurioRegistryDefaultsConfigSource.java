@@ -2,16 +2,17 @@ package ai.pipestream.apicurio.registry.protobuf.runtime;
 
 import org.eclipse.microprofile.config.spi.ConfigSource;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * Provides a safe default for apicurio.registry.url so applications don't need
- * to set it manually when using the Apicurio protobuf extension. This runs with
- * a lower ordinal than application.properties, so explicit values or Dev
- * Services values still win.
+ * Bridges the APICURIO_REGISTRY_URL environment variable into the
+ * {@code apicurio.registry.url} config property.  Only emits a value when
+ * the env var is explicitly set (e.g. in production / docker-compose).
+ *
+ * <p>When no env var is present the map is empty, which lets Quarkus
+ * DevServices detect that no registry URL is configured and start its own
+ * Apicurio container automatically — essential for CI and bare test runs.
  */
 public class ApicurioRegistryDefaultsConfigSource implements ConfigSource {
 
@@ -19,14 +20,12 @@ public class ApicurioRegistryDefaultsConfigSource implements ConfigSource {
     private final Map<String, String> defaults;
 
     public ApicurioRegistryDefaultsConfigSource() {
-        Map<String, String> map = new HashMap<>();
         String envUrl = System.getenv("APICURIO_REGISTRY_URL");
         if (envUrl != null && !envUrl.isBlank()) {
-            map.put("apicurio.registry.url", envUrl.trim());
+            this.defaults = Map.of("apicurio.registry.url", envUrl.trim());
         } else {
-            map.put("apicurio.registry.url", "http://localhost:8081/apis/registry/v3");
+            this.defaults = Map.of();
         }
-        this.defaults = Collections.unmodifiableMap(map);
     }
 
     @Override

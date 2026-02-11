@@ -212,6 +212,13 @@ pipestream.registration.http.schema=/openapi.json
 pipestream.registration.http.schema-version=1.0.0
 ```
 
+**SSL/TLS Support for HTTP Health Checks:**
+
+When `pipestream.registration.http.tls-enabled` is set to `true`:
+- The health check scheme defaults to `https://` (if `pipestream.registration.http.scheme` is not explicitly set).
+- The Consul health check is configured with `tlsSkipVerify(true)`, allowing health checks to pass when using internal or self-signed certificates.
+- The registration metadata will include `tls_enabled=true`.
+
 ### Programmatic Access
 
 You can inject `ServiceRegistrationManager` to check registration status or get the assigned service ID:

@@ -15,7 +15,9 @@ tasks.matching { it.name == 'validateExtension' }.configureEach {
 dependencies {
     api platform(libs.quarkus.bom)
     api 'io.quarkus:quarkus-arc'
+    api 'io.quarkus:quarkus-rest'
     api 'io.quarkus:quarkus-vertx-http'
+    api 'io.quarkus:quarkus-smallrye-health'
     api 'io.quarkus:quarkus-smallrye-openapi'
     api 'io.quarkus:quarkus-swagger-ui'
     api 'io.smallrye.config:smallrye-config'

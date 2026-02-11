@@ -11,6 +11,7 @@ javaPlatform {
 
 dependencies {
     api platform(libs.quarkus.bom)
+    api platform(libs.quarkus.amazon.services.bom)
     api platform("io.grpc:grpc-bom:${libs.versions.grpc.get()}")
     api platform("com.google.protobuf:protobuf-bom:${libs.versions.protobufVersion.get()}")
     api platform("org.testcontainers:testcontainers-bom:${libs.versions.testcontainersVersion.get()}")

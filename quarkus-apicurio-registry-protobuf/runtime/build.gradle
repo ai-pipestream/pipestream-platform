@@ -14,6 +14,9 @@ dependencies {
     // Quarkus CDI
     implementation 'io.quarkus:quarkus-arc'
 
+    // Health check API (implementation provided by quarkus-smallrye-health at runtime)
+    implementation 'org.eclipse.microprofile.health:microprofile-health-api'
+
     // SmallRye Reactive Messaging Kafka
     implementation 'io.smallrye.reactive:smallrye-reactive-messaging-kafka'
 

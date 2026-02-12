@@ -24,8 +24,6 @@ pipestreamProtos {
     gitRef = System.getenv('PROTO_GIT_REF') ?: "main"
 
     modules {
-        register("common")
-        register("pipeline-module")
         register("registration")
     }
 }

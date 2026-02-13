@@ -5,7 +5,6 @@ import io.smallrye.config.ConfigValue;
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.jboss.logging.Logger;
 
-import java.net.InetAddress;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -230,16 +229,15 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
     }
 
     private String resolveHostname(ConfigSourceContext context) {
+        // Only use HOSTNAME env var (always set in Docker/K8s).
+        // Do NOT use InetAddress.getLocalHost() — this ConfigSource runs at build time
+        // during Quarkus augmentation, so it would bake the CI runner hostname into the
+        // artifact instead of resolving at runtime.
         String envHostname = getOptional(context, "HOSTNAME").orElse("");
         if (!envHostname.isBlank()) {
             return envHostname;
         }
-        try {
-            return InetAddress.getLocalHost().getHostName();
-        } catch (Exception e) {
-            LOG.debug("Unable to resolve hostname for prod defaults", e);
-            return null;
-        }
+        return null;
     }
 
     private String detectOsMode() {

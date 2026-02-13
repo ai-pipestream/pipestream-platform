@@ -8,6 +8,8 @@ dependencies {
     implementation 'io.quarkus:quarkus-rest-deployment'
     implementation 'io.quarkus:quarkus-vertx-http-deployment'
     implementation 'io.quarkus:quarkus-smallrye-health-deployment'
+    implementation 'io.quarkus:quarkus-smallrye-openapi-deployment'
+    implementation 'io.quarkus:quarkus-swagger-ui-deployment'
 
     implementation project(':pipestream-server')
 

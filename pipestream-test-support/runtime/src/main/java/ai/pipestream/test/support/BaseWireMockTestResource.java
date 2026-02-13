@@ -13,10 +13,12 @@ import java.util.Map;
  */
 public abstract class BaseWireMockTestResource implements QuarkusTestResourceLifecycleManager {
 
-    private static final String IMAGE_PROPERTY = "pipestream.wiremock.image";
-    private static final String IMAGE_ENV = "PIPESTREAM_WIREMOCK_IMAGE";
-    private static final String IMAGE_ENV_FALLBACK = "WIREMOCK_IMAGE";
-    private static final String DEFAULT_IMAGE = "docker.io/pipestreamai/pipestream-wiremock-server:0.1.38";
+    static final String WIREMOCK_VERSION = "0.1.38";
+    static final String IMAGE_PROPERTY = "pipestream.wiremock.image";
+    static final String IMAGE_ENV = "PIPESTREAM_WIREMOCK_IMAGE";
+    static final String IMAGE_ENV_FALLBACK = "WIREMOCK_IMAGE";
+    static final String DEFAULT_GHCR_IMAGE = "ghcr.io/ai-pipestream/pipestream-wiremock-server:" + WIREMOCK_VERSION;
+    static final String DEFAULT_DOCKER_IO_IMAGE = "docker.io/pipestreamai/pipestream-wiremock-server:" + WIREMOCK_VERSION;
 
     protected static final int DEFAULT_HTTP_PORT = 8080;
     protected static final int DEFAULT_GRPC_PORT = 50052;
@@ -65,7 +67,11 @@ public abstract class BaseWireMockTestResource implements QuarkusTestResourceLif
         return wireMockContainer.getMappedPort(port);
     }
 
-    private static String resolveImage() {
+    static String resolveImage() {
+        return resolveImage(DEFAULT_DOCKER_IO_IMAGE);
+    }
+
+    static String resolveImage(String defaultImage) {
         String image = System.getProperty(IMAGE_PROPERTY);
         if (image == null || image.isBlank()) {
             image = System.getenv(IMAGE_ENV);
@@ -74,7 +80,7 @@ public abstract class BaseWireMockTestResource implements QuarkusTestResourceLif
             image = System.getenv(IMAGE_ENV_FALLBACK);
         }
         if (image == null || image.isBlank()) {
-            image = DEFAULT_IMAGE;
+            image = defaultImage;
         }
         return image;
     }

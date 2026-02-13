@@ -10,6 +10,7 @@ dependencies {
 
     implementation project(':pipestream-quarkus-devservices')
     implementation 'io.quarkus:quarkus-arc-deployment'
+    implementation libs.testcontainers.core
 
     // Annotation processor for extension metadata (usually enabled by the plugin)
     annotationProcessor 'io.quarkus:quarkus-extension-processor'

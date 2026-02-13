@@ -11,8 +11,6 @@ import io.grpc.stub.StreamObserver;
 import io.netty.handler.ssl.SslContext;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
-import io.vertx.mutiny.core.Vertx;
-import io.vertx.ext.consul.ConsulClientOptions;
 import io.vertx.mutiny.ext.consul.ConsulClient;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -37,16 +35,15 @@ public class RegistrationClient {
     private static final String DEFAULT_REGISTRATION_SERVICE_NAME = "platform-registration";
 
     private final RegistrationConfig config;
-    private final Vertx vertx;
+    private final ConsulClient consulClient;
     private volatile ManagedChannel channel;
     private volatile PlatformRegistrationServiceGrpc.PlatformRegistrationServiceStub asyncStub;
     private volatile PlatformRegistrationServiceGrpc.PlatformRegistrationServiceBlockingStub blockingStub;
-    private volatile ConsulClient consulClient;
 
     @Inject
-    public RegistrationClient(RegistrationConfig config, Vertx vertx) {
+    public RegistrationClient(RegistrationConfig config, ConsulClient consulClient) {
         this.config = config;
-        this.vertx = vertx;
+        this.consulClient = consulClient;
     }
 
     /**
@@ -99,8 +96,8 @@ public class RegistrationClient {
                             LOG.infof("Discovered registration service via Consul: %s:%d", host, port);
                         } else {
                             String message = String.format(
-                                    "Consul discovery failed for '%s' and no direct host/port is configured (consul=%s:%d)",
-                                    serviceName, config.consul().host(), config.consul().port());
+                                    "Consul discovery failed for '%s' and no direct host/port is configured",
+                                    serviceName);
                             LOG.warn(message);
                             throw new IllegalStateException(message);
                         }
@@ -141,9 +138,7 @@ public class RegistrationClient {
      */
     private DiscoveryResult discoverViaConsul(String serviceName) {
         try {
-            ConsulClient client = getOrCreateConsulClient();
-            
-            return client.healthServiceNodes(serviceName, true)
+            return consulClient.healthServiceNodes(serviceName, true)
                     .map(serviceList -> {
                         if (serviceList != null && serviceList.getList() != null && !serviceList.getList().isEmpty()) {
                             var entry = serviceList.getList().getFirst();
@@ -163,29 +158,6 @@ public class RegistrationClient {
             LOG.debugf(e, "Consul discovery failed for service '%s'", serviceName);
             return null;
         }
-    }
-
-    /**
-     * Gets or creates the Consul client (lazy initialization).
-     */
-    private ConsulClient getOrCreateConsulClient() {
-        if (consulClient == null) {
-            synchronized (this) {
-                if (consulClient == null) {
-                    String consulHost = config.consul().host();
-                    int consulPort = config.consul().port();
-                    
-                    LOG.debugf("Creating Consul client for %s:%d", consulHost, consulPort);
-                    
-                    ConsulClientOptions options = new ConsulClientOptions()
-                            .setHost(consulHost)
-                            .setPort(consulPort);
-                    
-                    consulClient = ConsulClient.create(vertx, options);
-                }
-            }
-        }
-        return consulClient;
     }
 
     /**

@@ -52,6 +52,30 @@ public class DynamicConsulServiceDiscovery implements ServiceDiscovery {
     @ConfigProperty(name = "quarkus.dynamic-grpc.consul.port", defaultValue = "8500")
     int consulPort;
 
+    @ConfigProperty(name = "quarkus.dynamic-grpc.consul.token", defaultValue = "${CONSUL_HTTP_TOKEN:}")
+    Optional<String> consulToken;
+
+    @ConfigProperty(name = "quarkus.dynamic-grpc.consul.dc")
+    Optional<String> consulDc;
+
+    @ConfigProperty(name = "quarkus.dynamic-grpc.consul.ssl", defaultValue = "false")
+    boolean consulSsl;
+
+    @ConfigProperty(name = "quarkus.dynamic-grpc.consul.trust-all", defaultValue = "false")
+    boolean consulTrustAll;
+
+    @ConfigProperty(name = "quarkus.dynamic-grpc.consul.verify-host", defaultValue = "true")
+    boolean consulVerifyHost;
+
+    @ConfigProperty(name = "quarkus.dynamic-grpc.consul.connect-timeout", defaultValue = "5000")
+    int consulConnectTimeout;
+
+    @ConfigProperty(name = "quarkus.dynamic-grpc.consul.idle-timeout", defaultValue = "0")
+    int consulIdleTimeout;
+
+    @ConfigProperty(name = "quarkus.dynamic-grpc.consul.timeout", defaultValue = "0")
+    long consulTimeout;
+
     private ConsulClient consulClient;
 
     private final LoadBalancer loadBalancer = new RandomLoadBalancer();
@@ -67,6 +91,33 @@ public class DynamicConsulServiceDiscovery implements ServiceDiscovery {
         ConsulClientOptions options = new ConsulClientOptions()
                 .setHost(consulHost)
                 .setPort(consulPort);
+
+        consulToken.filter(t -> !t.isBlank()).ifPresent(token -> {
+            LOG.debug("Using ACL token for Consul service discovery client");
+            options.setAclToken(token);
+        });
+
+        consulDc.ifPresent(dc -> {
+            LOG.debugf("Using Consul datacenter: %s", dc);
+            options.setDc(dc);
+        });
+
+        if (consulSsl) {
+            LOG.debug("TLS enabled for Consul service discovery client");
+            options.setSsl(true);
+            options.setTrustAll(consulTrustAll);
+            options.setVerifyHost(consulVerifyHost);
+        }
+
+        if (consulConnectTimeout > 0) {
+            options.setConnectTimeout(consulConnectTimeout);
+        }
+        if (consulIdleTimeout > 0) {
+            options.setIdleTimeout(consulIdleTimeout);
+        }
+        if (consulTimeout > 0) {
+            options.setTimeout(consulTimeout);
+        }
 
         this.consulClient = ConsulClient.create(vertx, options);
         LOG.infof("ConsulClient connected to %s:%d", consulHost, consulPort);

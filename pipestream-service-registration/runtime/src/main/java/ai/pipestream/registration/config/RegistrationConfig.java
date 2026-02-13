@@ -131,12 +131,6 @@ public interface RegistrationConfig {
     RetryConfig retry();
 
     /**
-     * Configuration for Consul service discovery.
-     */
-    @WithName("consul")
-    ConsulConfig consul();
-
-    /**
      * Configuration for re-registration behavior.
      */
     @WithName("re-registration")
@@ -183,23 +177,6 @@ public interface RegistrationConfig {
          */
         @WithDefault("10s")
         Duration timeout();
-    }
-
-    /**
-     * Consul configuration for service discovery.
-     */
-    interface ConsulConfig {
-        /**
-         * Consul host.
-         */
-        @WithDefault("localhost")
-        String host();
-
-        /**
-         * Consul port.
-         */
-        @WithDefault("8500")
-        int port();
     }
 
     /**

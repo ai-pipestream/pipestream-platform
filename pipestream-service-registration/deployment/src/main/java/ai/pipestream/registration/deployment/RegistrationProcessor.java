@@ -3,6 +3,7 @@ package ai.pipestream.registration.deployment;
 import ai.pipestream.registration.RegistrationClient;
 import ai.pipestream.registration.ServiceMetadataCollector;
 import ai.pipestream.registration.ServiceRegistrationManager;
+import ai.pipestream.registration.consul.PipestreamConsulClientProducer;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -37,7 +38,8 @@ public class RegistrationProcessor {
                 .addBeanClasses(
                         ServiceRegistrationManager.class,
                         RegistrationClient.class,
-                        ServiceMetadataCollector.class
+                        ServiceMetadataCollector.class,
+                        PipestreamConsulClientProducer.class
                 )
                 .setUnremovable()
                 .build();

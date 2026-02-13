@@ -91,11 +91,27 @@ The extension uses SmallRye Stork for service discovery. It automatically checks
 #### Option 1: Consul Discovery (Production Default)
 
 ```properties
-# Consul discovery (used when no Stork config exists for the service)
+# Consul connection
 quarkus.dynamic-grpc.consul.host=localhost
 quarkus.dynamic-grpc.consul.port=8500
 quarkus.dynamic-grpc.consul.refresh-period=10s
 quarkus.dynamic-grpc.consul.use-health-checks=false
+
+# ACL token (falls back to CONSUL_HTTP_TOKEN env var)
+quarkus.dynamic-grpc.consul.token=${CONSUL_HTTP_TOKEN:}
+
+# Datacenter (optional, defaults to agent's datacenter)
+quarkus.dynamic-grpc.consul.dc=dc1
+
+# TLS configuration
+quarkus.dynamic-grpc.consul.ssl=false
+quarkus.dynamic-grpc.consul.trust-all=false
+quarkus.dynamic-grpc.consul.verify-host=true
+
+# Timeouts (milliseconds, 0 = no timeout)
+quarkus.dynamic-grpc.consul.connect-timeout=5000
+quarkus.dynamic-grpc.consul.idle-timeout=0
+quarkus.dynamic-grpc.consul.timeout=0
 ```
 
 #### Option 2: Static Discovery (Testing/Development)

@@ -525,12 +525,34 @@ The extension supports two methods for locating the platform-registration-servic
 When `host` and `port` are not configured, the extension automatically attempts Consul service discovery (using `discovery-name` when set):
 
 ```properties
-# Consul client configuration (defaults shown)
-pipestream.registration.consul.host=localhost
-pipestream.registration.consul.port=8500
-
 # Service name to look up in Consul (default: platform-registration)
 pipestream.registration.registration-service.discovery-name=platform-registration
+```
+
+**Shared Consul Client Configuration** (`pipestream.consul.*`):
+
+The extension provides a shared Consul client bean configured via the `pipestream.consul.*` namespace. This client is used for service discovery and is also available for injection by consuming applications.
+
+```properties
+# Consul connection
+pipestream.consul.host=localhost
+pipestream.consul.port=8500
+
+# ACL token (falls back to CONSUL_HTTP_TOKEN env var)
+pipestream.consul.token=${CONSUL_HTTP_TOKEN:}
+
+# Datacenter (optional, defaults to agent's datacenter)
+pipestream.consul.dc=dc1
+
+# TLS configuration
+pipestream.consul.ssl=false
+pipestream.consul.trust-all=false
+pipestream.consul.verify-host=true
+
+# Timeouts (milliseconds, 0 = no timeout)
+pipestream.consul.connect-timeout=5000
+pipestream.consul.idle-timeout=0
+pipestream.consul.timeout=0
 ```
 
 **Method 2: Direct Connection**

@@ -66,12 +66,11 @@ public class ConsulTestResource implements QuarkusTestResourceLifecycleManager {
         config.put("quarkus.stork.service-discovery.consul-host", host);
         config.put("quarkus.stork.service-discovery.consul-port", String.valueOf(mappedHttpPort));
 
-        // Service registration (pipestream.registration.* prefix)
-        config.put("pipestream.registration.consul.host", host);
-        config.put("pipestream.registration.consul.port", String.valueOf(mappedHttpPort));
-        config.put("pipestream.registration.consul.url", consulUrl);
+        // Shared Pipestream Consul client (PipestreamConsulClientProducer)
+        config.put("pipestream.consul.host", host);
+        config.put("pipestream.consul.port", String.valueOf(mappedHttpPort));
 
-        // Pipeline Consul client (used by platform-registration-service ConsulClientProducer)
+        // Legacy properties (kept for backward compatibility)
         config.put("pipeline.consul.host", host);
         config.put("pipeline.consul.port", String.valueOf(mappedHttpPort));
 

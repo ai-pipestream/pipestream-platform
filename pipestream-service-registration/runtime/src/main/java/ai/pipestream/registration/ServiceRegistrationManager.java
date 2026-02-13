@@ -13,6 +13,7 @@ import io.vertx.mutiny.core.Vertx;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.time.Duration;
@@ -35,6 +36,12 @@ public class ServiceRegistrationManager {
     private final ServiceMetadataCollector metadataCollector;
     private final RegistrationConfig config;
     private final Vertx vertx;
+
+    @ConfigProperty(name = "pipestream.consul.host", defaultValue = "localhost")
+    String consulHost;
+
+    @ConfigProperty(name = "pipestream.consul.port", defaultValue = "8500")
+    int consulPort;
 
     private final AtomicReference<String> serviceId = new AtomicReference<>();
     private final AtomicReference<RegistrationState> state = new AtomicReference<>(RegistrationState.UNREGISTERED);
@@ -274,6 +281,6 @@ public class ServiceRegistrationManager {
         String host = config.registrationService().host().orElse("<unset>");
         String port = config.registrationService().port().map(String::valueOf).orElse("<unset>");
         return String.format("Discovery=%s Consul=%s:%d Host=%s Port=%s",
-                discoveryName, config.consul().host(), config.consul().port(), host, port);
+                discoveryName, consulHost, consulPort, host, port);
     }
 }

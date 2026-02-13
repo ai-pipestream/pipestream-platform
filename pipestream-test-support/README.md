@@ -33,4 +33,4 @@ You can override the WireMock container image at runtime:
 - Environment variable: `PIPESTREAM_WIREMOCK_IMAGE`
 - Environment variable (compat): `WIREMOCK_IMAGE`
 
-Default: `docker.io/pipestreamai/pipestream-wiremock-server:0.1.38`
+Default: `docker.io/pipestreamai/pipestream-wiremock-server:0.1.39`

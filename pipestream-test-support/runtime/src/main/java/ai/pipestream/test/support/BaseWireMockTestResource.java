@@ -13,7 +13,7 @@ import java.util.Map;
  */
 public abstract class BaseWireMockTestResource implements QuarkusTestResourceLifecycleManager {
 
-    static final String WIREMOCK_VERSION = "0.1.38";
+    static final String WIREMOCK_VERSION = "0.1.39";
     static final String IMAGE_PROPERTY = "pipestream.wiremock.image";
     static final String IMAGE_ENV = "PIPESTREAM_WIREMOCK_IMAGE";
     static final String IMAGE_ENV_FALLBACK = "WIREMOCK_IMAGE";

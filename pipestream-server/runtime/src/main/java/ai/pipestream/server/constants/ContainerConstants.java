@@ -17,7 +17,7 @@ public final class ContainerConstants {
     public static final class WireMock {
         private WireMock() {}
 
-        public static final String VERSION = "0.1.38";
+        public static final String VERSION = "0.1.39";
         public static final String IMAGE_PROPERTY = "pipestream.wiremock.image";
         public static final String IMAGE_ENV = "PIPESTREAM_WIREMOCK_IMAGE";
         public static final String IMAGE_ENV_FALLBACK = "WIREMOCK_IMAGE";

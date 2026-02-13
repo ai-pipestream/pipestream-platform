@@ -67,7 +67,7 @@ consul-client = "1.9.2"
 # ========================
 # External Pipestream Libraries (not part of this monorepo)
 # ========================
-pipestream-wiremock-server = "0.1.37"
+pipestream-wiremock-server = "0.1.38"
 
 # Gradle plugins
 axion-release = "1.21.1"
@@ -75,8 +75,8 @@ nmcp = "1.4.4"
 protobuf-plugin = "0.9.6"
 buf-plugin = "0.11.0"
 shadow-plugin = "9.3.1"
-proto-toolchain = "0.7.14"
-quarkus-buf-grpc-generator = "0.7.14"
+proto-toolchain = "0.7.16"
+quarkus-buf-grpc-generator = "0.7.16"
 
 [libraries]
 # Quarkus BOM

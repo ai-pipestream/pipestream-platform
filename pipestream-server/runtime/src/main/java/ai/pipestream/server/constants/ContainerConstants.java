@@ -20,8 +20,8 @@ public final class ContainerConstants {
         public static final String IMAGE_PROPERTY = "pipestream.wiremock.image";
         public static final String IMAGE_ENV = "PIPESTREAM_WIREMOCK_IMAGE";
         public static final String IMAGE_ENV_FALLBACK = "WIREMOCK_IMAGE";
-        public static final String DEFAULT_IMAGE = "ghcr.io/ai-pipestream/pipestream-wiremock-server:0.1.37";
-        public static final String DEFAULT_DOCKER_IO_IMAGE = "docker.io/pipestreamai/pipestream-wiremock-server:0.1.37";
+        public static final String DEFAULT_IMAGE = "ghcr.io/ai-pipestream/pipestream-wiremock-server:0.1.38";
+        public static final String DEFAULT_DOCKER_IO_IMAGE = "docker.io/pipestreamai/pipestream-wiremock-server:0.1.38";
         public static final int DEFAULT_HTTP_PORT = 8080;
         public static final int DEFAULT_GRPC_PORT = 50052;
     }

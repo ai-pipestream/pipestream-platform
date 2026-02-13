@@ -48,6 +48,7 @@ public class ServiceRegistrationManager {
     private volatile Cancellable registrationSubscription;
     private final Object timeoutLock = new Object();
     private volatile Long requiredTimeoutTimerId;
+    private volatile Long reRegistrationTimerId;
 
     @Inject
     public ServiceRegistrationManager(RegistrationClient registrationClient,
@@ -78,6 +79,7 @@ public class ServiceRegistrationManager {
 
         LOG.info("Shutting down service registration");
         cancelRequiredTimeout();
+        cancelReRegistrationTimer();
 
         // Cancel any ongoing registration
         if (registrationSubscription != null) {
@@ -121,6 +123,11 @@ public class ServiceRegistrationManager {
                                 // Connection lost after registration - trigger re-registration
                                 LOG.warnf(failure, "Registration stream failed after successful registration, will re-register");
                                 handleConnectionLoss();
+                            } else if (config.reRegistration().enabled()) {
+                                // Retries exhausted but re-registration enabled - schedule another round
+                                LOG.warnf(failure, "Registration failed after %d attempts, will retry in %s",
+                                        maxAttempts, config.reRegistration().interval());
+                                scheduleReRegistration();
                             } else {
                                 LOG.errorf(failure, "Registration failed after %d attempts", maxAttempts);
                                 state.set(RegistrationState.FAILED);
@@ -194,39 +201,58 @@ public class ServiceRegistrationManager {
 
     /**
      * Handles connection loss after successful registration.
-     * Resets the channel and state, then triggers re-registration.
+     * Resets the channel and state, then schedules re-registration.
      */
     private void handleConnectionLoss() {
         RegistrationState currentState = state.get();
         if (currentState != RegistrationState.REGISTERED) {
-            // Only handle connection loss if we were actually registered
             return;
         }
 
-        LOG.info("Handling connection loss - resetting channel and state for re-registration");
-        
-        // Cancel current subscription
+        LOG.info("Handling connection loss - scheduling re-registration");
+        scheduleReRegistration();
+    }
+
+    /**
+     * Schedules a new round of registration attempts after a delay.
+     * Resets the channel so the next attempt re-discovers via Consul.
+     */
+    private void scheduleReRegistration() {
+        Duration interval = config.reRegistration().interval();
+        LOG.infof("Scheduling re-registration in %s", interval);
+
+        resetForReRegistration();
+
+        reRegistrationTimerId = vertx.setTimer(interval.toMillis(), id -> {
+            reRegistrationTimerId = null;
+            if (state.get() == RegistrationState.REGISTERED || state.get() == RegistrationState.DEREGISTERING) {
+                return;
+            }
+            LOG.info("Starting new registration attempt");
+            scheduleRequiredTimeout();
+            registerWithRetry();
+        });
+    }
+
+    /**
+     * Resets channel and state in preparation for a re-registration attempt.
+     */
+    private void resetForReRegistration() {
         if (registrationSubscription != null) {
             registrationSubscription.cancel();
             registrationSubscription = null;
         }
-
-        // Reset channel to force re-discovery
         registrationClient.resetChannel();
-
-        // Reset state to allow re-registration
         state.set(RegistrationState.UNREGISTERED);
         serviceId.set(null);
+    }
 
-        // Schedule re-registration with a delay
-        Duration reRegistrationDelay = config.retry().initialDelay();
-        LOG.infof("Scheduling re-registration in %s", reRegistrationDelay);
-        
-        // Use a simple delay mechanism - in a real implementation, you might want
-        // to use a scheduler, but for now we'll trigger it immediately with retry logic
-        // The retry logic in registerWithRetry will handle the backoff
-        scheduleRequiredTimeout();
-        registerWithRetry();
+    private void cancelReRegistrationTimer() {
+        Long timerId = reRegistrationTimerId;
+        reRegistrationTimerId = null;
+        if (timerId != null) {
+            vertx.cancelTimer(timerId);
+        }
     }
 
     private void scheduleRequiredTimeout() {

@@ -184,10 +184,19 @@ public interface RegistrationConfig {
      */
     interface ReRegistrationConfig {
         /**
-         * Whether re-registration is enabled when connection is lost.
+         * Whether re-registration is enabled when connection is lost
+         * or when initial registration fails after all retry attempts.
          */
         @WithDefault("true")
         boolean enabled();
+
+        /**
+         * Interval between re-registration rounds after all retry attempts
+         * are exhausted. The service will wait this long before starting
+         * a new round of retries.
+         */
+        @WithDefault("30s")
+        Duration interval();
     }
 
     /**

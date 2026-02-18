@@ -27,6 +27,13 @@ public interface RegistrationConfig {
     boolean enabled();
 
     /**
+     * Registration mode: "direct" registers directly with Consul (no gRPC dependency
+     * on platform-registration-service), "grpc" uses the legacy gRPC streaming path.
+     */
+    @WithDefault("direct")
+    String mode();
+
+    /**
      * Whether successful registration is required for readiness.
      */
     @WithDefault("false")

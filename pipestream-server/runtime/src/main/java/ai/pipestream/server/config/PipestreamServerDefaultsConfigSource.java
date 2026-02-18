@@ -63,6 +63,9 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         applyIfMissing(context, values, "pipestream.registration.required", "true");
         applyIfMissing(context, values, "%test.pipestream.registration.required", "false");
 
+        // Bind to all interfaces so Consul (in Docker) can reach the host service via 172.17.0.1
+        applyIfMissing(context, values, "quarkus.http.host", "0.0.0.0");
+
         // Prefer the shared HTTP server for gRPC unless explicitly overridden
         applyIfMissing(context, values, "quarkus.grpc.server.use-separate-server", "false");
         // gRPC defaults: health + reflection + large messages

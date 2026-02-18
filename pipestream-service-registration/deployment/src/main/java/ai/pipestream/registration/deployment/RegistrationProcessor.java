@@ -1,8 +1,11 @@
 package ai.pipestream.registration.deployment;
 
+import ai.pipestream.registration.DirectRegistrationService;
 import ai.pipestream.registration.RegistrationClient;
 import ai.pipestream.registration.ServiceMetadataCollector;
 import ai.pipestream.registration.ServiceRegistrationManager;
+import ai.pipestream.registration.consul.ConsulHealthChecker;
+import ai.pipestream.registration.consul.ConsulRegistrar;
 import ai.pipestream.registration.consul.PipestreamConsulClientProducer;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -39,7 +42,10 @@ public class RegistrationProcessor {
                         ServiceRegistrationManager.class,
                         RegistrationClient.class,
                         ServiceMetadataCollector.class,
-                        PipestreamConsulClientProducer.class
+                        PipestreamConsulClientProducer.class,
+                        ConsulRegistrar.class,
+                        ConsulHealthChecker.class,
+                        DirectRegistrationService.class
                 )
                 .setUnremovable()
                 .build();

@@ -3,6 +3,7 @@ package ai.pipestream.registration;
 import ai.pipestream.platform.registration.v1.RegisterResponse;
 import ai.pipestream.platform.registration.v1.PlatformEventType;
 import ai.pipestream.registration.config.RegistrationConfig;
+import ai.pipestream.registration.model.RegistrationResult;
 import ai.pipestream.registration.model.RegistrationState;
 import ai.pipestream.registration.model.ServiceInfo;
 import io.quarkus.runtime.Quarkus;
@@ -22,8 +23,11 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Manages the service registration lifecycle.
  *
- * <p>Automatically registers the service on startup and deregisters gracefully on shutdown.
- * Health checking is handled by Consul via standard gRPC health checks.
+ * <p>Supports two modes:
+ * <ul>
+ *   <li>{@code direct} (default) — registers directly with Consul via {@link DirectRegistrationService}</li>
+ *   <li>{@code grpc} — uses the legacy gRPC streaming path via {@link RegistrationClient}</li>
+ * </ul>
  */
 @SuppressWarnings("unused")
 @ApplicationScoped
@@ -31,8 +35,11 @@ public class ServiceRegistrationManager {
 
     private static final Logger LOG = Logger.getLogger(ServiceRegistrationManager.class);
     private static final double DEFAULT_RETRY_JITTER = 0.2;
+    private static final String MODE_DIRECT = "direct";
+    private static final String MODE_GRPC = "grpc";
 
     private final RegistrationClient registrationClient;
+    private final DirectRegistrationService directRegistrationService;
     private final ServiceMetadataCollector metadataCollector;
     private final RegistrationConfig config;
     private final Vertx vertx;
@@ -52,10 +59,12 @@ public class ServiceRegistrationManager {
 
     @Inject
     public ServiceRegistrationManager(RegistrationClient registrationClient,
+                                       DirectRegistrationService directRegistrationService,
                                        ServiceMetadataCollector metadataCollector,
                                        RegistrationConfig config,
                                        Vertx vertx) {
         this.registrationClient = registrationClient;
+        this.directRegistrationService = directRegistrationService;
         this.metadataCollector = metadataCollector;
         this.config = config;
         this.vertx = vertx;
@@ -67,7 +76,7 @@ public class ServiceRegistrationManager {
             return;
         }
 
-        LOG.info("Starting service registration");
+        LOG.infof("Starting service registration (mode=%s)", config.mode());
         scheduleRequiredTimeout();
         registerWithRetry();
     }
@@ -93,16 +102,83 @@ public class ServiceRegistrationManager {
         }
     }
 
+    private boolean isDirectMode() {
+        return MODE_DIRECT.equalsIgnoreCase(config.mode());
+    }
+
     private void registerWithRetry() {
         state.set(RegistrationState.REGISTERING);
         ServiceInfo serviceInfo = metadataCollector.collect();
 
+        if (isDirectMode()) {
+            registerDirectWithRetry(serviceInfo);
+        } else {
+            registerGrpcWithRetry(serviceInfo);
+        }
+    }
+
+    /**
+     * Direct mode: register with Consul via DirectRegistrationService with retry logic.
+     */
+    private void registerDirectWithRetry(ServiceInfo serviceInfo) {
+        long maxAttempts = config.required() ? Long.MAX_VALUE : config.retry().maxAttempts();
+        Duration initialDelay = config.retry().initialDelay();
+        Duration maxDelay = config.retry().maxDelay();
+
+        registrationSubscription = directRegistrationService.register(serviceInfo)
+                .onItem().invoke(result -> handleDirectRegistrationResult(result))
+                .onFailure().invoke(t -> LOG.warnf(t, "Direct registration attempt failed"))
+                .onFailure().retry()
+                    .withBackOff(initialDelay, maxDelay)
+                    .withJitter(DEFAULT_RETRY_JITTER)
+                    .atMost(maxAttempts)
+                .subscribe().with(
+                        result -> {
+                            if (!result.healthy()) {
+                                // Result was handled in invoke above, but if not healthy after retries,
+                                // schedule re-registration if enabled
+                                if (state.get() != RegistrationState.REGISTERED && config.reRegistration().enabled()) {
+                                    LOG.warnf("Direct registration returned unhealthy, will retry in %s",
+                                            config.reRegistration().interval());
+                                    scheduleReRegistration();
+                                }
+                            }
+                        },
+                        failure -> {
+                            if (config.reRegistration().enabled()) {
+                                LOG.warnf(failure, "Direct registration failed after %d attempts, will retry in %s",
+                                        maxAttempts, config.reRegistration().interval());
+                                scheduleReRegistration();
+                            } else {
+                                LOG.errorf(failure, "Direct registration failed after %d attempts", maxAttempts);
+                                state.set(RegistrationState.FAILED);
+                            }
+                        }
+                );
+    }
+
+    private void handleDirectRegistrationResult(RegistrationResult result) {
+        if (result.healthy()) {
+            serviceId.set(result.serviceId());
+            state.set(RegistrationState.REGISTERED);
+            cancelRequiredTimeout();
+            LOG.infof("Service registered successfully (direct mode) with ID: %s", result.serviceId());
+        } else {
+            LOG.errorf("Direct registration failed: %s", result.message());
+            state.set(RegistrationState.FAILED);
+        }
+    }
+
+    /**
+     * gRPC mode: register via platform-registration-service gRPC stream (legacy path).
+     */
+    private void registerGrpcWithRetry(ServiceInfo serviceInfo) {
         long maxAttempts = config.required() ? Long.MAX_VALUE : config.retry().maxAttempts();
         Duration initialDelay = config.retry().initialDelay();
         Duration maxDelay = config.retry().maxDelay();
 
         registrationSubscription = registrationClient.register(serviceInfo)
-                .onItem().invoke(this::handleRegistrationResponse)
+                .onItem().invoke(this::handleGrpcRegistrationResponse)
                 .onFailure().invoke(t -> {
                     LOG.warnf(t, "Registration attempt failed");
                     // If we were REGISTERED and connection fails, reset for re-registration
@@ -120,11 +196,9 @@ public class ServiceRegistrationManager {
                         failure -> {
                             RegistrationState currentState = state.get();
                             if (currentState == RegistrationState.REGISTERED && config.reRegistration().enabled()) {
-                                // Connection lost after registration - trigger re-registration
                                 LOG.warnf(failure, "Registration stream failed after successful registration, will re-register");
                                 handleConnectionLoss();
                             } else if (config.reRegistration().enabled()) {
-                                // Retries exhausted but re-registration enabled - schedule another round
                                 LOG.warnf(failure, "Registration failed after %d attempts, will retry in %s",
                                         maxAttempts, config.reRegistration().interval());
                                 scheduleReRegistration();
@@ -134,14 +208,9 @@ public class ServiceRegistrationManager {
                             }
                         },
                         () -> {
-                            // Stream completed normally
                             RegistrationState currentState = state.get();
-                            // Don't treat completion as connection loss if we successfully registered
-                            // The stream is expected to complete after COMPLETED event is sent by the server
                             if (currentState == RegistrationState.REGISTERED) {
                                 LOG.debug("Registration stream completed normally after successful registration");
-                                // This is expected behavior - the server closes the stream after sending COMPLETED
-                                // Do NOT trigger re-registration here
                             } else {
                                 LOG.info("Registration stream completed");
                             }
@@ -149,7 +218,7 @@ public class ServiceRegistrationManager {
                 );
     }
 
-    private void handleRegistrationResponse(RegisterResponse response) {
+    private void handleGrpcRegistrationResponse(RegisterResponse response) {
         var event = response.getEvent();
         LOG.infof("Registration event: type=%s, message=%s", event.getEventType(), event.getMessage());
 
@@ -173,8 +242,13 @@ public class ServiceRegistrationManager {
             LOG.infof("Deregistering: %s at %s:%d",
                     info.getName(), info.getAdvertisedHost(), info.getAdvertisedPort());
 
-            registrationClient.unregister(info.getName(), info.getAdvertisedHost(), info.getAdvertisedPort())
-                    .await().atMost(Duration.ofSeconds(10));
+            if (isDirectMode()) {
+                directRegistrationService.unregister(info.getName(), info.getAdvertisedHost(), info.getAdvertisedPort())
+                        .await().atMost(Duration.ofSeconds(10));
+            } else {
+                registrationClient.unregister(info.getName(), info.getAdvertisedHost(), info.getAdvertisedPort())
+                        .await().atMost(Duration.ofSeconds(10));
+            }
 
             state.set(RegistrationState.DEREGISTERED);
             LOG.info("Service deregistered successfully");
@@ -200,8 +274,7 @@ public class ServiceRegistrationManager {
     }
 
     /**
-     * Handles connection loss after successful registration.
-     * Resets the channel and state, then schedules re-registration.
+     * Handles connection loss after successful registration (gRPC mode only).
      */
     private void handleConnectionLoss() {
         RegistrationState currentState = state.get();
@@ -213,10 +286,6 @@ public class ServiceRegistrationManager {
         scheduleReRegistration();
     }
 
-    /**
-     * Schedules a new round of registration attempts after a delay.
-     * Resets the channel so the next attempt re-discovers via Consul.
-     */
     private void scheduleReRegistration() {
         Duration interval = config.reRegistration().interval();
         LOG.infof("Scheduling re-registration in %s", interval);
@@ -234,15 +303,14 @@ public class ServiceRegistrationManager {
         });
     }
 
-    /**
-     * Resets channel and state in preparation for a re-registration attempt.
-     */
     private void resetForReRegistration() {
         if (registrationSubscription != null) {
             registrationSubscription.cancel();
             registrationSubscription = null;
         }
-        registrationClient.resetChannel();
+        if (!isDirectMode()) {
+            registrationClient.resetChannel();
+        }
         state.set(RegistrationState.UNREGISTERED);
         serviceId.set(null);
     }
@@ -270,7 +338,7 @@ public class ServiceRegistrationManager {
             }
             requiredTimeoutTimerId = vertx.setTimer(timeout.toMillis(), id -> handleRequiredTimeout(timeout));
         }
-        LOG.infof("Registration required: waiting up to %s for platform-registration", timeout);
+        LOG.infof("Registration required: waiting up to %s for registration to complete", timeout);
     }
 
     private void cancelRequiredTimeout() {
@@ -292,9 +360,7 @@ public class ServiceRegistrationManager {
             return;
         }
         String diagnostics = buildRegistrationDiagnostics();
-        LOG.errorf("Registration required but not completed within %s. " +
-                        "Ensure platform-registration-service is reachable or set pipestream.registration.required=false. %s",
-                timeout, diagnostics);
+        LOG.errorf("Registration required but not completed within %s. %s", timeout, diagnostics);
         if (registrationSubscription != null) {
             registrationSubscription.cancel();
         }
@@ -303,10 +369,13 @@ public class ServiceRegistrationManager {
     }
 
     private String buildRegistrationDiagnostics() {
+        if (isDirectMode()) {
+            return String.format("Mode=direct Consul=%s:%d", consulHost, consulPort);
+        }
         String discoveryName = config.registrationService().discoveryName().orElse("platform-registration");
         String host = config.registrationService().host().orElse("<unset>");
         String port = config.registrationService().port().map(String::valueOf).orElse("<unset>");
-        return String.format("Discovery=%s Consul=%s:%d Host=%s Port=%s",
+        return String.format("Mode=grpc Discovery=%s Consul=%s:%d Host=%s Port=%s",
                 discoveryName, consulHost, consulPort, host, port);
     }
 }

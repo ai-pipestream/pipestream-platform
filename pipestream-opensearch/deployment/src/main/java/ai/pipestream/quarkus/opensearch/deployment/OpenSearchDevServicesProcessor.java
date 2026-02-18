@@ -63,7 +63,7 @@ public class OpenSearchDevServicesProcessor {
     @BuildStep(onlyIf = IsDevelopment.class)
     public DevServicesResultBuildItem startOpenSearchDevServiceDev(
             DockerStatusBuildItem dockerStatusBuildItem,
-            DevServicesComposeProjectBuildItem compose,
+            Optional<DevServicesComposeProjectBuildItem> compose,
             LaunchModeBuildItem launchMode,
             OpenSearchBuildTimeConfig config,
             List<DevServicesSharedNetworkBuildItem> sharedNetwork,
@@ -80,12 +80,15 @@ public class OpenSearchDevServicesProcessor {
                 devServicesConfig, sharedNetwork);
 
         // Try to locate OpenSearch in compose-devservices
-        Optional<ContainerAddress> composeContainer = ComposeLocator.locateContainer(
-                compose,
-                COMPOSE_IMAGE_PATTERNS,
-                OPENSEARCH_PORT,
-                launchMode.getLaunchMode(),
-                useSharedNetwork);
+        Optional<ContainerAddress> composeContainer = Optional.empty();
+        if (compose.isPresent()) {
+            composeContainer = ComposeLocator.locateContainer(
+                    compose.get(),
+                    COMPOSE_IMAGE_PATTERNS,
+                    OPENSEARCH_PORT,
+                    launchMode.getLaunchMode(),
+                    useSharedNetwork);
+        }
 
         if (composeContainer.isPresent()) {
             // Found in compose - yield to compose for container management

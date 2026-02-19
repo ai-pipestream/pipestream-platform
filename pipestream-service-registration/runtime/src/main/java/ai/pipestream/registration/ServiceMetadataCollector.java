@@ -51,6 +51,9 @@ public class ServiceMetadataCollector {
     @ConfigProperty(name = "quarkus.grpc.server.port", defaultValue = "9000")
     int grpcPort;
 
+    @ConfigProperty(name = "quarkus.grpc.server.use-separate-server", defaultValue = "false")
+    boolean useSeparateGrpcServer;
+
     @Inject
     public ServiceMetadataCollector(RegistrationConfig config) {
         this.config = config;
@@ -123,8 +126,8 @@ public class ServiceMetadataCollector {
     }
 
     private int resolveAdvertisedPort() {
-        // Use configured advertised port if specified, otherwise use gRPC port
-        return config.advertisedPort().orElse(grpcPort);
+        // Use configured advertised port if specified, otherwise use the actual gRPC-serving port
+        return config.advertisedPort().orElse(useSeparateGrpcServer ? grpcPort : httpPort);
     }
 
     private Map<String, String> collectMetadata() {
@@ -133,8 +136,8 @@ public class ServiceMetadataCollector {
         // Add HTTP port info
         metadata.put("http.port", String.valueOf(httpPort));
         
-        // Add gRPC port info
-        metadata.put("grpc.port", String.valueOf(grpcPort));
+        // Add gRPC port info — when sharing the HTTP server, gRPC is on the HTTP port
+        metadata.put("grpc.port", String.valueOf(useSeparateGrpcServer ? grpcPort : httpPort));
         
         // Add Java version
         metadata.put("java.version", System.getProperty("java.version", "unknown"));

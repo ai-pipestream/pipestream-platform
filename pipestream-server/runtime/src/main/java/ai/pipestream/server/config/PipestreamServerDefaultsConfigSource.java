@@ -265,6 +265,12 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
     }
 
     private int resolveGrpcPort(ConfigSourceContext context) {
+        boolean separateServer = getOptional(context, "quarkus.grpc.server.use-separate-server")
+                .map(Boolean::parseBoolean)
+                .orElse(false);
+        if (!separateServer) {
+            return resolveHttpPort(context);
+        }
         return getOptional(context, "quarkus.grpc.server.port")
                 .map(Integer::parseInt)
                 .orElse(9000);

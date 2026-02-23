@@ -269,7 +269,7 @@ services:
       S3_CREDENTIALS_TYPE: "static"
       S3_ACCESS_KEY_ID: "any"
       S3_SECRET_ACCESS_KEY: "any"
-    command: 'server -s3 -filer -dir=/data -s3.allowEmptyFolder=true -volume.max=5 -s3.config=/etc/seaweedfs/s3.json'
+    command: 'server -s3 -filer -dir=/data -s3.allowEmptyFolder=true -volume.max=100 -s3.config=/etc/seaweedfs/s3.json'
     volumes:
       - seaweedfs-data:/data
       # S3 authentication config (required for signed requests from AWS SDK)

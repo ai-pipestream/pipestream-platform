@@ -4,7 +4,8 @@ import ai.pipestream.apicurio.registry.protobuf.ApicurioRegistryProtobufConfig;
 import ai.pipestream.common.descriptor.DescriptorLoader;
 import ai.pipestream.common.descriptor.apicurio.ApicurioDescriptorLoader;
 import io.apicurio.registry.rest.client.RegistryClient;
-import io.apicurio.registry.rest.client.RegistryClientFactory;
+import io.apicurio.registry.client.RegistryClientFactory;
+import io.apicurio.registry.client.common.RegistryClientOptions;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
@@ -25,7 +26,8 @@ public class ApicurioDescriptorLoaderProducer {
         if (url == null || url.isBlank()) {
             return null;
         }
-        return RegistryClientFactory.create(url);
+        RegistryClientOptions options = RegistryClientOptions.create(url);
+        return RegistryClientFactory.create(options);
     }
 
     @Produces

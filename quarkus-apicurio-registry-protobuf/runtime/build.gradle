@@ -11,7 +11,9 @@ dependencies {
     // Quarkus BOM
     implementation platform(libs.quarkus.bom)
 
+    implementation project(':pipestream-descriptor-api')
     implementation project(':pipestream-descriptor-apicurio')
+    implementation libs.apicurio.registry.java.sdk
 
     // Quarkus CDI
     implementation 'io.quarkus:quarkus-arc'

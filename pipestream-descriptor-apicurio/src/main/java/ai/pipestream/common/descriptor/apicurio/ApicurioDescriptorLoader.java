@@ -6,6 +6,7 @@ import io.apicurio.registry.resolver.ParsedSchema;
 import io.apicurio.registry.resolver.SchemaParser;
 import io.apicurio.registry.rest.client.RegistryClient;
 import io.apicurio.registry.serde.protobuf.ProtobufSchemaParser;
+import io.apicurio.registry.utils.protobuf.schema.ProtobufSchema;
 import org.jboss.logging.Logger;
 
 import java.util.Collections;
@@ -21,13 +22,13 @@ public class ApicurioDescriptorLoader implements DescriptorLoader {
 
     private final RegistryClient client;
     private final String groupId;
-    private final SchemaParser<FileDescriptor, ?> schemaParser;
+    private final SchemaParser<ProtobufSchema, ?> schemaParser;
     private final ConcurrentHashMap<String, FileDescriptor> cache = new ConcurrentHashMap<>();
 
     public ApicurioDescriptorLoader(RegistryClient client, String groupId) {
         this.client = client;
         this.groupId = groupId;
-        this.schemaParser = new ProtobufSchemaParser();
+        this.schemaParser = new ProtobufSchemaParser<>();
     }
 
     @Override
@@ -81,12 +82,15 @@ public class ApicurioDescriptorLoader implements DescriptorLoader {
     }
 
     private FileDescriptor fetchAndParse(String gid, String aid) throws Exception {
-        var artifact = client.groups().byGroupId(gid).artifacts().byArtifactId(aid).get();
-        if (artifact == null) {
-            throw new Exception("Artifact not found");
+        var inputStream = client.groups().byGroupId(gid).artifacts().byArtifactId(aid).versions().byVersionExpression("branch=latest").content().get();
+        if (inputStream == null) {
+            throw new Exception("Artifact content not found");
         }
-        ParsedSchema<FileDescriptor> parsed = schemaParser.parseSchema(artifact.readAllBytes(), Collections.emptyMap());
-        return parsed.getParsedSchema();
+        try (inputStream) {
+            byte[] bytes = inputStream.readAllBytes();
+            ProtobufSchema parsed = schemaParser.parseSchema(bytes, Collections.emptyMap());
+            return parsed.getFileDescriptor();
+        }
     }
 
     @Override

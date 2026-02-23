@@ -3,6 +3,7 @@ plugins {
 }
 
 dependencies {
+    implementation platform(libs.quarkus.bom)
     api libs.protobuf.java
-    implementation libs.jboss.logging
+    implementation libs.quarkus.arc
 }

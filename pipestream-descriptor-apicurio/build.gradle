@@ -3,8 +3,9 @@ plugins {
 }
 
 dependencies {
+    implementation platform(libs.quarkus.bom)
     implementation project(':pipestream-descriptor-api')
     implementation libs.apicurio.registry.protobuf.serde
-    implementation libs.apicurio.registry.client
-    implementation libs.jboss.logging
+    implementation libs.apicurio.registry.java.sdk
+    implementation libs.quarkus.arc
 }

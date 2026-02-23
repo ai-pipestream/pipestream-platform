@@ -59,7 +59,7 @@ public interface RegistrationConfig {
     Optional<String> description();
 
     /**
-     * The type of service being registered (SERVICE or MODULE).
+     * The type of service being registered (SERVICE, MODULE, or CONNECTOR).
      * Defaults to SERVICE.
      */
     @WithDefault("SERVICE")

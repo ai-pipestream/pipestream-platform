@@ -87,3 +87,7 @@ project(':pipestream-opensearch-deployment').projectDir = file('pipestream-opens
 
 include 'pipestream-opensearch-integration-tests'
 project(':pipestream-opensearch-integration-tests').projectDir = file('pipestream-opensearch/integration-tests')
+
+// 7. Protobuf Descriptors
+include 'pipestream-descriptor-api'
+include 'pipestream-descriptor-apicurio'

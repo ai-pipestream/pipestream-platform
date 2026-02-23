@@ -114,6 +114,7 @@ public class ServiceMetadataCollector {
         return switch (typeString) {
             case "MODULE" -> ServiceType.SERVICE_TYPE_MODULE;
             case "SERVICE" -> ServiceType.SERVICE_TYPE_SERVICE;
+            case "CONNECTOR" -> ServiceType.SERVICE_TYPE_CONNECTOR;
             default -> {
                 LOG.warnf("Unknown service type '%s', defaulting to SERVICE", typeString);
                 yield ServiceType.SERVICE_TYPE_SERVICE;

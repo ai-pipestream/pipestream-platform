@@ -2,6 +2,7 @@ package ai.pipestream.registration;
 
 import ai.pipestream.platform.registration.v1.RegisterResponse;
 import ai.pipestream.platform.registration.v1.PlatformEventType;
+import ai.pipestream.platform.registration.v1.ServiceType;
 import ai.pipestream.registration.config.RegistrationConfig;
 import ai.pipestream.registration.model.RegistrationResult;
 import ai.pipestream.registration.model.RegistrationState;
@@ -109,6 +110,12 @@ public class ServiceRegistrationManager {
     private void registerWithRetry() {
         state.set(RegistrationState.REGISTERING);
         ServiceInfo serviceInfo = metadataCollector.collect();
+        if (isDirectMode() && (serviceInfo.getType() == ServiceType.SERVICE_TYPE_MODULE
+                || serviceInfo.getType() == ServiceType.SERVICE_TYPE_CONNECTOR)) {
+            LOG.warnf("Direct registration mode is active for %s (%s). Apicurio schema registration via platform-registration-service is skipped.",
+                    serviceInfo.getName(),
+                    serviceInfo.getType());
+        }
 
         if (isDirectMode()) {
             registerDirectWithRetry(serviceInfo);

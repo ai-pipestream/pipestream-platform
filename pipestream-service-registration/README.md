@@ -70,7 +70,13 @@ quarkus.application.version=1.0.0
 pipestream.registration.enabled=true
 
 # Type defaults to SERVICE
+# Supported values: SERVICE, MODULE, CONNECTOR
 pipestream.registration.type=SERVICE
+
+# registration.mode controls whether we only register in Consul (direct) or
+# route through platform-registration-service (grpc) for full platform metadata flow.
+# Mode defaults to direct.
+# pipestream.registration.mode=grpc
 ```
 
 **Step 3: Configure the registration service connection**

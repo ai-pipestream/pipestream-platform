@@ -66,6 +66,9 @@ dependencies {
         api project(':pipestream-opensearch')
         api project(':pipestream-opensearch-deployment')
 
+        api project(':pipestream-descriptor-api')
+        api project(':pipestream-descriptor-apicurio')
+
         // Shared test fixtures
         api project(':pipestream-test-support')
 

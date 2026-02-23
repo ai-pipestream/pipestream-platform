@@ -1,0 +1,10 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    implementation project(':pipestream-descriptor-api')
+    implementation libs.apicurio.registry.protobuf.serde
+    implementation libs.apicurio.registry.client
+    implementation libs.jboss.logging
+}

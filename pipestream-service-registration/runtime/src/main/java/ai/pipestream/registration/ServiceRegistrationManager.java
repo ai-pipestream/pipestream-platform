@@ -4,6 +4,7 @@ import ai.pipestream.platform.registration.v1.RegisterResponse;
 import ai.pipestream.platform.registration.v1.PlatformEventType;
 import ai.pipestream.platform.registration.v1.ServiceType;
 import ai.pipestream.registration.config.RegistrationConfig;
+import ai.pipestream.registration.consul.ConsulRegistrar;
 import ai.pipestream.registration.model.RegistrationResult;
 import ai.pipestream.registration.model.RegistrationState;
 import ai.pipestream.registration.model.ServiceInfo;
@@ -41,6 +42,7 @@ public class ServiceRegistrationManager {
 
     private final RegistrationClient registrationClient;
     private final DirectRegistrationService directRegistrationService;
+    private final ConsulRegistrar consulRegistrar;
     private final ServiceMetadataCollector metadataCollector;
     private final RegistrationConfig config;
     private final Vertx vertx;
@@ -61,11 +63,13 @@ public class ServiceRegistrationManager {
     @Inject
     public ServiceRegistrationManager(RegistrationClient registrationClient,
                                        DirectRegistrationService directRegistrationService,
+                                       ConsulRegistrar consulRegistrar,
                                        ServiceMetadataCollector metadataCollector,
                                        RegistrationConfig config,
                                        Vertx vertx) {
         this.registrationClient = registrationClient;
         this.directRegistrationService = directRegistrationService;
+        this.consulRegistrar = consulRegistrar;
         this.metadataCollector = metadataCollector;
         this.config = config;
         this.vertx = vertx;
@@ -173,6 +177,44 @@ public class ServiceRegistrationManager {
         } else {
             LOG.errorf("Direct registration failed: %s", result.message());
             state.set(RegistrationState.FAILED);
+        }
+    }
+
+    private void upgradeHttpHealthCheck(String registeredServiceId) {
+        try {
+            ServiceInfo info = metadataCollector.collect();
+            if (info.getHttpEndpoints().isEmpty()) {
+                LOG.info("No HTTP endpoints to upgrade for readiness check");
+                return;
+            }
+            var endpoint = info.getHttpEndpoints().get(0);
+            String scheme = endpoint.getScheme().isBlank()
+                    ? (endpoint.isTlsEnabled() ? "https" : "http")
+                    : endpoint.getScheme();
+            String host = endpoint.getHost().isBlank() ? info.getAdvertisedHost() : endpoint.getHost();
+            int port = endpoint.getPort() == 0 ? info.getAdvertisedPort() : endpoint.getPort();
+
+            LOG.infof("Scheduling readiness check addition for %s", registeredServiceId);
+
+            // Delay briefly to let Consul stabilize after registration, then add the readiness check
+            vertx.setTimer(5000, id ->
+                    consulRegistrar.addReadinessCheck(
+                            registeredServiceId, info.getName(),
+                            scheme, host, port,
+                            endpoint.getBasePath(), endpoint.isTlsEnabled()
+                    ).subscribe().with(
+                            success -> {
+                                if (success) {
+                                    LOG.infof("HTTP readiness check (/q/health) added for %s", registeredServiceId);
+                                } else {
+                                    LOG.warnf("HTTP readiness check addition returned false for %s", registeredServiceId);
+                                }
+                            },
+                            failure -> LOG.warnf(failure, "Failed to add HTTP readiness check for %s", registeredServiceId)
+                    )
+            );
+        } catch (Exception e) {
+            LOG.warnf(e, "Error setting up HTTP readiness check upgrade for %s", registeredServiceId);
         }
     }
 

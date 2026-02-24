@@ -18,10 +18,13 @@ dependencies {
     api 'io.quarkus:quarkus-arc'
     api 'io.quarkus:quarkus-rest'
     api 'io.quarkus:quarkus-vertx-http'
+    api 'io.quarkus:quarkus-grpc'
     api 'io.quarkus:quarkus-smallrye-health'
     api 'io.quarkus:quarkus-smallrye-openapi'
     api 'io.quarkus:quarkus-swagger-ui'
     api 'io.smallrye.config:smallrye-config'
+    implementation libs.grpc.services
+    implementation libs.vertx.web.client
 
     annotationProcessor enforcedPlatform(libs.quarkus.bom)
     annotationProcessor 'io.quarkus:quarkus-extension-processor'

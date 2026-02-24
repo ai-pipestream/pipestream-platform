@@ -176,6 +176,44 @@ public class ServiceRegistrationManager {
         }
     }
 
+    private void upgradeHttpHealthCheck(String registeredServiceId) {
+        try {
+            ServiceInfo info = metadataCollector.collect();
+            if (info.getHttpEndpoints().isEmpty()) {
+                LOG.info("No HTTP endpoints to upgrade for readiness check");
+                return;
+            }
+            var endpoint = info.getHttpEndpoints().get(0);
+            String scheme = endpoint.getScheme().isBlank()
+                    ? (endpoint.isTlsEnabled() ? "https" : "http")
+                    : endpoint.getScheme();
+            String host = endpoint.getHost().isBlank() ? info.getAdvertisedHost() : endpoint.getHost();
+            int port = endpoint.getPort() == 0 ? info.getAdvertisedPort() : endpoint.getPort();
+
+            LOG.infof("Scheduling readiness check addition for %s", registeredServiceId);
+
+            // Delay briefly to let Consul stabilize after registration, then add the readiness check
+            vertx.setTimer(5000, id ->
+                    consulRegistrar.addReadinessCheck(
+                            registeredServiceId, info.getName(),
+                            scheme, host, port,
+                            endpoint.getBasePath(), endpoint.isTlsEnabled()
+                    ).subscribe().with(
+                            success -> {
+                                if (success) {
+                                    LOG.infof("HTTP readiness check (/q/health) added for %s", registeredServiceId);
+                                } else {
+                                    LOG.warnf("HTTP readiness check addition returned false for %s", registeredServiceId);
+                                }
+                            },
+                            failure -> LOG.warnf(failure, "Failed to add HTTP readiness check for %s", registeredServiceId)
+                    )
+            );
+        } catch (Exception e) {
+            LOG.warnf(e, "Error setting up HTTP readiness check upgrade for %s", registeredServiceId);
+        }
+    }
+
     /**
      * gRPC mode: register via platform-registration-service gRPC stream (legacy path).
      */

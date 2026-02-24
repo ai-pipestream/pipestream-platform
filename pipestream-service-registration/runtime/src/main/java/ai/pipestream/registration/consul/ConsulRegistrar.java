@@ -206,6 +206,48 @@ public class ConsulRegistrar {
     }
 
     /**
+     * Re-register a service with Consul using the full /q/health readiness endpoint.
+     * Called after initial registration succeeds (which used /q/health/live to break the
+     * chicken-and-egg deadlock). Re-registration is idempotent in Consul and replaces
+     * the existing check definitions.
+     *
+     * @param serviceInfo The service info (will be re-collected with full health path)
+     * @param serviceId   The existing Consul service ID
+     * @param fullHealthPath The full health path (e.g. /q/health)
+     * @return Uni&lt;Boolean&gt; true if re-registration succeeded
+     */
+    public Uni<Boolean> addReadinessCheck(String serviceId, String serviceName,
+                                          String scheme, String host, int port,
+                                          String basePath, boolean tlsEnabled) {
+        String fullHealthPath = joinPaths(basePath, "/q/health");
+        String checkUrl = String.format("%s://%s:%d%s", scheme, host, port, fullHealthPath);
+
+        CheckOptions readinessCheck = new CheckOptions()
+                .setId("service:" + serviceId + ":4")
+                .setName(serviceName + " HTTP Readiness Check")
+                .setServiceId(serviceId)
+                .setInterval("10s")
+                .setDeregisterAfter("1m")
+                .setHttp(checkUrl);
+
+        if (tlsEnabled) {
+            readinessCheck.setTlsSkipVerify(true);
+        }
+
+        LOG.infof("Adding HTTP readiness check for %s: %s", serviceId, checkUrl);
+
+        return consulClient.registerCheck(readinessCheck)
+                .map(v -> {
+                    LOG.infof("HTTP readiness check registered for %s: %s", serviceId, checkUrl);
+                    return true;
+                })
+                .onFailure().recoverWithItem(throwable -> {
+                    LOG.warnf(throwable, "Failed to add HTTP readiness check for %s", serviceId);
+                    return false;
+                });
+    }
+
+    /**
      * Unregister a service from Consul.
      */
     public Uni<Boolean> unregisterService(String serviceId) {

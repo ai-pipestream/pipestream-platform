@@ -4,6 +4,7 @@ import ai.pipestream.platform.registration.v1.RegisterResponse;
 import ai.pipestream.platform.registration.v1.PlatformEventType;
 import ai.pipestream.platform.registration.v1.ServiceType;
 import ai.pipestream.registration.config.RegistrationConfig;
+import ai.pipestream.registration.consul.ConsulRegistrar;
 import ai.pipestream.registration.model.RegistrationResult;
 import ai.pipestream.registration.model.RegistrationState;
 import ai.pipestream.registration.model.ServiceInfo;
@@ -41,6 +42,7 @@ public class ServiceRegistrationManager {
 
     private final RegistrationClient registrationClient;
     private final DirectRegistrationService directRegistrationService;
+    private final ConsulRegistrar consulRegistrar;
     private final ServiceMetadataCollector metadataCollector;
     private final RegistrationConfig config;
     private final Vertx vertx;
@@ -61,11 +63,13 @@ public class ServiceRegistrationManager {
     @Inject
     public ServiceRegistrationManager(RegistrationClient registrationClient,
                                        DirectRegistrationService directRegistrationService,
+                                       ConsulRegistrar consulRegistrar,
                                        ServiceMetadataCollector metadataCollector,
                                        RegistrationConfig config,
                                        Vertx vertx) {
         this.registrationClient = registrationClient;
         this.directRegistrationService = directRegistrationService;
+        this.consulRegistrar = consulRegistrar;
         this.metadataCollector = metadataCollector;
         this.config = config;
         this.vertx = vertx;

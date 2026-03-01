@@ -4,7 +4,9 @@
 # Consul connectivity:
 #   - Host-based apps (quarkus dev): localhost:8500 via port mapping
 #   - Container-to-container: consul:8500 on pipeline-test-network (bridge)
-#   - Container-to-host (if needed): host.docker.internal (Win/Mac) or 172.17.0.1 (Linux bridge)
+
+
+#   - Container-to-host (if needed): host.docker.internal (Win/Mac/Docker Desktop) with host-gateway fallback mapping
 
 name: pipeline-shared-devservices
 
@@ -31,6 +33,8 @@ services:
     hostname: consul
     networks:
       - pipeline-test-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8500:8500"       # Consul UI and HTTP API
       - "8600:8600/tcp"   # Consul DNS TCP

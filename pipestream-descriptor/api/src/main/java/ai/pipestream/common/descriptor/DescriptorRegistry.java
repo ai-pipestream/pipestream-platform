@@ -42,6 +42,18 @@ public class DescriptorRegistry {
     }
 
     /**
+     * Creates a new DescriptorRegistry with optional auto-loading.
+     *
+     * @param autoLoad if true, automatically load descriptors from all available loaders
+     */
+    public DescriptorRegistry(boolean autoLoad) {
+        registerWellKnownTypes();
+        if (autoLoad) {
+            autoLoadDescriptors();
+        }
+    }
+
+    /**
      * Registers well-known Google protobuf types.
      */
     private void registerWellKnownTypes() {
@@ -174,6 +186,30 @@ public class DescriptorRegistry {
     }
 
     /**
+     * Returns the number of registered descriptors (by full name).
+     */
+    public int size() {
+        return descriptorsByFullName.size();
+    }
+
+    /**
+     * Loads descriptors from a specific loader and registers them.
+     *
+     * @param loader the loader to load from
+     * @return the number of message types registered
+     * @throws DescriptorLoader.DescriptorLoadException if loading fails
+     */
+    public int loadFrom(DescriptorLoader loader) throws DescriptorLoader.DescriptorLoadException {
+        List<FileDescriptor> fileDescriptors = loader.loadDescriptors();
+        int count = 0;
+        for (FileDescriptor fd : fileDescriptors) {
+            registerFile(fd);
+            count += fd.getMessageTypes().size();
+        }
+        return count;
+    }
+
+    /**
      * Clears all registered descriptors except well-known types.
      */
     public void clear() {
@@ -221,6 +257,95 @@ public class DescriptorRegistry {
                     LOG.warnf("Failed to load descriptors from %s: %s", loader.getLoaderType(), e.getMessage());
                 }
             }
+        }
+    }
+
+    /**
+     * Creates a new builder for DescriptorRegistry.
+     */
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /**
+     * Fluent builder for constructing a DescriptorRegistry with pre-configured loaders and descriptors.
+     */
+    public static class Builder {
+        private final List<Descriptor> descriptors = new ArrayList<>();
+        private final List<FileDescriptor> fileDescriptors = new ArrayList<>();
+        private final List<Message> messages = new ArrayList<>();
+        private final List<DescriptorLoader> loaders = new ArrayList<>();
+        private boolean autoLoad = false;
+
+        /**
+         * Registers a descriptor.
+         */
+        public Builder register(Descriptor descriptor) {
+            descriptors.add(descriptor);
+            return this;
+        }
+
+        /**
+         * Registers all message types from a file descriptor.
+         */
+        public Builder registerFile(FileDescriptor fileDescriptor) {
+            fileDescriptors.add(fileDescriptor);
+            return this;
+        }
+
+        /**
+         * Registers a descriptor from a message instance.
+         */
+        public Builder registerFromMessage(Message message) {
+            messages.add(message);
+            return this;
+        }
+
+        /**
+         * Adds a GoogleDescriptorLoader with the default path.
+         */
+        public Builder withGoogleDescriptorLoader() {
+            loaders.add(new GoogleDescriptorLoader());
+            return this;
+        }
+
+        /**
+         * Adds a GoogleDescriptorLoader with a custom path.
+         */
+        public Builder withGoogleDescriptorLoader(String descriptorPath) {
+            loaders.add(new GoogleDescriptorLoader(descriptorPath));
+            return this;
+        }
+
+        /**
+         * Enables auto-loading of descriptors from all loaders on build.
+         */
+        public Builder withAutoLoad() {
+            this.autoLoad = true;
+            return this;
+        }
+
+        /**
+         * Builds the DescriptorRegistry.
+         */
+        public DescriptorRegistry build() {
+            DescriptorRegistry registry = new DescriptorRegistry();
+            for (Descriptor d : descriptors) {
+                registry.register(d);
+            }
+            for (FileDescriptor fd : fileDescriptors) {
+                registry.registerFile(fd);
+            }
+            for (Message m : messages) {
+                registry.registerFromMessage(m);
+            }
+            for (DescriptorLoader loader : loaders) {
+                registry.addLoader(loader);
+            }
+            if (autoLoad) {
+                registry.autoLoadDescriptors();
+            }
+            return registry;
         }
     }
 }

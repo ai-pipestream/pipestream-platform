@@ -68,6 +68,7 @@ dependencies {
 
         api project(':pipestream-descriptor-api')
         api project(':pipestream-descriptor-apicurio')
+        api project(':pipestream-descriptor-apicurio-deployment')
 
         // Shared test fixtures
         api project(':pipestream-test-support')

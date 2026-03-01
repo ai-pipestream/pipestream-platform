@@ -1,0 +1,31 @@
+plugins {
+    alias(libs.plugins.java.library)
+    alias(libs.plugins.quarkus.extension)
+}
+
+quarkusExtension {
+    deploymentModule = 'pipestream-descriptor-apicurio-deployment'
+}
+
+dependencies {
+    // Quarkus BOM
+    implementation platform(libs.quarkus.bom)
+
+    // API module
+    api project(':pipestream-descriptor-api')
+
+    // Apicurio Registry
+    api libs.apicurio.registry.java.sdk
+    implementation libs.apicurio.registry.protobuf.serde
+
+    // Quarkus core
+    implementation libs.quarkus.arc
+
+    // Annotation processor for extension metadata
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+}
+
+// Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution
+tasks.matching { it.name == 'validateExtension' }.configureEach {
+    enabled = false
+}

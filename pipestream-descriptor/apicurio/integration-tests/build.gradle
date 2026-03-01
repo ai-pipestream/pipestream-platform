@@ -1,0 +1,23 @@
+plugins {
+    alias(libs.plugins.quarkus)
+}
+
+description = 'Pipestream Descriptor Apicurio Extension - Integration Tests'
+
+dependencies {
+    implementation platform(libs.quarkus.bom)
+
+    // Our extension
+    implementation project(':pipestream-descriptor-apicurio')
+
+    // Quarkus test dependencies
+    testImplementation 'io.quarkus:quarkus-junit5'
+    testImplementation libs.assertj.core
+
+    // Gradle 9 requires explicit JUnit Platform launcher
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}

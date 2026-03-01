@@ -90,4 +90,13 @@ project(':pipestream-opensearch-integration-tests').projectDir = file('pipestrea
 
 // 7. Protobuf Descriptors
 include 'pipestream-descriptor-api'
+project(':pipestream-descriptor-api').projectDir = file('pipestream-descriptor/api')
+
 include 'pipestream-descriptor-apicurio'
+project(':pipestream-descriptor-apicurio').projectDir = file('pipestream-descriptor/apicurio/runtime')
+
+include 'pipestream-descriptor-apicurio-deployment'
+project(':pipestream-descriptor-apicurio-deployment').projectDir = file('pipestream-descriptor/apicurio/deployment')
+
+include 'pipestream-descriptor-apicurio-integration-tests'
+project(':pipestream-descriptor-apicurio-integration-tests').projectDir = file('pipestream-descriptor/apicurio/integration-tests')

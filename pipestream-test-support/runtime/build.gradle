@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.java.library)
     alias(libs.plugins.quarkus.extension)
-    alias(libs.plugins.jandex)
 }
 
 description = 'Pipestream Test Support - Runtime'
@@ -40,7 +39,6 @@ tasks.matching { it.name == 'validateExtension' }.configureEach {
 }
 
 tasks.named('javadoc') {
-    dependsOn tasks.named('jandex')
     options.addStringOption('Xdoclint:all', '-Werror')
     failOnError = true
 }

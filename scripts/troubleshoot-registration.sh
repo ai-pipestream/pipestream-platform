@@ -16,23 +16,23 @@ SUBDIV="------------------------------------------------------------------------
 
 # Known service ports
 CORE_SERVICES=(
-    "platform-registration:38101"
-    "engine:38100"
-    "repository:38102"
-    "opensearch-manager:38103"
-    "s3-connector:38104"
-    "account-manager:38105"
-    "design-mode:38106"
-    "connector-admin:38107"
-    "connector-intake:38108"
-    "s3-connector-alt:38120"
+    "platform-registration:18101"
+    "engine:18100"
+    "repository:18102"
+    "opensearch-manager:18103"
+    "s3-connector:18104"
+    "account-manager:18105"
+    "design-mode:18106"
+    "connector-admin:18107"
+    "connector-intake:18108"
+    "s3-connector-alt:18120"
 )
 MODULES=(
-    "echo:39000"
-    "parser:39001"
-    "chunker:39002"
-    "embedder:39003"
-    "opensearch-sink:39004"
+    "echo:19000"
+    "parser:19001"
+    "chunker:19002"
+    "embedder:19003"
+    "opensearch-sink:19004"
 )
 
 header() {

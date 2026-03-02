@@ -1,9 +1,21 @@
 plugins {
     id 'java-library'
+    alias(libs.plugins.jandex)
 }
 
 dependencies {
     implementation platform(libs.quarkus.bom)
     api libs.protobuf.java
     implementation libs.quarkus.arc
+}
+
+// Ensure Jandex index is generated for CDI discovery
+// This prevents "classpath hell" by making this jar a proper bean archive
+jandex {
+    skipIndex = false
+}
+
+// Explicitly declare that javadoc depends on jandex to avoid Gradle 9 validation errors
+tasks.named('javadoc') {
+    dependsOn tasks.named('jandex')
 }

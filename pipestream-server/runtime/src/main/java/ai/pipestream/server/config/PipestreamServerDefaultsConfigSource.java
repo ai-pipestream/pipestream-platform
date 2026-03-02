@@ -13,9 +13,8 @@ import java.util.Optional;
 public class PipestreamServerDefaultsConfigSource implements ConfigSource {
 
     private static final Logger LOG = Logger.getLogger(PipestreamServerDefaultsConfigSource.class);
-    // Use higher than application.properties (260) so we can override baked defaults
-    // but still allow env/system properties (300+) to win.
-    private static final int ORDINAL = 265;
+    // Use lower than application.properties (250) so it acts as a true default.
+    private static final int ORDINAL = 100;
     private static final String DEFAULT_LINUX_HOST = "172.17.0.1";
     private static final String DEFAULT_DOCKER_HOST = "host.docker.internal";
 

@@ -119,9 +119,10 @@ public class ConsulRegistrar {
             sanitizedMetadata.put("http_schema_version", request.getHttpSchemaVersion());
         }
 
+        String consulServiceName = request.getName();
         ServiceOptions serviceOptions = new ServiceOptions()
                 .setId(serviceId)
-                .setName(request.getName())
+                .setName(consulServiceName)
                 .setAddress(consulHost)
                 .setPort(consulPort)
                 .setTags(new ArrayList<>(request.getTagsList()))

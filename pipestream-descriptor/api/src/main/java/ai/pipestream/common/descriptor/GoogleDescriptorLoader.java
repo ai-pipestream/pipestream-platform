@@ -105,31 +105,6 @@ public class GoogleDescriptorLoader implements DescriptorLoader {
         return false;
     }
 
-    /**
-     * Returns the descriptor file path this loader is configured with.
-     */
-    public String getDescriptorPath() {
-        return descriptorPath;
-    }
-
-    /**
-     * Creates a GoogleDescriptorLoader from the first available path.
-     * Tries each path in order and returns a loader for the first one that exists.
-     * If none are available, returns a loader for the first path (which will report unavailable).
-     *
-     * @param paths the descriptor file paths to try
-     * @return a GoogleDescriptorLoader configured with the first available path
-     */
-    public static GoogleDescriptorLoader searchPaths(String... paths) {
-        for (String path : paths) {
-            GoogleDescriptorLoader loader = new GoogleDescriptorLoader(path);
-            if (loader.isAvailable()) {
-                return loader;
-            }
-        }
-        return new GoogleDescriptorLoader(paths.length > 0 ? paths[0] : DEFAULT_DESCRIPTOR_PATH);
-    }
-
     @Override
     public String getLoaderType() {
         return "Google Descriptor File";

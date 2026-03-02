@@ -1,0 +1,23 @@
+---
+description: Apicurio Registry + Quarkus DevServices — do not set URL manually
+alwaysApply: true
+---
+
+# Apicurio Registry: Let the Plugin Own the URL
+
+The **quarkus-apicurio-registry-protobuf** extension provides DevServices that discover the Apicurio Registry (from Compose or a shared container) and inject the registry URL plus all per-channel Kafka/Apicurio wiring. This avoids repetitive config (no “20 properties per channel”).
+
+## Rule: Do NOT set the registry URL for dev/test
+
+- **Do NOT** set `apicurio.registry.url` or `mp.messaging.connector.smallrye-kafka.apicurio.registry.url` in:
+  - `compose-devservices.yml` (no `config_map.env` that maps to these properties)
+  - `application.properties` (or env) in dev/test when using this plugin
+- **Do NOT** add env vars on the apicurio-registry container that get mapped to those Quarkus properties.
+
+## Why
+
+In `DevServicesApicurioRegistryProtobufProcessor`, if either of those properties is already set, the plugin **exits and does nothing**: no discovery, no URL injection, no per-channel automation. Compose/container only needs the standard labels (`quarkus-dev-service-apicurio-registry`, `quarkus-dev-service-apicurio-registry-protobuf`) so the plugin can discover the container and inject the URL itself.
+
+## If something breaks with Apicurio in dev
+
+Debug **why** the plugin’s discovered URL or schema resolution fails (e.g. ComposeLocator returning a host-unreachable address, or schema not registered). Fix the plugin or discovery logic, or the producer/consumer registry usage — do not “fix” it by setting the URL in compose or application config and bypassing the plugin.

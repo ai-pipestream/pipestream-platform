@@ -5,6 +5,7 @@ import ai.pipestream.registration.config.RegistrationConfig;
 import ai.pipestream.registration.model.HttpEndpointInfo;
 import ai.pipestream.registration.model.ServiceInfo;
 import io.quarkus.grpc.runtime.GrpcServerRecorder;
+import io.quarkus.runtime.LaunchMode;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -104,14 +105,26 @@ public class ServiceMetadataCollector {
     }
 
     private int resolveQuarkusHttpPort() {
-        return quarkusConfig.getOptionalValue("quarkus.http.test-port", Integer.class)
-                .or(() -> quarkusConfig.getOptionalValue("quarkus.http.port", Integer.class))
+        // Only check test-port in test mode; skip 0 (random port assignment)
+        if (LaunchMode.current() == LaunchMode.TEST) {
+            var testPort = quarkusConfig.getOptionalValue("quarkus.http.test-port", Integer.class);
+            if (testPort.isPresent() && testPort.get() > 0) {
+                return testPort.get();
+            }
+        }
+        return quarkusConfig.getOptionalValue("quarkus.http.port", Integer.class)
                 .orElse(8080);
     }
 
     private int resolveQuarkusGrpcPort() {
-        return quarkusConfig.getOptionalValue("quarkus.grpc.server.test-port", Integer.class)
-                .or(() -> quarkusConfig.getOptionalValue("quarkus.grpc.server.port", Integer.class))
+        // Only check test-port in test mode; skip 0 (random port assignment)
+        if (LaunchMode.current() == LaunchMode.TEST) {
+            var testPort = quarkusConfig.getOptionalValue("quarkus.grpc.server.test-port", Integer.class);
+            if (testPort.isPresent() && testPort.get() > 0) {
+                return testPort.get();
+            }
+        }
+        return quarkusConfig.getOptionalValue("quarkus.grpc.server.port", Integer.class)
                 .orElse(9000);
     }
 

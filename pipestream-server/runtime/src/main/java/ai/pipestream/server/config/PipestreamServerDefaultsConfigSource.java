@@ -101,18 +101,16 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         logDevServicesDefaults(values);
 
         Integer registrationPort = resolveRegistrationPort(context);
-        if (registrationPort != null) {
-            applyIfMissingAllowingDefaults(context, values, "pipestream.registration.advertised-port",
-                    String.valueOf(registrationPort), "8080");
-            applyIfMissingAllowingDefaults(context, values, "pipestream.registration.internal-port",
-                    String.valueOf(registrationPort), "8080");
-            // In dev, prefer the runtime HTTP/grpc port even if a baked default exists
-            applyIfMissing(context, values, "%dev.pipestream.registration.advertised-port",
-                    String.valueOf(registrationPort));
-            applyIfMissing(context, values, "%dev.pipestream.registration.internal-port",
-                    String.valueOf(registrationPort));
-            logRegistrationDefaults(registrationPort, values);
-        }
+        applyIfMissingAllowingDefaults(context, values, "pipestream.registration.advertised-port",
+                String.valueOf(registrationPort), "8080");
+        applyIfMissingAllowingDefaults(context, values, "pipestream.registration.internal-port",
+                String.valueOf(registrationPort), "8080");
+        // In dev, prefer the runtime HTTP/grpc port even if a baked default exists
+        applyIfMissing(context, values, "%dev.pipestream.registration.advertised-port",
+                String.valueOf(registrationPort));
+        applyIfMissing(context, values, "%dev.pipestream.registration.internal-port",
+                String.valueOf(registrationPort));
+        logRegistrationDefaults(registrationPort, values);
 
         String httpRootPath = normalizePath(getOptional(context, "quarkus.http.root-path").orElse(""));
         if (!httpRootPath.isBlank() && !"/".equals(httpRootPath)) {
@@ -200,6 +198,10 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         if (prod) {
             String hostname = resolveHostname(context);
             if (hostname != null) {
+                // If we are in a CI/CD runner, default to localhost
+                if (hostname.toLowerCase().contains("runner")) {
+                    return "localhost";
+                }
                 return hostname;
             }
         }
@@ -270,15 +272,31 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         if (!separateServer) {
             return resolveHttpPort(context);
         }
-        return getOptional(context, "quarkus.grpc.server.port")
-                .map(Integer::parseInt)
+        return firstInt(
+                getOptional(context, "quarkus.grpc.server.test-port"),
+                getOptional(context, "quarkus.grpc.server.port"))
                 .orElse(9000);
     }
 
     private int resolveHttpPort(ConfigSourceContext context) {
-        return getOptional(context, "quarkus.http.port")
-                .map(Integer::parseInt)
+        return firstInt(
+                getOptional(context, "quarkus.http.test-port"),
+                getOptional(context, "quarkus.http.port"))
                 .orElse(8080);
+    }
+
+    private Optional<Integer> firstInt(Optional<String> first, Optional<String> second) {
+        if (first.isPresent()) {
+            try {
+                return Optional.of(Integer.parseInt(first.get()));
+            } catch (NumberFormatException ignored) {}
+        }
+        if (second.isPresent()) {
+            try {
+                return Optional.of(Integer.parseInt(second.get()));
+            } catch (NumberFormatException ignored) {}
+        }
+        return Optional.empty();
     }
 
     private String resolveHealthBasePath(ConfigSourceContext context, String httpRootPath) {

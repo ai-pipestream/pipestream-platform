@@ -201,7 +201,7 @@ public class ServiceRegistrationManager {
                     consulRegistrar.addReadinessCheck(
                             registeredServiceId, info.getName(),
                             scheme, host, port,
-                            endpoint.getBasePath(), endpoint.isTlsEnabled()
+                            endpoint.isTlsEnabled()
                     ).subscribe().with(
                             success -> {
                                 if (success) {

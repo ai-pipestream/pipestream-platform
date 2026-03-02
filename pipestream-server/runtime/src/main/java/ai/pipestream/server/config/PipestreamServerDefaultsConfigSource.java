@@ -60,6 +60,7 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         applyIfMissing(context, values, "pipestream.registration.registration-service.discovery-name", "platform-registration");
         logDiscoveryDefaults(values.get("pipestream.registration.registration-service.discovery-name"));
         applyIfMissing(context, values, "pipestream.registration.required", "true");
+        applyIfMissing(context, values, "%dev.pipestream.registration.required", "false");
         applyIfMissing(context, values, "%test.pipestream.registration.required", "false");
 
         // Bind to all interfaces so Consul (in Docker) can reach the host service via 172.17.0.1
@@ -101,16 +102,18 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         logDevServicesDefaults(values);
 
         Integer registrationPort = resolveRegistrationPort(context);
-        applyIfMissingAllowingDefaults(context, values, "pipestream.registration.advertised-port",
-                String.valueOf(registrationPort), "8080");
-        applyIfMissingAllowingDefaults(context, values, "pipestream.registration.internal-port",
-                String.valueOf(registrationPort), "8080");
-        // In dev, prefer the runtime HTTP/grpc port even if a baked default exists
-        applyIfMissing(context, values, "%dev.pipestream.registration.advertised-port",
-                String.valueOf(registrationPort));
-        applyIfMissing(context, values, "%dev.pipestream.registration.internal-port",
-                String.valueOf(registrationPort));
-        logRegistrationDefaults(registrationPort, values);
+        if (registrationPort != null && registrationPort > 0) {
+            applyIfMissingAllowingDefaults(context, values, "pipestream.registration.advertised-port",
+                    String.valueOf(registrationPort), "8080");
+            applyIfMissingAllowingDefaults(context, values, "pipestream.registration.internal-port",
+                    String.valueOf(registrationPort), "8080");
+            // In dev, prefer the runtime HTTP/grpc port even if a baked default exists
+            applyIfMissing(context, values, "%dev.pipestream.registration.advertised-port",
+                    String.valueOf(registrationPort));
+            applyIfMissing(context, values, "%dev.pipestream.registration.internal-port",
+                    String.valueOf(registrationPort));
+            logRegistrationDefaults(registrationPort, values);
+        }
 
         String httpRootPath = normalizePath(getOptional(context, "quarkus.http.root-path").orElse(""));
         if (!httpRootPath.isBlank() && !"/".equals(httpRootPath)) {
@@ -282,7 +285,7 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         return firstInt(
                 getOptional(context, "quarkus.http.test-port"),
                 getOptional(context, "quarkus.http.port"))
-                .orElse(8080);
+                .orElse(0); // Use 0 to indicate unset/dynamic rather than 8080
     }
 
     private Optional<Integer> firstInt(Optional<String> first, Optional<String> second) {

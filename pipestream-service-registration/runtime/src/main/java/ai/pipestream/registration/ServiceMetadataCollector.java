@@ -112,8 +112,10 @@ public class ServiceMetadataCollector {
                 return testPort.get();
             }
         }
+        
+        // Return 0 if not found, let registration pick it up or fail clearly
         return quarkusConfig.getOptionalValue("quarkus.http.port", Integer.class)
-                .orElse(8080);
+                .orElse(0);
     }
 
     private int resolveQuarkusGrpcPort() {
@@ -124,8 +126,10 @@ public class ServiceMetadataCollector {
                 return testPort.get();
             }
         }
+        
+        // Return 0 if not found
         return quarkusConfig.getOptionalValue("quarkus.grpc.server.port", Integer.class)
-                .orElse(9000);
+                .orElse(0);
     }
 
     private boolean isSeparateGrpcServer() {
@@ -155,7 +159,7 @@ public class ServiceMetadataCollector {
     }
 
     private int resolveAdvertisedPort(int httpPort, int grpcPort, boolean useSeparateGrpcServer) {
-        // Use configured advertised port if specified, otherwise use the actual gRPC-serving port
+        // Use configured advertised port if specified, otherwise use the actual gRPC-serving port.
         return config.advertisedPort().orElse(useSeparateGrpcServer ? grpcPort : httpPort);
     }
 
@@ -208,14 +212,8 @@ public class ServiceMetadataCollector {
             }
         }
 
-        if (override == null
-                && !basePath.isBlank()
-                && !healthPath.isBlank()
-                && !healthPath.equals("/q/health")
-                && healthPath.startsWith("/")
-                && !healthPath.startsWith(basePath)) {
-            LOG.warnf("HTTP health path '%s' does not include base path '%s'; the registration service will prepend it.", healthPath, basePath);
-        }
+        // Note: Quarkus management endpoints (/q/health, /q/metrics) are served
+        // outside quarkus.http.root-path, so healthPath is used as-is (not prepended with basePath).
 
         HttpEndpointInfo endpoint = new HttpEndpointInfo(
             scheme,

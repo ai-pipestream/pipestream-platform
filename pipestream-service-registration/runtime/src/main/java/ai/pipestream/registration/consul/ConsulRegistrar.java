@@ -160,7 +160,10 @@ public class ConsulRegistrar {
                         checkUrl = rawHealthPath;
                         LOG.debugf("Using absolute health URL override for %s: %s", serviceId, checkUrl);
                     } else {
-                        String effectiveHealthPath = joinPaths(endpoint.getBasePath(), rawHealthPath);
+                        // Use healthPath as-is (absolute from server root).
+                        // Quarkus management endpoints (/q/health, /q/metrics) are served
+                        // OUTSIDE quarkus.http.root-path, so we must NOT prepend basePath.
+                        String effectiveHealthPath = ensureLeadingSlash(rawHealthPath);
                         checkUrl = String.format("%s://%s:%d%s",
                                 scheme, checkHost, checkPort, effectiveHealthPath);
                     }
@@ -219,9 +222,10 @@ public class ConsulRegistrar {
      */
     public Uni<Boolean> addReadinessCheck(String serviceId, String serviceName,
                                           String scheme, String host, int port,
-                                          String basePath, boolean tlsEnabled) {
-        String fullHealthPath = joinPaths(basePath, "/q/health");
-        String checkUrl = String.format("%s://%s:%d%s", scheme, host, port, fullHealthPath);
+                                          boolean tlsEnabled) {
+        // Use /q/health directly — Quarkus management endpoints are served
+        // outside quarkus.http.root-path, so basePath should not be prepended.
+        String checkUrl = String.format("%s://%s:%d/q/health", scheme, host, port);
 
         CheckOptions readinessCheck = new CheckOptions()
                 .setId("service:" + serviceId + ":4")

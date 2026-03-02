@@ -42,17 +42,11 @@ public class ServiceMetadataCollector {
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "1.0.0")
     String applicationVersion;
 
-    @ConfigProperty(name = "quarkus.http.port", defaultValue = "8080")
-    int httpPort;
-
     @ConfigProperty(name = "quarkus.http.root-path", defaultValue = "")
     String httpRootPath;
 
-    @ConfigProperty(name = "quarkus.grpc.server.port", defaultValue = "9000")
-    int grpcPort;
-
-    @ConfigProperty(name = "quarkus.grpc.server.use-separate-server", defaultValue = "false")
-    boolean useSeparateGrpcServer;
+    @Inject
+    io.smallrye.config.SmallRyeConfig quarkusConfig;
 
     @Inject
     public ServiceMetadataCollector(RegistrationConfig config) {
@@ -65,18 +59,22 @@ public class ServiceMetadataCollector {
      * @return ServiceInfo containing all collected metadata
      */
     public ServiceInfo collect() {
+        int httpPort = resolveQuarkusHttpPort();
+        int grpcPort = resolveQuarkusGrpcPort();
+        boolean useSeparateGrpcServer = isSeparateGrpcServer();
+
         String name = resolveServiceName();
         ServiceType type = resolveServiceType();
         String version = resolveVersion();
         String advertisedHost = config.advertisedHost();
-        int advertisedPort = resolveAdvertisedPort();
+        int advertisedPort = resolveAdvertisedPort(httpPort, grpcPort, useSeparateGrpcServer);
         String internalHost = config.internalHost().orElse(null);
-        Integer internalPort = config.internalPort().orElse(null);
+        Integer internalPort = config.internalPort().orElse(useSeparateGrpcServer ? grpcPort : httpPort);
         boolean tlsEnabled = config.tlsEnabled();
-        Map<String, String> metadata = collectMetadata();
+        Map<String, String> metadata = collectMetadata(httpPort, grpcPort, useSeparateGrpcServer);
         List<String> tags = config.tags().orElse(Collections.emptyList());
         List<String> capabilities = config.capabilities().orElse(Collections.emptyList());
-        List<HttpEndpointInfo> httpEndpoints = collectHttpEndpoints(advertisedHost);
+        List<HttpEndpointInfo> httpEndpoints = collectHttpEndpoints(advertisedHost, httpPort);
         List<String> grpcServices = collectGrpcServices();
         String httpSchema = config.http().schema().orElse(null);
         String httpSchemaVersion = config.http().schemaVersion().orElse(null);
@@ -105,6 +103,23 @@ public class ServiceMetadataCollector {
         return serviceInfo;
     }
 
+    private int resolveQuarkusHttpPort() {
+        return quarkusConfig.getOptionalValue("quarkus.http.test-port", Integer.class)
+                .or(() -> quarkusConfig.getOptionalValue("quarkus.http.port", Integer.class))
+                .orElse(8080);
+    }
+
+    private int resolveQuarkusGrpcPort() {
+        return quarkusConfig.getOptionalValue("quarkus.grpc.server.test-port", Integer.class)
+                .or(() -> quarkusConfig.getOptionalValue("quarkus.grpc.server.port", Integer.class))
+                .orElse(9000);
+    }
+
+    private boolean isSeparateGrpcServer() {
+        return quarkusConfig.getOptionalValue("quarkus.grpc.server.use-separate-server", Boolean.class)
+                .orElse(false);
+    }
+
     private String resolveServiceName() {
         return config.serviceName().orElse(applicationName);
     }
@@ -126,12 +141,12 @@ public class ServiceMetadataCollector {
         return config.version().orElse(applicationVersion);
     }
 
-    private int resolveAdvertisedPort() {
+    private int resolveAdvertisedPort(int httpPort, int grpcPort, boolean useSeparateGrpcServer) {
         // Use configured advertised port if specified, otherwise use the actual gRPC-serving port
         return config.advertisedPort().orElse(useSeparateGrpcServer ? grpcPort : httpPort);
     }
 
-    private Map<String, String> collectMetadata() {
+    private Map<String, String> collectMetadata(int httpPort, int grpcPort, boolean useSeparateGrpcServer) {
         Map<String, String> metadata = new HashMap<>();
         
         // Add HTTP port info
@@ -149,7 +164,7 @@ public class ServiceMetadataCollector {
         return metadata;
     }
 
-    private List<HttpEndpointInfo> collectHttpEndpoints(String advertisedHost) {
+    private List<HttpEndpointInfo> collectHttpEndpoints(String advertisedHost, int httpPort) {
         RegistrationConfig.HttpConfig httpConfig = config.http();
         if (!httpConfig.enabled()) {
             return Collections.emptyList();

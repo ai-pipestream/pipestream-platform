@@ -34,6 +34,32 @@ public class GoogleDescriptorLoader implements DescriptorLoader {
         this.classLoader = classLoader != null ? classLoader : ClassLoader.getSystemClassLoader();
     }
 
+    /**
+     * Gets the path to the descriptor file.
+     *
+     * @return the descriptor path
+     */
+    public String getDescriptorPath() {
+        return descriptorPath;
+    }
+
+    /**
+     * Searches for a descriptor file in the specified paths and returns a loader for the first one found.
+     * If none are found, returns a loader for the first path.
+     *
+     * @param paths the paths to search
+     * @return a descriptor loader
+     */
+    public static GoogleDescriptorLoader searchPaths(String... paths) {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        for (String path : paths) {
+            if (cl.getResource(path) != null) {
+                return new GoogleDescriptorLoader(path, cl);
+            }
+        }
+        return new GoogleDescriptorLoader(paths[0], cl);
+    }
+
     @Override
     public List<FileDescriptor> loadDescriptors() throws DescriptorLoadException {
         try (InputStream inputStream = classLoader.getResourceAsStream(descriptorPath)) {

@@ -42,6 +42,29 @@ public class DescriptorRegistry {
     }
 
     /**
+     * Creates a new DescriptorRegistry.
+     *
+     * @return a new registry instance
+     */
+    public static DescriptorRegistry create() {
+        return new DescriptorRegistry();
+    }
+
+    /**
+     * Creates a new DescriptorRegistry with optional auto-loading.
+     *
+     * @param autoLoad whether to automatically load descriptors from available loaders
+     * @return a new registry instance
+     */
+    public static DescriptorRegistry create(boolean autoLoad) {
+        DescriptorRegistry registry = new DescriptorRegistry();
+        if (autoLoad) {
+            registry.autoLoadDescriptors();
+        }
+        return registry;
+    }
+
+    /**
      * Creates a new DescriptorRegistry with optional auto-loading.
      *
      * @param autoLoad if true, automatically load descriptors from all available loaders

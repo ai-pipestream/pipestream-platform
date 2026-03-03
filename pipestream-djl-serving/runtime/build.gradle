@@ -1,0 +1,26 @@
+plugins {
+    alias(libs.plugins.java.library)
+    alias(libs.plugins.quarkus.extension)
+}
+
+description = 'Pipestream DJL Serving Extension - Runtime'
+
+quarkusExtension {
+    deploymentModule = 'pipestream-djl-serving-deployment'
+}
+
+dependencies {
+    implementation platform(libs.quarkus.bom)
+
+    implementation 'io.quarkus:quarkus-core'
+    implementation 'io.quarkus:quarkus-arc'
+    implementation 'io.quarkus:quarkus-mutiny'
+    implementation 'io.quarkus:quarkus-rest-client-jackson'
+
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+}
+
+// Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution
+tasks.matching { it.name == 'validateExtension' }.configureEach {
+    enabled = false
+}

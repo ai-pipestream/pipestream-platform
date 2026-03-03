@@ -1,0 +1,32 @@
+plugins {
+    alias(libs.plugins.quarkus)
+}
+
+description = 'Pipestream DJL Serving Extension - Integration Tests'
+
+dependencies {
+    implementation platform(libs.quarkus.bom)
+    implementation project(':pipestream-djl-serving')
+    
+    implementation 'io.quarkus:quarkus-rest'
+    implementation 'io.quarkus:quarkus-rest-client'
+    implementation 'io.quarkus:quarkus-arc'
+
+    testImplementation 'io.quarkus:quarkus-junit5'
+    testImplementation libs.rest.assured
+    
+    // Deployment module needed for Dev Services to run during tests
+    testImplementation project(':pipestream-djl-serving-deployment')
+
+    // Gradle 9 requires explicit JUnit Platform launcher
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// Workaround for Gradle 9: disable validateExtension
+tasks.matching { it.name == 'validateExtension' }.configureEach {
+    enabled = false
+}
+
+test {
+    systemProperty "java.util.logging.manager", "org.jboss.logmanager.LogManager"
+}

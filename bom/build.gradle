@@ -70,6 +70,9 @@ dependencies {
         api project(':pipestream-descriptor-apicurio')
         api project(':pipestream-descriptor-apicurio-deployment')
 
+        api project(':pipestream-djl-serving')
+        api project(':pipestream-djl-serving-deployment')
+
         // Shared test fixtures
         api project(':pipestream-test-support')
 

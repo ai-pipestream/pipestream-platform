@@ -100,3 +100,13 @@ project(':pipestream-descriptor-apicurio-deployment').projectDir = file('pipestr
 
 include 'pipestream-descriptor-apicurio-integration-tests'
 project(':pipestream-descriptor-apicurio-integration-tests').projectDir = file('pipestream-descriptor/apicurio/integration-tests')
+
+// 8. DJL Serving Extension
+include 'pipestream-djl-serving'
+project(':pipestream-djl-serving').projectDir = file('pipestream-djl-serving/runtime')
+
+include 'pipestream-djl-serving-deployment'
+project(':pipestream-djl-serving-deployment').projectDir = file('pipestream-djl-serving/deployment')
+
+include 'pipestream-djl-serving-integration-tests'
+project(':pipestream-djl-serving-integration-tests').projectDir = file('pipestream-djl-serving/integration-tests')

@@ -13,6 +13,8 @@ dependencies {
     implementation 'io.quarkus:quarkus-core-deployment'
     implementation 'io.quarkus:quarkus-devservices-common'
     implementation libs.testcontainers.core
+    implementation 'com.github.docker-java:docker-java-api'
+    implementation 'com.github.docker-java:docker-java-transport-zerodep'
 
     annotationProcessor 'io.quarkus:quarkus-extension-processor'
 }

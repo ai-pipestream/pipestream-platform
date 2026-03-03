@@ -27,6 +27,15 @@ tasks.matching { it.name == 'validateExtension' }.configureEach {
     enabled = false
 }
 
-test {
-    systemProperty "java.util.logging.manager", "org.jboss.logmanager.LogManager"
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        showStandardStreams = true
+    }
+    systemProperty 'java.util.logging.manager', 'org.jboss.logmanager.LogManager'
+    // Give testcontainer time to start
+    jvmArgs '-Xmx2g'
+    // Run tests sequentially to avoid port conflicts with QuarkusTest
+    maxParallelForks = 1
 }

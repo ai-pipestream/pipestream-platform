@@ -1,5 +1,4 @@
-package ai.pipestream.quarkus.djl.serving.deployment;
-
+import com.github.dockerjava.api.model.DeviceRequest;
 import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -19,7 +18,9 @@ import org.jboss.logging.Logger;
 
 import java.io.File;
 import java.net.Socket;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -133,10 +134,10 @@ class DjlServingDevServicesProcessor {
             container.withCreateContainerCmdModifier(cmd -> {
                 var hostConfig = cmd.getHostConfig();
                 if (hostConfig != null) {
-                    hostConfig.withDeviceRequests(java.util.List.of(
-                        new com.github.dockerjava.api.model.DeviceRequest()
+                    hostConfig.withDeviceRequests(List.of(
+                        new DeviceRequest()
                             .withDriver("nvidia")
-                            .withCapabilities(java.util.List.of(java.util.List.of("gpu")))
+                            .withCapabilities(List.of(List.of("gpu")))
                     ));
                 }
             });
@@ -185,3 +186,4 @@ class DjlServingDevServicesProcessor {
         }
     }
 }
+

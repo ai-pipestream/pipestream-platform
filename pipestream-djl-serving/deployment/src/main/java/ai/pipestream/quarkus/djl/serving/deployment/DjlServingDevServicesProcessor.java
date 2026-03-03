@@ -1,3 +1,5 @@
+package ai.pipestream.quarkus.djl.serving.deployment;
+
 import com.github.dockerjava.api.model.DeviceRequest;
 import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -13,12 +15,10 @@ import io.quarkus.deployment.console.ConsoleInstalledBuildItem;
 import io.quarkus.deployment.console.StartupLogCompressor;
 import io.quarkus.deployment.dev.devservices.DevServicesConfig;
 import io.quarkus.deployment.logging.LoggingSetupBuildItem;
-import io.quarkus.runtime.configuration.ConfigUtils;
 import org.jboss.logging.Logger;
 
 import java.io.File;
 import java.net.Socket;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -155,15 +155,19 @@ class DjlServingDevServicesProcessor {
 
     private String detectVariant() {
         // 1. Check for GPU (NVIDIA)
-        if (new File("/dev/nvidia0").exists() || new File("/dev/nvidia-uvm").exists()) {
-            return "cuda";
-        }
+        try {
+            if (new File("/dev/nvidia0").exists() || new File("/dev/nvidia-uvm").exists()) {
+                return "cuda";
+            }
+        } catch (Exception ignored) {}
 
         // 2. Fallback to CPU based on architecture
-        String arch = System.getProperty("os.arch").toLowerCase();
-        if (arch.contains("arm") || arch.contains("aarch64")) {
-            return "arm64";
-        }
+        try {
+            String arch = System.getProperty("os.arch", "x86_64").toLowerCase();
+            if (arch.contains("arm") || arch.contains("aarch64")) {
+                return "arm64";
+            }
+        } catch (Exception ignored) {}
 
         return "cpu";
     }
@@ -186,4 +190,3 @@ class DjlServingDevServicesProcessor {
         }
     }
 }
-

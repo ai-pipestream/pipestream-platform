@@ -116,12 +116,9 @@ class DjlServingDevServicesProcessor {
         String variant = detectVariant();
         String imageName = config.imageName();
         
-        // If the user didn't override the image name, apply the variant suffix
+        // If the user didn't override the image name, apply the variant-aware name
         if (DjlServingContainer.DEFAULT_IMAGE.equals(imageName)) {
-            // CPU is the default/base 'latest' image, so only append if not cpu
-            if (!"cpu".equals(variant)) {
-                imageName = imageName + "-" + variant;
-            }
+            imageName = DjlServingContainer.resolveImageName(variant);
         }
 
         LOG.infof("Starting DJL Serving Dev Service with variant: %s (Image: %s)", variant, imageName);

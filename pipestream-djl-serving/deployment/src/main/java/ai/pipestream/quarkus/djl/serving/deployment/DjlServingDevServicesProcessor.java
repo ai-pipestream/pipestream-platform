@@ -121,7 +121,7 @@ class DjlServingDevServicesProcessor {
             imageName = DjlServingContainer.resolveImageName(variant);
         }
 
-        LOG.infof("Starting DJL Serving Dev Service with variant: %s (Image: %s)", variant, imageName);
+        LOG.info("Starting DJL Serving Dev Service with variant: " + variant + " (Image: " + imageName + ")");
 
         var container = new DjlServingContainer(imageName);
         if (config.shared()) {

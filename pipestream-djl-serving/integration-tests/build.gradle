@@ -17,6 +17,10 @@ dependencies {
     
     // Deployment module needed for Dev Services to run during tests
     testImplementation project(':pipestream-djl-serving-deployment')
+    
+    // Ensure docker-java classes are available during augmentation
+    testRuntimeOnly 'com.github.docker-java:docker-java-api'
+    testRuntimeOnly 'com.github.docker-java:docker-java-transport-zerodep'
 
     // Gradle 9 requires explicit JUnit Platform launcher
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

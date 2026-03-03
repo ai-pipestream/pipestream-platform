@@ -3,7 +3,7 @@ quarkusVersion = "3.32.1"
 jandex-plugin = "2.3.0"
 commons-lang3 = "3.20.0"
 opennlp-tools = "2.5.7"
-jackson-module-jsonschema = "2.21.0"
+jackson-module-jsonschema = "2.21.1"
 logging-manager = "3.4.1"
 opensearch = "3.6.0"
 opensearch-testcontainers = "4.1.0"
@@ -15,7 +15,7 @@ caffeine = "3.2.3"
 # gRPC and Protobuf versions - match Quarkus defaults
 
 grpc = "1.79.0"
-protobufVersion = "4.33.5"
+protobufVersion = "4.34.0"
 
 # Quarkiverse extensions
 quinoa = "2.7.2"
@@ -23,10 +23,10 @@ wiremock = "4.0.0-beta.29"
 wiremock-standalone = "4.0.0-beta.29"
 wiremock-grpc-extension = "1.0.0-beta.5"
 hibernate-types = "2.2.0"
-quarkus-mcp-server = "1.10.1"
-quarkus-docling = "1.2.2"
+quarkus-mcp-server = "1.10.2"
+quarkus-docling = "1.2.3"
 # AWS SDK
-aws-sdk = "2.41.32"
+aws-sdk = "2.42.4"
 # Apicurio
 apicurio = "3.1.7"
 # Testing
@@ -74,7 +74,7 @@ axion-release = "1.21.1"
 nmcp = "1.4.4"
 protobuf-plugin = "0.9.6"
 buf-plugin = "0.11.0"
-shadow-plugin = "9.3.1"
+shadow-plugin = "9.3.2"
 proto-toolchain = "0.7.17"
 quarkus-buf-grpc-generator = "0.7.17"
 

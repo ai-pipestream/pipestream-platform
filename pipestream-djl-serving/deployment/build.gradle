@@ -12,6 +12,8 @@ dependencies {
     implementation 'io.quarkus:quarkus-arc-deployment'
     implementation 'io.quarkus:quarkus-core-deployment'
     implementation 'io.quarkus:quarkus-devservices-common'
+    implementation 'io.quarkus:quarkus-rest-client-jackson-deployment'
+    
     implementation libs.testcontainers.core
     implementation 'com.github.docker-java:docker-java-api'
     implementation 'com.github.docker-java:docker-java-transport-zerodep'

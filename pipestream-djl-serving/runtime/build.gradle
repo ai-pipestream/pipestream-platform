@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.java.library)
     alias(libs.plugins.quarkus.extension)
-    alias(libs.plugins.jandex)
 }
 
 description = 'Pipestream DJL Serving Extension - Runtime'

@@ -98,7 +98,7 @@ public class DevServicesConsulProcessor {
         // Only start Consul DevServices if explicitly enabled
         // This prevents unnecessary Consul startup for services that don't need registration
         if (!configuration.enabled().orElse(false)) {
-            log.debug("Consul Dev Services not enabled, skipping. Enable with quarkus.pipestream.service.registration.devservices.consul.enabled=true");
+            log.debug("Consul Dev Services not enabled, skipping. Enable with quarkus.pipestream.service.registration.devservices.enabled=true");
             return null;
         }
 

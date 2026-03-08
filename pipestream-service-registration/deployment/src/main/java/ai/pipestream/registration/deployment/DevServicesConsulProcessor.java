@@ -54,8 +54,13 @@ public class DevServicesConsulProcessor {
 
     private static final String DEV_SERVICE_NAME = "consul";
     private static final int CONSUL_HTTP_PORT = 8500;
-    private static final String CONSUL_HOST_CONFIG = "quarkus.pipestream.service.registration.consul.host";
-    private static final String CONSUL_PORT_CONFIG = "quarkus.pipestream.service.registration.consul.port";
+    
+    // Configuration keys used by Pipestream and Stork
+    private static final String PIPESTREAM_CONSUL_HOST = "pipestream.consul.host";
+    private static final String PIPESTREAM_CONSUL_PORT = "pipestream.consul.port";
+    private static final String STORK_CONSUL_HOST = "quarkus.stork.consul.consul-host";
+    private static final String STORK_CONSUL_PORT = "quarkus.stork.consul.consul-port";
+    
     private static final String DEV_SERVICE_LABEL = "quarkus-dev-service-consul";
     private static final String DEFAULT_IMAGE = "hashicorp/consul:1.22";
 
@@ -98,20 +103,21 @@ public class DevServicesConsulProcessor {
         // Only start Consul DevServices if explicitly enabled
         // This prevents unnecessary Consul startup for services that don't need registration
         if (!configuration.enabled().orElse(false)) {
-            log.debug("Consul Dev Services not enabled, skipping. Enable with quarkus.pipestream.service.registration.devservices.consul.enabled=true");
+            log.debug("Consul Dev Services not enabled, skipping. Enable with quarkus.pipestream.service.registration.devservices.enabled=true");
             return null;
         }
 
-        // Check if Consul is already configured
+        // Check if Consul is already configured via any of the primary keys
         Config runtimeConfig = ConfigProvider.getConfig();
-        Optional<String> consulHost = runtimeConfig.getOptionalValue(CONSUL_HOST_CONFIG, String.class);
-        Optional<String> consulPort = runtimeConfig.getOptionalValue(CONSUL_PORT_CONFIG, String.class);
+        Optional<String> consulHost = runtimeConfig.getOptionalValue(PIPESTREAM_CONSUL_HOST, String.class);
+        Optional<String> consulPort = runtimeConfig.getOptionalValue(PIPESTREAM_CONSUL_PORT, String.class);
+        Optional<String> storkHost = runtimeConfig.getOptionalValue(STORK_CONSUL_HOST, String.class);
 
-        boolean alreadyConfigured = consulHost.isPresent() || consulPort.isPresent();
+        boolean alreadyConfigured = consulHost.isPresent() || consulPort.isPresent() || storkHost.isPresent();
 
         if (alreadyConfigured) {
             log.infof("Consul already configured at %s:%s, skipping Dev Services",
-                consulHost.orElse("localhost"), consulPort.orElse("8500"));
+                consulHost.orElse(storkHost.orElse("localhost")), consulPort.orElse("8500"));
             return null;
         }
 
@@ -191,8 +197,10 @@ public class DevServicesConsulProcessor {
         if (sharedContainer.isPresent()) {
             var address = sharedContainer.get();
             return new StartResult(null, address.getId(), Map.of(
-                CONSUL_HOST_CONFIG, address.getHost(),
-                CONSUL_PORT_CONFIG, String.valueOf(address.getPort())
+                PIPESTREAM_CONSUL_HOST, address.getHost(),
+                PIPESTREAM_CONSUL_PORT, String.valueOf(address.getPort()),
+                STORK_CONSUL_HOST, address.getHost(),
+                STORK_CONSUL_PORT, String.valueOf(address.getPort())
             ));
         }
 
@@ -216,8 +224,10 @@ public class DevServicesConsulProcessor {
         Integer port = container.getFirstMappedPort();
 
         Map<String, String> config = Map.of(
-            CONSUL_HOST_CONFIG, host,
-            CONSUL_PORT_CONFIG, String.valueOf(port)
+            PIPESTREAM_CONSUL_HOST, host,
+            PIPESTREAM_CONSUL_PORT, String.valueOf(port),
+            STORK_CONSUL_HOST, host,
+            STORK_CONSUL_PORT, String.valueOf(port)
         );
 
         return new StartResult(container, container.getContainerId(), config);

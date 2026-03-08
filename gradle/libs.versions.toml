@@ -75,8 +75,8 @@ nmcp = "1.4.4"
 protobuf-plugin = "0.9.6"
 buf-plugin = "0.11.0"
 shadow-plugin = "9.3.2"
-proto-toolchain = "0.7.17"
-quarkus-buf-grpc-generator = "0.7.17"
+proto-toolchain = "0.7.18"
+quarkus-buf-grpc-generator = "0.7.18"
 
 [libraries]
 # Quarkus BOM

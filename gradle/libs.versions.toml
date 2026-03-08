@@ -67,7 +67,7 @@ consul-client = "1.10.0"
 # ========================
 # External Pipestream Libraries (not part of this monorepo)
 # ========================
-pipestream-wiremock-server = "0.1.42"
+pipestream-wiremock-server = "0.1.43"
 
 # Gradle plugins
 axion-release = "1.21.1"

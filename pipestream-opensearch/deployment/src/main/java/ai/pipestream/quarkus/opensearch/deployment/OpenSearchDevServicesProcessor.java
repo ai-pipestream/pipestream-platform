@@ -50,6 +50,8 @@ public class OpenSearchDevServicesProcessor {
     private static final String OPENSEARCH_HOSTS_CONFIG = "opensearch.hosts";
     private static final String OPENSEARCH_PROTOCOL_CONFIG = "opensearch.protocol";
     private static final int OPENSEARCH_PORT = 9200;
+    private static final int OPENSEARCH_GRPC_PORT = 9400;
+    private static final String OPENSEARCH_GRPC_ADDRESS_CONFIG = "quarkus.dynamic-grpc.service.opensearch-grpc.address";
     
     // Image patterns to match in compose-devservices
     private static final List<String> COMPOSE_IMAGE_PATTERNS = List.of(
@@ -99,7 +101,8 @@ public class OpenSearchDevServicesProcessor {
             // Run extension-specific initialization
             initializeOpenSearch(address.getUrl(), dsConfig);
 
-            Map<String, String> configMap = buildConfigMap(address.getUrl());
+            // Compose manages gRPC port — typically accessible via Consul discovery
+            Map<String, String> configMap = buildConfigMap(address.getUrl(), null, 0);
             
             // Return "discovered" result - we don't own the container
             return new DevServicesResultBuildItem.RunningDevService(
@@ -169,7 +172,11 @@ public class OpenSearchDevServicesProcessor {
                     .withEnv("DISABLE_SECURITY_PLUGIN", "true")
                     .withEnv("discovery.type", "single-node")
                     .withEnv("bootstrap.memory_lock", "true")
-                    .withEnv("OPENSEARCH_JAVA_OPTS", dsConfig.javaOpts());
+                    .withEnv("OPENSEARCH_JAVA_OPTS", dsConfig.javaOpts())
+                    .withEnv("aux.transport.types", "[\"transport-grpc\"]")
+                    .withEnv("aux.transport.transport-grpc.port",
+                            OPENSEARCH_GRPC_PORT + "-" + OPENSEARCH_GRPC_PORT)
+                    .withExposedPorts(OPENSEARCH_PORT, OPENSEARCH_GRPC_PORT);
 
             // Add label for container identification
             container.withLabel("quarkus-dev-service-opensearch", dsConfig.serviceName());
@@ -177,13 +184,15 @@ public class OpenSearchDevServicesProcessor {
             container.start();
 
             String httpHostAddress = container.getHttpHostAddress();
-            LOG.infof("OpenSearch DevServices started at %s (image: %s)", 
-                    httpHostAddress, dsConfig.imageName());
+            String grpcHost = container.getHost();
+            int grpcPort = container.getMappedPort(OPENSEARCH_GRPC_PORT);
+            LOG.infof("OpenSearch DevServices started at %s (gRPC=%s:%d, image: %s)",
+                    httpHostAddress, grpcHost, grpcPort, dsConfig.imageName());
 
             // Run extension-specific initialization
             initializeOpenSearch(httpHostAddress, dsConfig);
 
-            Map<String, String> configMap = buildConfigMap(httpHostAddress);
+            Map<String, String> configMap = buildConfigMap(httpHostAddress, grpcHost, grpcPort);
 
             return new DevServicesResultBuildItem.RunningDevService(
                     "opensearch",
@@ -197,13 +206,16 @@ public class OpenSearchDevServicesProcessor {
         }
     }
 
-    private Map<String, String> buildConfigMap(String hostUrl) {
+    private Map<String, String> buildConfigMap(String hostUrl, String grpcHost, int grpcPort) {
         // Remove protocol prefix if present
         String hosts = hostUrl.replace("http://", "").replace("https://", "");
-        
+
         Map<String, String> configMap = new HashMap<>();
         configMap.put(OPENSEARCH_HOSTS_CONFIG, hosts);
         configMap.put(OPENSEARCH_PROTOCOL_CONFIG, "http");
+        if (grpcHost != null && grpcPort > 0) {
+            configMap.put(OPENSEARCH_GRPC_ADDRESS_CONFIG, grpcHost + ":" + grpcPort);
+        }
         return configMap;
     }
 

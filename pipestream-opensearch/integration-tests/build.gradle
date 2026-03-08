@@ -14,6 +14,10 @@ dependencies {
     // Need OpenSearch client directly for test code
     testImplementation libs.opensearch.java
 
+    // OpenSearch gRPC protobuf types (BulkRequest, etc.)
+    testImplementation libs.opensearch.protobufs
+    testImplementation libs.protobuf.java
+
     // Mutiny for reactive tests
     testImplementation 'io.smallrye.reactive:smallrye-mutiny-vertx-core'
 

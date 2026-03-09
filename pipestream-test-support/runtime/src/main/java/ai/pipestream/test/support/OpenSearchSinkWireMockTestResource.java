@@ -79,9 +79,6 @@ public class OpenSearchSinkWireMockTestResource implements QuarkusTestResourceLi
         config.put("quarkus.stork.registration-service.service-discovery.type", "static");
         config.put("quarkus.stork.registration-service.service-discovery.address-list", wiremockAddress);
 
-        // Use opensearch-manager (WireMock) for schema
-        config.put("opensearch.sink.use-opensearch-manager", "true");
-
         // OpenSearch native gRPC (DocumentService bulk) - point at real OpenSearch
         config.put("quarkus.dynamic-grpc.service.opensearch-grpc.address", osGrpcAddress);
 

@@ -31,7 +31,7 @@ public class DjlServingTestResource implements QuarkusTestResourceLifecycleManag
 
     private static final Logger log = LoggerFactory.getLogger(DjlServingTestResource.class);
 
-    private static final String DEFAULT_IMAGE = "deepjavalibrary/djl-serving:latest";
+    private static final String DEFAULT_IMAGE = "deepjavalibrary/djl-serving:0.36.0";
     private static final int PORT = 8080;
     private static final String DEFAULT_MODEL_NAME = "all_MiniLM_L6_v2";
 

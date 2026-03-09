@@ -165,7 +165,7 @@ class DjlServingDevServicesProcessor {
         try {
             String arch = System.getProperty("os.arch", "x86_64").toLowerCase();
             if (arch.contains("arm") || arch.contains("aarch64")) {
-                return "arm64";
+                return "aarch64";
             }
         } catch (Exception ignored) {}
 

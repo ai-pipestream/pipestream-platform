@@ -85,3 +85,4 @@ public abstract class BaseWireMockTestResource implements QuarkusTestResourceLif
         return image;
     }
 }
+// Trigger: WireMock 0.1.47 is now live

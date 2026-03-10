@@ -174,3 +174,4 @@ git log quarkus-apicurio-registry-protobuf/
 
 MIT License - See [LICENSE](LICENSE) file for details.
 \n\n# Trigger: Propagate WireMock 0.1.47
+\n\n# Re-trigger: WireMock 0.1.47 is now live

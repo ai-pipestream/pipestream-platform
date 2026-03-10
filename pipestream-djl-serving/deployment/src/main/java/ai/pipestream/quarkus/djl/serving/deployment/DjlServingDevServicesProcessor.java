@@ -73,7 +73,7 @@ class DjlServingDevServicesProcessor {
                 loggingSetupBuildItem);
 
         try {
-            startContainer(dockerStatusBuildItem, devServicesConfig)
+            startContainer(dockerStatusBuildItem, devServicesConfig, launchMode.isTest())
                     .ifPresentOrElse(
                             devService -> {
                                 DEV_SERVICE = devService;
@@ -103,7 +103,8 @@ class DjlServingDevServicesProcessor {
 
     private Optional<RunningDevService> startContainer(
             DockerStatusBuildItem dockerStatusBuildItem,
-            DjlServingBuildTimeConfig.DevServicesConfig config) {
+            DjlServingBuildTimeConfig.DevServicesConfig config,
+            boolean isTest) {
 
         if (!config.enabled()) {
             return Optional.empty();
@@ -114,9 +115,9 @@ class DjlServingDevServicesProcessor {
             return Optional.empty();
         }
 
-        String variant = detectVariant();
+        String variant = resolveVariant(config.variant(), isTest);
         String imageName = config.imageName();
-        
+
         // If the user didn't override the image name, apply the variant-aware name
         if (DjlServingContainer.DEFAULT_IMAGE.equals(imageName)) {
             imageName = DjlServingContainer.resolveImageName(variant);
@@ -145,30 +146,36 @@ class DjlServingDevServicesProcessor {
 
         container.start();
 
+        String modelName = config.modelName();
+        String modelUri = config.modelUri();
+        container.registerModel(modelName, modelUri);
+
+        String url = container.getUrl();
         Map<String, String> exposedConfig = new HashMap<>();
-        exposedConfig.put("pipestream.djl-serving.url", container.getUrl());
-        exposedConfig.put("embedder.djl-serving.url", container.getUrl());
-        exposedConfig.put("quarkus.rest-client.djl-serving.url", container.getUrl());
+        exposedConfig.put("pipestream.djl-serving.url", url);
+        exposedConfig.put("pipestream.djl-serving.model-name", modelName);
+        exposedConfig.put("embedder.djl-serving.url", url);
+        exposedConfig.put("embedder.djl-serving.model-name", modelName);
+        exposedConfig.put("quarkus.rest-client.djl-serving.url", url);
 
         return Optional.of(new RunningDevService(PROVIDER, container.getContainerId(), container::close, exposedConfig));
     }
 
-    private String detectVariant() {
-        // 1. Check for GPU (NVIDIA)
-        try {
-            if (new File("/dev/nvidia0").exists() || new File("/dev/nvidia-uvm").exists()) {
-                return "cuda";
-            }
-        } catch (Exception ignored) {}
-
-        // 2. Fallback to CPU based on architecture
-        try {
-            String arch = System.getProperty("os.arch", "x86_64").toLowerCase();
-            if (arch.contains("arm") || arch.contains("aarch64")) {
-                return "aarch64";
-            }
-        } catch (Exception ignored) {}
-
+    private String resolveVariant(Optional<String> configured, boolean isTest) {
+        if (configured.isPresent()) {
+            return configured.get();
+        }
+        if (isTest) {
+            return "cpu";
+        }
+        // Auto-detect for dev mode
+        String arch = System.getProperty("os.arch", "");
+        if (arch.equals("aarch64")) {
+            return "aarch64";
+        }
+        if (new File("/dev/nvidia0").exists()) {
+            return "cuda";
+        }
         return "cpu";
     }
 

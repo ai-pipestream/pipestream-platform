@@ -1,6 +1,7 @@
 package ai.pipestream.quarkus.djl.serving.runtime.client;
 
 import io.smallrye.mutiny.Uni;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -23,5 +24,5 @@ public interface DjlServingClient {
     @Path("/predictions/{modelName}")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    Uni<JsonObject> predict(@PathParam("modelName") String modelName, JsonObject input);
+    Uni<JsonArray> predict(@PathParam("modelName") String modelName, JsonObject input);
 }

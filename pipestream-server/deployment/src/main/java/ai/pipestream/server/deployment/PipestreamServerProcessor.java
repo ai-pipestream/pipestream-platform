@@ -5,6 +5,7 @@ import ai.pipestream.server.health.HttpServerReadinessCheck;
 import ai.pipestream.server.health.PipestreamHealthConfig;
 import ai.pipestream.server.health.PipestreamLivenessCheck;
 import ai.pipestream.server.http.PipestreamHttpServerOptionsCustomizer;
+import ai.pipestream.server.util.ChunkSizeCalculator;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -24,6 +25,7 @@ public class PipestreamServerProcessor {
     AdditionalBeanBuildItem registerBeans() {
         return AdditionalBeanBuildItem.builder()
                 .addBeanClasses(PipestreamHttpServerOptionsCustomizer.class)
+                .addBeanClasses(ChunkSizeCalculator.class)
                 .setUnremovable()
                 .build();
     }

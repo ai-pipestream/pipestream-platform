@@ -13,7 +13,7 @@ import java.util.Map;
  */
 public abstract class BaseWireMockTestResource implements QuarkusTestResourceLifecycleManager {
 
-    static final String WIREMOCK_VERSION = "0.1.47";
+    static final String WIREMOCK_VERSION = "0.1.48";
     static final String IMAGE_PROPERTY = "pipestream.wiremock.image";
     static final String IMAGE_ENV = "PIPESTREAM_WIREMOCK_IMAGE";
     static final String IMAGE_ENV_FALLBACK = "WIREMOCK_IMAGE";
@@ -85,4 +85,4 @@ public abstract class BaseWireMockTestResource implements QuarkusTestResourceLif
         return image;
     }
 }
-// Trigger: WireMock 0.1.47 is now live
+// Trigger: WireMock 0.1.48 - fix NOT_FOUND for unknown accounts in direct gRPC server

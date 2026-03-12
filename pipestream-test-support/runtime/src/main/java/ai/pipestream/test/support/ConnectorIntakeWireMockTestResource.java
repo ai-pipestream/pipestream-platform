@@ -2,6 +2,11 @@ package ai.pipestream.test.support;
 
 import org.testcontainers.containers.GenericContainer;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.Map;
 
 /**
@@ -81,10 +86,46 @@ public class ConnectorIntakeWireMockTestResource extends BaseWireMockTestResourc
         // Expose standard port in case needed for HTTP/Admin API
         config.put("wiremock.host", host);
         config.put("wiremock.port", standardPort);
+        // Ensure REST client always targets WireMock intake endpoint in tests using this resource.
+        config.put("quarkus.rest-client.connector-intake.url", "http://" + host + ":" + standardPort);
 
         // Ensure Quarkus gRPC server allows large messages (overriding defaults)
         config.put("quarkus.grpc.server.max-inbound-message-size", "2147483647");
 
+        // Provide a default intake upload stub so tests fail only on real integration issues,
+        // not because /uploads/raw has no mapping.
+        registerDefaultUploadStub(host, standardPort);
+
         return config;
+    }
+
+    private void registerDefaultUploadStub(String host, String port) {
+        String body = """
+                {
+                  "request": { "method": "POST", "url": "/uploads/raw" },
+                  "response": {
+                    "status": 200,
+                    "body": "{\\"status\\":\\"accepted\\"}",
+                    "headers": { "Content-Type": "application/json" }
+                  }
+                }
+                """;
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://" + host + ":" + port + "/__admin/mappings"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        try {
+            HttpResponse<String> response = HttpClient.newHttpClient()
+                    .send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400) {
+                throw new IllegalStateException("Failed to register default /uploads/raw stub: HTTP " + response.statusCode());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Failed to register default /uploads/raw stub", e);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to register default /uploads/raw stub", e);
+        }
     }
 }

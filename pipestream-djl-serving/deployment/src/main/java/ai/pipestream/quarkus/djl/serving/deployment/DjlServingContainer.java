@@ -19,23 +19,39 @@ public class DjlServingContainer extends GenericContainer<DjlServingContainer> {
     public static final int DJL_SERVING_PORT = 8080;
     public static final String DJL_VERSION = "0.36.0";
     public static final String DEFAULT_IMAGE_BASE = "deepjavalibrary/djl-serving";
-    public static final String DEFAULT_IMAGE = DEFAULT_IMAGE_BASE + ":" + DJL_VERSION;
+    public static final String DEFAULT_IMAGE = DEFAULT_IMAGE_BASE + ":" + DJL_VERSION + "-cpu";
     public static final String DEFAULT_MODEL_NAME = "all_MiniLM_L6_v2";
     public static final String DEFAULT_MODEL_URI =
             "djl://ai.djl.huggingface.pytorch/sentence-transformers/all-MiniLM-L6-v2";
 
-    public DjlServingContainer(String imageName) {
+    public DjlServingContainer(String imageName, String variant) {
         super(DockerImageName.parse(imageName == null ? DEFAULT_IMAGE : imageName));
         withExposedPorts(DJL_SERVING_PORT);
-        waitingFor(Wait.forHttp("/ping").forPort(DJL_SERVING_PORT).withStartupTimeout(Duration.ofMinutes(3)));
+        applyVariantConfig(variant);
+        waitingFor(Wait.forHttp("/ping").forPort(DJL_SERVING_PORT).withStartupTimeout(Duration.ofMinutes(5)));
+    }
+
+    private void applyVariantConfig(String variant) {
+        if ("cuda".equals(variant)) {
+            // GPU settings — matches docker-compose.gpu.yml
+            withEnv("MODEL_LOADING_TIMEOUT", "600");
+            withEnv("JAVA_OPTS", "-Xmx8g -Xms2g -XX:+ExitOnOutOfMemoryError");
+            withEnv("OPTION_ROLLING_BATCH", "disable");
+            withEnv("OPTION_TENSOR_PARALLEL_DEGREE", "1");
+            withEnv("OMP_NUM_THREADS", "4");
+        } else {
+            // CPU / aarch64 settings — matches docker-compose.yml
+            withEnv("MODEL_LOADING_TIMEOUT", "300");
+            withEnv("JAVA_OPTS", "-Xmx4g -Xms1g -XX:+ExitOnOutOfMemoryError");
+        }
     }
 
     public static String resolveImageName(String variant) {
         return switch (variant) {
-            case "cpu" -> DEFAULT_IMAGE;
+            case "cpu" -> DEFAULT_IMAGE_BASE + ":" + DJL_VERSION + "-cpu";
             case "cuda" -> DEFAULT_IMAGE_BASE + ":" + DJL_VERSION + "-pytorch-gpu";
             case "aarch64" -> DEFAULT_IMAGE_BASE + ":" + DJL_VERSION + "-aarch64";
-            default -> DEFAULT_IMAGE;
+            default -> DEFAULT_IMAGE_BASE + ":" + DJL_VERSION + "-cpu";
         };
     }
 

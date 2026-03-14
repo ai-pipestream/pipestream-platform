@@ -125,7 +125,7 @@ class DjlServingDevServicesProcessor {
 
         LOG.info("Starting DJL Serving Dev Service with variant: " + variant + " (Image: " + imageName + ")");
 
-        var container = new DjlServingContainer(imageName);
+        var container = new DjlServingContainer(imageName, variant);
         if (config.shared()) {
             container.withLabel("quarkus-dev-service-djl-serving", "shared");
         }

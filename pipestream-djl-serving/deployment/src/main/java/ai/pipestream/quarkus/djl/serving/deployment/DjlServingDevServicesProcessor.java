@@ -138,6 +138,7 @@ class DjlServingDevServicesProcessor {
                     hostConfig.withDeviceRequests(List.of(
                         new DeviceRequest()
                             .withDriver("nvidia")
+                            .withCount(-1) // all GPUs, equivalent to docker --gpus all
                             .withCapabilities(List.of(List.of("gpu")))
                     ));
                 }

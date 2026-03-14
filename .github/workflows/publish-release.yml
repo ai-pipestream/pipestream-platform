@@ -31,7 +31,7 @@ jobs:
       - name: Install Buf
         uses: bufbuild/buf-setup-action@v1
         with:
-          version: "1.28.1"
+          version: "1.66.1"
           github_token: ${{ github.token }}
 
       - name: Publish to Maven Central Portal and GitHub Packages

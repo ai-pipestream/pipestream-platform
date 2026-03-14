@@ -37,7 +37,7 @@ jobs:
       - name: Install Buf
         uses: bufbuild/buf-setup-action@v1
         with:
-          version: "1.28.1"
+          version: "1.66.1"
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Docker Hub
@@ -95,7 +95,7 @@ jobs:
       - name: Install Buf
         uses: bufbuild/buf-setup-action@v1
         with:
-          version: "1.28.1"
+          version: "1.66.1"
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate publish configuration
@@ -150,7 +150,7 @@ jobs:
       - name: Install Buf
         uses: bufbuild/buf-setup-action@v1
         with:
-          version: "1.28.1"
+          version: "1.66.1"
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to Maven Central Snapshots and GitHub Packages

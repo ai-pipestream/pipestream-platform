@@ -87,6 +87,10 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         applyIfMissing(context, values, "quarkus.smallrye-openapi.path", "openapi");
         applyIfMissing(context, values, "quarkus.swagger-ui.path", "swagger-ui");
 
+        // Security: enable admin fallback in dev mode (no x-account-id header → admin)
+        applyIfMissing(context, values, "%dev.pipestream.security.admin-fallback-enabled", "true");
+        applyIfMissing(context, values, "%test.pipestream.security.admin-fallback-enabled", "true");
+
         // Dev profile: compose devservices defaults (shared infra)
         applyIfMissing(context, values, "%dev.quarkus.devservices.enabled", "true");
         applyIfMissing(context, values, "%dev.quarkus.compose.devservices.enabled", "true");

@@ -7,6 +7,10 @@ import ai.pipestream.server.health.PipestreamLivenessCheck;
 import ai.pipestream.server.http.PipestreamHttpServerOptionsCustomizer;
 import ai.pipestream.server.meta.BuildInfoProvider;
 import ai.pipestream.server.meta.BuildInfoResource;
+import ai.pipestream.server.security.AdminSecurityFilter;
+import ai.pipestream.server.security.AdminSecurityInterceptor;
+import ai.pipestream.server.security.PipestreamSecurityConfig;
+import ai.pipestream.server.security.PipestreamSecurityContext;
 import ai.pipestream.server.util.ChunkSizeCalculator;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -30,6 +34,10 @@ public class PipestreamServerProcessor {
                 .addBeanClasses(ChunkSizeCalculator.class)
                 .addBeanClasses(BuildInfoProvider.class)
                 .addBeanClasses(BuildInfoResource.class)
+                .addBeanClasses(PipestreamSecurityContext.class)
+                .addBeanClasses(PipestreamSecurityConfig.class)
+                .addBeanClasses(AdminSecurityInterceptor.class)
+                .addBeanClasses(AdminSecurityFilter.class)
                 .setUnremovable()
                 .build();
     }

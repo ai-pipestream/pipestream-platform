@@ -35,11 +35,15 @@ public class PipestreamServerProcessor {
                 .addBeanClasses(BuildInfoProvider.class)
                 .addBeanClasses(BuildInfoResource.class)
                 .addBeanClasses(PipestreamSecurityContext.class)
-                .addBeanClasses(PipestreamSecurityConfig.class)
                 .addBeanClasses(AdminSecurityInterceptor.class)
                 .addBeanClasses(AdminSecurityFilter.class)
                 .setUnremovable()
                 .build();
+    }
+
+    @BuildStep
+    void registerSecurityBeans(BuildProducer<AdditionalBeanBuildItem> beans) {
+        beans.produce(AdditionalBeanBuildItem.unremovableOf(PipestreamSecurityConfig.class));
     }
 
     @BuildStep

@@ -1,7 +1,7 @@
 package ai.pipestream.server.security;
 
 import io.grpc.Context;
-import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.ConfigProvider;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.ext.Provider;
@@ -22,9 +22,6 @@ public class AdminSecurityFilter implements ContainerRequestFilter {
 
     private static final Logger LOG = Logger.getLogger(AdminSecurityFilter.class);
 
-    @Inject
-    PipestreamSecurityConfig config;
-
     @Override
     public void filter(ContainerRequestContext requestContext) {
         String accountId = requestContext.getHeaderString("x-account-id");
@@ -32,7 +29,7 @@ public class AdminSecurityFilter implements ContainerRequestFilter {
         Set<String> roles = Collections.emptySet();
 
         if (accountId == null || accountId.isBlank()) {
-            if (config.adminFallbackEnabled()) {
+            if (isAdminFallbackEnabled()) {
                 accountId = "admin";
                 isAdmin = true;
                 roles = Set.of("admin");
@@ -52,5 +49,11 @@ public class AdminSecurityFilter implements ContainerRequestFilter {
                 .withValue(PipestreamSecurityContext.IS_ADMIN_KEY, isAdmin)
                 .withValue(PipestreamSecurityContext.ROLES_KEY, roles);
         grpcCtx.attach();
+    }
+
+    private boolean isAdminFallbackEnabled() {
+        return ConfigProvider.getConfig()
+                .getOptionalValue("pipestream.security.admin-fallback-enabled", Boolean.class)
+                .orElse(false);
     }
 }

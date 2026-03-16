@@ -2,7 +2,7 @@ package ai.pipestream.server.security;
 
 import io.grpc.*;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
 
 import java.util.Collections;
@@ -22,9 +22,6 @@ public class AdminSecurityInterceptor implements ServerInterceptor {
     private static final Metadata.Key<String> ACCOUNT_ID_HEADER =
             Metadata.Key.of("x-account-id", Metadata.ASCII_STRING_MARSHALLER);
 
-    @Inject
-    PipestreamSecurityConfig config;
-
     @Override
     public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
             ServerCall<ReqT, RespT> call,
@@ -36,7 +33,7 @@ public class AdminSecurityInterceptor implements ServerInterceptor {
         Set<String> roles = Collections.emptySet();
 
         if (accountId == null || accountId.isBlank()) {
-            if (config.adminFallbackEnabled()) {
+            if (isAdminFallbackEnabled()) {
                 accountId = "admin";
                 isAdmin = true;
                 roles = Set.of("admin");
@@ -57,5 +54,11 @@ public class AdminSecurityInterceptor implements ServerInterceptor {
                 .withValue(PipestreamSecurityContext.ROLES_KEY, roles);
 
         return Contexts.interceptCall(ctx, call, headers, next);
+    }
+
+    private boolean isAdminFallbackEnabled() {
+        return ConfigProvider.getConfig()
+                .getOptionalValue("pipestream.security.admin-fallback-enabled", Boolean.class)
+                .orElse(false);
     }
 }

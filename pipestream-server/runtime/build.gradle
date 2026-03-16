@@ -22,6 +22,7 @@ dependencies {
     api 'io.quarkus:quarkus-smallrye-health'
     api 'io.quarkus:quarkus-smallrye-openapi'
     api 'io.quarkus:quarkus-swagger-ui'
+    api 'io.quarkus:quarkus-info'
     api 'io.smallrye.config:smallrye-config'
     implementation libs.grpc.services
     implementation libs.vertx.web.client

@@ -181,6 +181,8 @@ services:
       # Enable gRPC API (port 9400) for bulk, search, k-NN (3.4: transport-grpc, not experimental-transport-grpc)
       - 'aux.transport.types=["transport-grpc"]'
       - aux.transport.transport-grpc.port=9400-9400
+      # Allow large bulk gRPC messages (default 10MB too small for docs with embeddings)
+      - grpc.netty.max_msg_size=1gb
     ulimits:
       memlock:
         soft: -1

@@ -181,7 +181,6 @@ services:
       # Enable gRPC API (port 9400) for bulk, search, k-NN (3.4: transport-grpc, not experimental-transport-grpc)
       - 'aux.transport.types=["transport-grpc"]'
       - aux.transport.transport-grpc.port=9400-9400
-      - aux.transport.transport-grpc.max_content_length=1gb
     ulimits:
       memlock:
         soft: -1

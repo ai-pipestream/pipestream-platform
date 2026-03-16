@@ -88,16 +88,27 @@ public class HttpServerReadinessCheck implements HealthCheck {
     }
 
     private String resolveHealthLivePath() {
-        String rootPath = ConfigProvider.getConfig()
+        String httpRootPath = ConfigProvider.getConfig()
+                .getOptionalValue("quarkus.http.root-path", String.class)
+                .orElse("/");
+        String nonAppRootPath = ConfigProvider.getConfig()
                 .getOptionalValue("quarkus.http.non-application-root-path", String.class)
                 .orElse("q");
-        if (!rootPath.startsWith("/")) {
-            rootPath = "/" + rootPath;
+
+        // Normalize httpRootPath
+        if (!httpRootPath.startsWith("/")) {
+            httpRootPath = "/" + httpRootPath;
         }
-        if (rootPath.endsWith("/")) {
-            rootPath = rootPath.substring(0, rootPath.length() - 1);
+        if (httpRootPath.endsWith("/")) {
+            httpRootPath = httpRootPath.substring(0, httpRootPath.length() - 1);
         }
-        return rootPath + "/health/live";
+
+        // When non-application-root-path is relative (e.g. "q"), it's relative to root-path
+        // When absolute (e.g. "/q"), it's absolute
+        if (nonAppRootPath.startsWith("/")) {
+            return nonAppRootPath + "/health/live";
+        }
+        return httpRootPath + "/" + nonAppRootPath + "/health/live";
     }
 
     private static String truncate(String s, int maxLen) {

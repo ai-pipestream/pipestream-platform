@@ -12,6 +12,7 @@ import ai.pipestream.server.util.ChunkSizeCalculator;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.AdditionalIndexedClassesBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 
@@ -34,6 +35,11 @@ public class PipestreamServerProcessor {
                 .addBeanClasses(AdminSecurityFilter.class)
                 .setUnremovable()
                 .build();
+    }
+
+    @BuildStep
+    AdditionalIndexedClassesBuildItem indexRestResources() {
+        return new AdditionalIndexedClassesBuildItem(BuildInfoResource.class.getName());
     }
 
     @BuildStep

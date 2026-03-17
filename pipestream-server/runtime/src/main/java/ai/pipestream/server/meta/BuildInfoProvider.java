@@ -55,6 +55,10 @@ public class BuildInfoProvider {
         return metadata;
     }
 
+    public String getVersion() {
+        return buildVersion();
+    }
+
     private String buildVersion() {
         if (buildInfo.isResolvable() && buildInfo.get().version() != null) {
             return buildInfo.get().version();

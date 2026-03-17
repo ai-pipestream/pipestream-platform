@@ -168,7 +168,8 @@ jobs:
           BUF_API_TOKEN: ${{ secrets.BUF_API_TOKEN }}
         run: |
           # Publish to Maven Central Snapshots via nmcp aggregation (primary target)
-          ./gradlew publishAggregationToCentralPortalSnapshots --no-daemon
+          # Tests already ran in the 'build' job — skip here to avoid redundant work
+          ./gradlew publishAggregationToCentralPortalSnapshots --no-daemon -x test
           # Publish to GitHub Packages (best-effort: --continue tolerates 409 conflicts
           # from GitHub Packages rejecting re-upload of .asc signature files for SNAPSHOTs)
-          ./gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon --continue || true
+          ./gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon --continue -x test || true

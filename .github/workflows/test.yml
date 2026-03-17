@@ -49,29 +49,11 @@ jobs:
           username: ${{ secrets.DOCKER_USER }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Test pipestream-quarkus-devservices
+      - name: Build and test all modules
         env:
           GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
         run: |
-          ./gradlew :pipestream-quarkus-devservices:clean :pipestream-quarkus-devservices:build :pipestream-quarkus-devservices:test --no-daemon
-
-      - name: Test quarkus-apicurio-registry-protobuf
-        env:
-          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
-        run: |
-          ./gradlew :quarkus-apicurio-registry-protobuf:clean :quarkus-apicurio-registry-protobuf:build :quarkus-apicurio-registry-protobuf:test --no-daemon
-
-      - name: Test quarkus-dynamic-grpc
-        env:
-          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
-        run: |
-          ./gradlew :quarkus-dynamic-grpc:clean :quarkus-dynamic-grpc:build :quarkus-dynamic-grpc:test --no-daemon
-
-      - name: Test pipestream-service-registration
-        env:
-          GRADLE_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=512m
-        run: |
-          ./gradlew :pipestream-service-registration:clean :pipestream-service-registration:build :pipestream-service-registration:test --no-daemon
+          ./gradlew clean build --no-daemon
 
       - name: Publish Test Report
         uses: dorny/test-reporter@v2

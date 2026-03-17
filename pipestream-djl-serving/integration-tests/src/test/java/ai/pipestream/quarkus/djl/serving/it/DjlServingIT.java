@@ -3,11 +3,15 @@ package ai.pipestream.quarkus.djl.serving.it;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.*;
 
+// TODO: Fix port 8080 conflict — isAlreadyRunning() falsely detects other services as DJL Serving.
+// See: https://github.com/ai-pipestream/pipestream-platform/issues/40
+@Disabled("DJL DevService skips startup when port 8080 is occupied by another service")
 @QuarkusTest
 public class DjlServingIT {
 

@@ -55,5 +55,19 @@ public interface DjlServingBuildTimeConfig {
          */
         @WithDefault(DjlServingContainer.DEFAULT_MODEL_URI)
         String modelUri();
+
+        /**
+         * Base URL for pre-packaged model archives. Models are loaded from
+         * {modelsBaseUrl}/{archiveName}.tar.gz instead of downloading from HuggingFace.
+         * When empty, falls back to djl:// URIs from the model definitions.
+         */
+        Optional<String> modelsBaseUrl();
+
+        /**
+         * Whether to register all models from the model definitions list.
+         * When false, only registers the single model from modelName/modelUri.
+         */
+        @WithDefault("false")
+        boolean registerAllModels();
     }
 }

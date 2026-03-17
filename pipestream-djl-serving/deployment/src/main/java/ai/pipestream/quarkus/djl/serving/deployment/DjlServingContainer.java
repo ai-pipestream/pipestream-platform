@@ -11,6 +11,7 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 
 public class DjlServingContainer extends GenericContainer<DjlServingContainer> {
 
@@ -56,10 +57,8 @@ public class DjlServingContainer extends GenericContainer<DjlServingContainer> {
     }
 
     /**
-     * Registers a model with DJL Serving via the management API and waits for it to be ready.
-     *
-     * @param modelName the name under which to register the model (used in /predictions/{modelName})
-     * @param modelUri  the DJL model URI or HuggingFace model path
+     * Registers a model with DJL Serving via the management API using a djl:// URI.
+     * Kept for backward compatibility (single-model fallback).
      */
     public void registerModel(String modelName, String modelUri) {
         String managementUrl = getUrl();
@@ -78,6 +77,52 @@ public class DjlServingContainer extends GenericContainer<DjlServingContainer> {
                 + "&synchronous=true"
                 + "&translatorFactory=ai.djl.huggingface.translator.TextEmbeddingTranslatorFactory";
 
+        doRegister(modelName, endpoint);
+    }
+
+    /**
+     * Registers a model from a pre-packaged tar.gz archive URL.
+     * <p>
+     * For standard models, uses the PyTorch engine and TextEmbeddingTranslatorFactory.
+     * For Python handler models (like BGE-M3), omits engine/translatorFactory since
+     * the serving.properties inside the archive handles configuration.
+     */
+    public void registerModelFromUrl(String modelName, String archiveUrl, boolean pythonHandler) {
+        String managementUrl = getUrl();
+        LOG.infof("Registering model '%s' from archive %s at %s (pythonHandler=%s)",
+                modelName, archiveUrl, managementUrl, pythonHandler);
+
+        String encodedUrl;
+        try {
+            encodedUrl = URLEncoder.encode(archiveUrl, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to encode archive URL", e);
+        }
+
+        String endpoint = managementUrl + "/models?url=" + encodedUrl
+                + "&model_name=" + modelName
+                + "&synchronous=true";
+
+        if (!pythonHandler) {
+            endpoint += "&engine=PyTorch"
+                    + "&translatorFactory=ai.djl.huggingface.translator.TextEmbeddingTranslatorFactory";
+        }
+
+        doRegister(modelName, endpoint);
+    }
+
+    /**
+     * Registers all models from the given definitions, loading archives from the base URL.
+     */
+    public void registerAllModels(String baseUrl, List<DjlModelDefinitions.ModelDefinition> models) {
+        LOG.infof("Registering %d models from base URL: %s", models.size(), baseUrl);
+        for (var model : models) {
+            String archiveUrl = baseUrl + "/" + model.archiveFileName() + ".tar.gz";
+            registerModelFromUrl(model.djlServingName(), archiveUrl, model.pythonHandler());
+        }
+    }
+
+    private void doRegister(String modelName, String endpoint) {
         int maxRetries = 5;
         for (int i = 0; i < maxRetries; i++) {
             try {

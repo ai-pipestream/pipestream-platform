@@ -147,16 +147,29 @@ class DjlServingDevServicesProcessor {
 
         container.start();
 
-        String modelName = config.modelName();
-        String modelUri = config.modelUri();
-        container.registerModel(modelName, modelUri);
-
         String url = container.getUrl();
         Map<String, String> exposedConfig = new HashMap<>();
+
+        if (config.registerAllModels() && config.modelsBaseUrl().isPresent()) {
+            // Multi-model: register all models from pre-packaged archives
+            container.registerAllModels(config.modelsBaseUrl().get(), DjlModelDefinitions.ALL_MODELS);
+            for (var model : DjlModelDefinitions.ALL_MODELS) {
+                exposedConfig.put("embedder.models." + model.enumName() + ".url", url);
+            }
+            // Default model name for backward compat
+            exposedConfig.put("pipestream.djl-serving.model-name", DjlServingContainer.DEFAULT_MODEL_NAME);
+            exposedConfig.put("embedder.djl-serving.model-name", DjlServingContainer.DEFAULT_MODEL_NAME);
+        } else {
+            // Single-model fallback
+            String modelName = config.modelName();
+            String modelUri = config.modelUri();
+            container.registerModel(modelName, modelUri);
+            exposedConfig.put("pipestream.djl-serving.model-name", modelName);
+            exposedConfig.put("embedder.djl-serving.model-name", modelName);
+        }
+
         exposedConfig.put("pipestream.djl-serving.url", url);
-        exposedConfig.put("pipestream.djl-serving.model-name", modelName);
         exposedConfig.put("embedder.djl-serving.url", url);
-        exposedConfig.put("embedder.djl-serving.model-name", modelName);
         exposedConfig.put("quarkus.rest-client.djl-serving.url", url);
 
         return Optional.of(new RunningDevService(PROVIDER, container.getContainerId(), container::close, exposedConfig));

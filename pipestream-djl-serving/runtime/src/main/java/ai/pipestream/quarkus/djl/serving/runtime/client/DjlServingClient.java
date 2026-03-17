@@ -25,4 +25,9 @@ public interface DjlServingClient {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     Uni<JsonArray> predict(@PathParam("modelName") String modelName, JsonObject input);
+
+    @GET
+    @Path("/models")
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<JsonObject> listModels();
 }

@@ -1,8 +1,8 @@
 package ai.pipestream.quarkus.djl.serving.runtime;
 
 import ai.pipestream.quarkus.djl.serving.runtime.client.DjlServingClient;
+import ai.pipestream.quarkus.djl.serving.runtime.config.DjlServingRuntimeConfig;
 import io.quarkus.scheduler.Scheduled;
-import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -11,7 +11,6 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.Map;
@@ -32,6 +31,7 @@ public class DjlModelRegistry {
     private static final Logger log = LoggerFactory.getLogger(DjlModelRegistry.class);
 
     private final Instance<DjlServingClient> clientInstance;
+    private final DjlServingRuntimeConfig config;
 
     /** model name -> status (e.g. "READY", "LOADING") */
     private final Map<String, ModelStatus> models = new ConcurrentHashMap<>();
@@ -46,14 +46,16 @@ public class DjlModelRegistry {
     }
 
     @Inject
-    public DjlModelRegistry(@RestClient Instance<DjlServingClient> clientInstance) {
+    public DjlModelRegistry(@RestClient Instance<DjlServingClient> clientInstance,
+                            DjlServingRuntimeConfig config) {
         this.clientInstance = clientInstance;
+        this.config = config;
     }
 
     /**
      * Scheduled health check — polls DJL Serving every 30 seconds.
      */
-    @Scheduled(every = "30s", delayed = "5s", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
+    @Scheduled(every = "{pipestream.djl-serving.refresh-interval:30s}", delayed = "5s", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void scheduledRefresh() {
         refresh();
     }
@@ -69,25 +71,23 @@ public class DjlModelRegistry {
             }
             DjlServingClient client = clientInstance.get();
             JsonObject response = client.listModels()
-                    .await().atMost(Duration.ofSeconds(10));
+                    .await().atMost(config.requestTimeout());
 
-            JsonArray modelArray = response.getJsonArray("models");
-            if (modelArray == null) {
-                log.warn("DJL Serving /models response missing 'models' array");
+            Map<String, ModelStatus> parsedModels = DjlServingModelsParser.parseModels(response, Instant.now());
+            if (parsedModels.isEmpty()) {
+                log.warn("DJL Serving /models response had no models");
                 djlServingReachable = true;
                 return;
             }
 
             Set<String> seen = ConcurrentHashMap.newKeySet();
-            for (int i = 0; i < modelArray.size(); i++) {
-                JsonObject m = modelArray.getJsonObject(i);
-                String name = m.getString("modelName");
-                String status = m.getString("status", "UNKNOWN");
-                String url = m.getString("modelUrl", "");
+            for (ModelStatus model : parsedModels.values()) {
+                String name = model.name();
+                String status = model.status();
                 seen.add(name);
 
                 ModelStatus prev = models.get(name);
-                models.put(name, new ModelStatus(name, status, url, Instant.now()));
+                models.put(name, model);
 
                 // Log state changes
                 if (prev == null) {

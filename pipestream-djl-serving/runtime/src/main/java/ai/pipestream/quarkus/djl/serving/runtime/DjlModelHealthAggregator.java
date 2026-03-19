@@ -2,19 +2,14 @@ package ai.pipestream.quarkus.djl.serving.runtime;
 
 import ai.pipestream.djl.serving.v1.ModelAggregateHealthStatus;
 import ai.pipestream.djl.serving.v1.ModelHealth;
+import ai.pipestream.quarkus.djl.serving.runtime.client.DjlRestClientFactory;
 import com.google.protobuf.Timestamp;
 import io.smallrye.mutiny.Uni;
-import io.smallrye.mutiny.infrastructure.Infrastructure;
-import io.vertx.core.json.JsonObject;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -33,7 +28,7 @@ public class DjlModelHealthAggregator {
     DjlServingEndpointResolver endpointResolver;
 
     @Inject
-    ai.pipestream.quarkus.djl.serving.runtime.config.DjlServingRuntimeConfig config;
+    DjlRestClientFactory restClientFactory;
 
     public Uni<AggregationResult> aggregateModelHealth(Collection<String> filterModels, boolean includeUnexpectedModels) {
         return endpointResolver.resolveEndpoints()
@@ -45,7 +40,7 @@ public class DjlModelHealthAggregator {
                             .map(this::fetchModelsFromEndpoint)
                             .toList();
                     return Uni.combine().all().unis(checks)
-                            .combinedWith(items -> items.stream()
+                            .with(items -> items.stream()
                                     .map(InstanceResult.class::cast)
                                     .toList())
                             .map(results -> buildResult(endpoints, results, filterModels, includeUnexpectedModels));
@@ -57,36 +52,20 @@ public class DjlModelHealthAggregator {
     }
 
     private Uni<InstanceResult> fetchModelsFromEndpoint(String endpoint) {
-        return Uni.createFrom().item(() -> fetchModelsFromEndpointBlocking(endpoint))
-                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
-    }
-
-    private InstanceResult fetchModelsFromEndpointBlocking(String endpoint) {
-        try {
-            String modelsUrl = endpoint.endsWith("/") ? endpoint + "models" : endpoint + "/models";
-            HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(config.requestTimeout())
-                    .build();
-            HttpRequest request = HttpRequest.newBuilder(URI.create(modelsUrl))
-                    .timeout(config.requestTimeout())
-                    .GET()
-                    .build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                return InstanceResult.failure(endpoint, "HTTP " + response.statusCode());
-            }
-
-            JsonObject body = new JsonObject(response.body());
-            Map<String, DjlModelRegistry.ModelStatus> parsed = DjlServingModelsParser.parseModels(body, Instant.now());
-            return InstanceResult.success(endpoint, parsed);
-        } catch (Exception e) {
-            log.debug("Failed to fetch model list from {}: {}", endpoint, e.getMessage());
-            String message = e.getMessage();
-            if (message == null || message.isBlank()) {
-                message = e.getClass().getSimpleName();
-            }
-            return InstanceResult.failure(endpoint, message);
-        }
+        return restClientFactory.djlClient(endpoint)
+                .listModels()
+                .map(body -> {
+                    Map<String, DjlModelRegistry.ModelStatus> parsed = DjlServingModelsParser.parseModels(body, Instant.now());
+                    return InstanceResult.success(endpoint, parsed);
+                })
+                .onFailure().recoverWithItem(error -> {
+                    log.debug("Failed to fetch model list from {}: {}", endpoint, error.getMessage());
+                    String message = error.getMessage();
+                    if (message == null || message.isBlank()) {
+                        message = error.getClass().getSimpleName();
+                    }
+                    return InstanceResult.failure(endpoint, message);
+                });
     }
 
     private AggregationResult buildResult(List<String> resolvedEndpoints,

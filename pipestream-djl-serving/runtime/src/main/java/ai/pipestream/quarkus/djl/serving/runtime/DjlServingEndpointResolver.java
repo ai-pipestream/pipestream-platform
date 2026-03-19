@@ -1,21 +1,16 @@
 package ai.pipestream.quarkus.djl.serving.runtime;
 
 import ai.pipestream.quarkus.djl.serving.runtime.config.DjlServingRuntimeConfig;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import ai.pipestream.quarkus.djl.serving.runtime.client.ConsulDiscoveryClient;
+import ai.pipestream.quarkus.djl.serving.runtime.client.DjlRestClientFactory;
 import io.smallrye.mutiny.Uni;
-import io.smallrye.mutiny.infrastructure.Infrastructure;
+import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -28,18 +23,13 @@ public class DjlServingEndpointResolver {
     DjlServingRuntimeConfig config;
 
     @Inject
-    ObjectMapper objectMapper;
+    DjlRestClientFactory restClientFactory;
 
     public Uni<List<String>> resolveEndpoints() {
-        return Uni.createFrom().item(this::resolveEndpointsBlocking)
-                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
-    }
-
-    private List<String> resolveEndpointsBlocking() {
         if (config.discoveryMode() == DjlServingRuntimeConfig.DiscoveryMode.CONSUL_HTTP) {
             return resolveFromConsul();
         }
-        return resolveDirectUrls();
+        return Uni.createFrom().item(resolveDirectUrls());
     }
 
     private List<String> resolveDirectUrls() {
@@ -49,73 +39,55 @@ public class DjlServingEndpointResolver {
         return List.copyOf(deduped);
     }
 
-    private List<String> resolveFromConsul() {
+    private Uni<List<String>> resolveFromConsul() {
         var consul = config.consul();
-        String serviceName = encode(consul.serviceName());
-        StringBuilder query = new StringBuilder();
-        query.append("passing=").append(consul.passingOnly());
-        consul.tag().ifPresent(tag -> query.append("&tag=").append(encode(tag)));
-        consul.datacenter().ifPresent(dc -> query.append("&dc=").append(encode(dc)));
+        String consulBaseUrl = String.format("%s://%s:%d", consul.scheme(), consul.host(), consul.port());
+        ConsulDiscoveryClient client = restClientFactory.consulClient(consulBaseUrl);
 
-        String url = String.format("%s://%s:%d/v1/health/service/%s?%s",
-                consul.scheme(),
-                consul.host(),
-                consul.port(),
-                serviceName,
-                query);
+        return client.listServiceInstances(consul.serviceName(), consul.passingOnly(), consul.tag().orElse(null), consul.datacenter().orElse(null))
+                .map(this::mapConsulPayloadToEndpoints)
+                .onFailure().recoverWithItem(error -> {
+                    log.warn("Failed to resolve DJL endpoints from Consul: {}", error.getMessage());
+                    return List.of();
+                });
+    }
 
-        HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(config.requestTimeout())
-                .build();
-
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(config.requestTimeout())
-                .GET()
-                .build();
-
-        try {
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                log.warn("Consul lookup for DJL endpoints failed with status {}", response.statusCode());
-                return List.of();
-            }
-
-            JsonNode payload = objectMapper.readTree(response.body());
-            if (!payload.isArray()) {
-                log.warn("Unexpected Consul response shape for DJL endpoints");
-                return List.of();
-            }
-
-            Set<String> endpoints = new LinkedHashSet<>();
-            for (JsonNode node : payload) {
-                String scheme = "http";
-
-                JsonNode service = node.path("Service");
-                JsonNode checks = node.path("Checks");
-                for (JsonNode check : checks) {
-                    String checkId = check.path("CheckID").asText("");
-                    if (checkId.contains("https")) {
-                        scheme = "https";
-                        break;
-                    }
-                }
-
-                String host = textOrEmpty(service.path("Address"));
-                if (host.isBlank()) {
-                    host = textOrEmpty(node.path("Node").path("Address"));
-                }
-                int port = service.path("Port").asInt(0);
-                if (host.isBlank() || port <= 0) {
-                    continue;
-                }
-                endpoints.add(String.format("%s://%s:%d", scheme, host, port));
-            }
-
-            return List.copyOf(endpoints);
-        } catch (Exception e) {
-            log.warn("Failed to resolve DJL endpoints from Consul: {}", e.getMessage());
+    private List<String> mapConsulPayloadToEndpoints(JsonArray payload) {
+        Set<String> endpoints = new LinkedHashSet<>();
+        if (payload == null) {
             return List.of();
         }
+
+        for (int i = 0; i < payload.size(); i++) {
+            JsonObject node = payload.getJsonObject(i);
+            if (node == null) {
+                continue;
+            }
+            JsonObject service = node.getJsonObject("Service", new JsonObject());
+            JsonArray checks = node.getJsonArray("Checks", new JsonArray());
+
+            String scheme = "http";
+            for (int c = 0; c < checks.size(); c++) {
+                JsonObject check = checks.getJsonObject(c);
+                if (check != null && check.getString("CheckID", "").contains("https")) {
+                    scheme = "https";
+                    break;
+                }
+            }
+
+            String host = service.getString("Address", "");
+            if (host.isBlank()) {
+                JsonObject nodeInfo = node.getJsonObject("Node", new JsonObject());
+                host = nodeInfo.getString("Address", "");
+            }
+            int port = service.getInteger("Port", 0);
+            if (host.isBlank() || port <= 0) {
+                continue;
+            }
+            endpoints.add(String.format("%s://%s:%d", scheme, host, port));
+        }
+
+        return List.copyOf(endpoints);
     }
 
     private static void addIfPresent(Set<String> target, String url) {
@@ -123,13 +95,5 @@ public class DjlServingEndpointResolver {
             return;
         }
         target.add(url.strip());
-    }
-
-    private static String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
-    }
-
-    private static String textOrEmpty(JsonNode node) {
-        return node == null ? "" : node.asText("");
     }
 }

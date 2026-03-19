@@ -20,17 +20,21 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.time.Duration;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /**
  * Integration tests to verify behavior when auth is disabled.
@@ -42,12 +46,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AuthDisabledTest {
 
     private static final Logger LOG = Logger.getLogger(AuthDisabledTest.class);
-    private static final String AUTH_DISABLED_SERVICE = "auth-disabled-service";
 
     private static Server testGrpcServer;
     private static int testGrpcPort;
-    private static ConsulServiceRegistration consulRegistration;
     private static final AtomicBoolean receivedAuthHeader = new AtomicBoolean(false);
+
+    private ConsulServiceRegistration consulRegistration;
+    private String serviceName;
 
     @Inject
     GrpcClientFactory factory;
@@ -59,7 +64,7 @@ class AuthDisabledTest {
     int consulPort;
 
     /**
-     * Test profile with auth disabled (default config, no token provider).
+     * Test profile with auth disabled.
      */
     public static class AuthDisabledProfile implements QuarkusTestProfile {
         @Override
@@ -89,18 +94,17 @@ class AuthDisabledTest {
 
     @BeforeEach
     void setup() {
-        if (consulRegistration == null) {
-            consulRegistration = new ConsulServiceRegistration(consulHost, consulPort);
-        }
+        consulRegistration = new ConsulServiceRegistration(consulHost, consulPort);
+        serviceName = "auth-disabled-" + UUID.randomUUID().toString().substring(0, 8);
 
         consulRegistration.registerService(
-            AUTH_DISABLED_SERVICE,
-            AUTH_DISABLED_SERVICE + "-1",
+            serviceName,
+            serviceName + "-1",
             "127.0.0.1",
             testGrpcPort
         );
 
-        LOG.infof("Registered %s in Consul at 127.0.0.1:%d", AUTH_DISABLED_SERVICE, testGrpcPort);
+        LOG.infof("Registered %s in Consul at 127.0.0.1:%d", serviceName, testGrpcPort);
 
         // Reset flag
         receivedAuthHeader.set(false);
@@ -108,38 +112,49 @@ class AuthDisabledTest {
 
     @AfterAll
     static void stopTestServer() throws InterruptedException {
-        if (consulRegistration != null) {
-            consulRegistration.deregisterService(AUTH_DISABLED_SERVICE + "-1");
-        }
-
         if (testGrpcServer != null) {
             testGrpcServer.shutdown();
             testGrpcServer.awaitTermination(5, TimeUnit.SECONDS);
         }
     }
 
+    @AfterEach
+    void cleanup() {
+        if (consulRegistration != null && serviceName != null) {
+            try {
+                consulRegistration.deregisterService(serviceName + "-1");
+            } catch (Exception ignore) {}
+        }
+    }
+
     @Test
-    void shouldNotAddAuthTokenWhenDisabled() throws InterruptedException {
+    void shouldNotAddAuthTokenWhenDisabled() {
         // Wait for Consul registration
-        Thread.sleep(500);
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            assertThat(factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+                .await().atMost(Duration.ofSeconds(1)))
+                .as("Client should be discoverable")
+                .isNotNull();
+        });
 
         // Create client and make request
-        var client = factory.getClient(AUTH_DISABLED_SERVICE, MutinyGreeterGrpc::newMutinyStub)
-            .await().atMost(java.time.Duration.ofSeconds(10));
+        var client = factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+            .await().atMost(Duration.ofSeconds(5));
 
         HelloRequest request = HelloRequest.newBuilder()
             .setName("No Auth Test")
             .build();
 
-        HelloReply response = client.sayHello(request)
-            .await().atMost(java.time.Duration.ofSeconds(5));
+        HelloReply response = client.sayHello(request).await().atMost(Duration.ofSeconds(5));
 
         // Verify response
-        assertThat(response).isNotNull();
-        assertThat(response.getMessage()).isEqualTo("Hello No Auth Test");
+        assertThat(response).as("Response should be received").isNotNull();
+        assertThat(response.getMessage()).as("Response message should be correct").isEqualTo("Hello No Auth Test");
 
         // Verify NO auth header was sent
-        assertThat(receivedAuthHeader.get()).isFalse();
+        assertThat(receivedAuthHeader.get())
+            .as("Server should NOT have received an auth header")
+            .isFalse();
     }
 
     /**
@@ -152,7 +167,6 @@ class AuthDisabledTest {
                 Metadata headers,
                 ServerCallHandler<ReqT, RespT> next) {
 
-            // Check if auth header exists
             Metadata.Key<String> authKey = Metadata.Key.of("Authorization", Metadata.ASCII_STRING_MARSHALLER);
             String authHeader = headers.get(authKey);
 

@@ -21,17 +21,20 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.ServerSocket;
-import java.util.Map;
+import java.time.Duration;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /**
  * Integration tests for authentication token functionality.
@@ -42,13 +45,33 @@ import static org.assertj.core.api.Assertions.assertThat;
 @TestProfile(AuthTokenTest.AuthEnabledProfile.class)
 class AuthTokenTest {
 
+    /**
+     * Profile that enables auth and activates the auth-test build profile
+     * so TestAuthTokenProvider is created by CDI.
+     */
+    public static class AuthEnabledProfile implements QuarkusTestProfile {
+        @Override
+        public java.util.Map<String, String> getConfigOverrides() {
+            return java.util.Map.of(
+                "quarkus.dynamic-grpc.auth.enabled", "true"
+            );
+        }
+
+        @Override
+        public String getConfigProfile() {
+            return "auth-test";
+        }
+    }
+
+
     private static final Logger LOG = Logger.getLogger(AuthTokenTest.class);
-    private static final String AUTH_SERVICE_NAME = "auth-test-service";
 
     private static Server testGrpcServer;
     private static int testGrpcPort;
-    private static ConsulServiceRegistration consulRegistration;
     private static final AtomicReference<String> receivedToken = new AtomicReference<>();
+
+    private ConsulServiceRegistration consulRegistration;
+    private String serviceName;
 
     @Inject
     GrpcClientFactory factory;
@@ -58,25 +81,6 @@ class AuthTokenTest {
 
     @ConfigProperty(name = "quarkus.dynamic-grpc.consul.port")
     int consulPort;
-
-    /**
-     * Test profile that enables auth and activates the test token provider.
-     */
-    public static class AuthEnabledProfile implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of(
-                "quarkus.dynamic-grpc.auth.enabled", "true",
-                "quarkus.dynamic-grpc.auth.header-name", "Authorization",
-                "quarkus.dynamic-grpc.auth.scheme-prefix", "Bearer "
-            );
-        }
-
-        @Override
-        public String getConfigProfile() {
-            return "auth-test";
-        }
-    }
 
     @BeforeAll
     static void startTestServer() throws IOException {
@@ -97,19 +101,18 @@ class AuthTokenTest {
 
     @BeforeEach
     void setup() {
-        if (consulRegistration == null) {
-            consulRegistration = new ConsulServiceRegistration(consulHost, consulPort);
-        }
+        consulRegistration = new ConsulServiceRegistration(consulHost, consulPort);
+        serviceName = "auth-test-" + UUID.randomUUID().toString().substring(0, 8);
 
         // Register service in Consul
         consulRegistration.registerService(
-            AUTH_SERVICE_NAME,
-            AUTH_SERVICE_NAME + "-1",
+            serviceName,
+            serviceName + "-1",
             "127.0.0.1",
             testGrpcPort
         );
 
-        LOG.infof("Registered %s in Consul at 127.0.0.1:%d", AUTH_SERVICE_NAME, testGrpcPort);
+        LOG.infof("Registered %s in Consul at 127.0.0.1:%d", serviceName, testGrpcPort);
 
         // Reset received token
         receivedToken.set(null);
@@ -117,46 +120,64 @@ class AuthTokenTest {
 
     @AfterAll
     static void stopTestServer() throws InterruptedException {
-        if (consulRegistration != null) {
-            consulRegistration.deregisterService(AUTH_SERVICE_NAME + "-1");
-        }
-
         if (testGrpcServer != null) {
             testGrpcServer.shutdown();
             testGrpcServer.awaitTermination(5, TimeUnit.SECONDS);
         }
     }
 
+    @AfterEach
+    void cleanup() {
+        if (consulRegistration != null && serviceName != null) {
+            try {
+                consulRegistration.deregisterService(serviceName + "-1");
+            } catch (Exception ignore) {}
+        }
+    }
+
     @Test
-    void shouldAddAuthTokenToRequest() throws InterruptedException {
+    void shouldAddAuthTokenToRequest() {
         // Wait for Consul registration
-        Thread.sleep(500);
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            assertThat(factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+                .await().atMost(Duration.ofSeconds(1)))
+                .as("Client should be discoverable for auth test")
+                .isNotNull();
+        });
 
         // Create client and make request
-        var client = factory.getClient(AUTH_SERVICE_NAME, MutinyGreeterGrpc::newMutinyStub)
-            .await().atMost(java.time.Duration.ofSeconds(10));
+        var client = factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+            .await().atMost(Duration.ofSeconds(5));
 
         HelloRequest request = HelloRequest.newBuilder()
             .setName("Auth Test")
             .build();
 
         HelloReply response = client.sayHello(request)
-            .await().atMost(java.time.Duration.ofSeconds(5));
+            .await().atMost(Duration.ofSeconds(5));
 
         // Verify response
-        assertThat(response).isNotNull();
-        assertThat(response.getMessage()).isEqualTo("Hello Auth Test");
+        assertThat(response).as("Response should be received").isNotNull();
+        assertThat(response.getMessage()).as("Response message should be correct").isEqualTo("Hello Auth Test");
 
         // Verify the server received the token in correct format
-        assertThat(receivedToken.get()).isEqualTo("Bearer " + TestAuthTokenProvider.TEST_TOKEN);
+        assertThat(receivedToken.get())
+            .as("Server should have received the Bearer token")
+            .isEqualTo("Bearer " + TestAuthTokenProvider.TEST_TOKEN);
     }
 
     @Test
-    void shouldIncludeTokenInMultipleRequests() throws InterruptedException {
-        Thread.sleep(500);
+    void shouldIncludeTokenInMultipleRequests() {
+        // Wait for Consul registration
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            assertThat(factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+                .await().atMost(Duration.ofSeconds(1)))
+                .as("Client should be discoverable")
+                .isNotNull();
+        });
 
-        var client = factory.getClient(AUTH_SERVICE_NAME, MutinyGreeterGrpc::newMutinyStub)
-            .await().atMost(java.time.Duration.ofSeconds(10));
+        var client = factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+            .await().atMost(Duration.ofSeconds(10));
 
         // Make multiple requests
         for (int i = 0; i < 3; i++) {
@@ -166,11 +187,12 @@ class AuthTokenTest {
                 .setName("Request " + i)
                 .build();
 
-            client.sayHello(request)
-                .await().atMost(java.time.Duration.ofSeconds(5));
+            client.sayHello(request).await().atMost(Duration.ofSeconds(5));
 
             // Each request should have the token
-            assertThat(receivedToken.get()).isEqualTo("Bearer " + TestAuthTokenProvider.TEST_TOKEN);
+            assertThat(receivedToken.get())
+                .as("Request " + i + " should contain the Bearer token")
+                .isEqualTo("Bearer " + TestAuthTokenProvider.TEST_TOKEN);
         }
     }
 

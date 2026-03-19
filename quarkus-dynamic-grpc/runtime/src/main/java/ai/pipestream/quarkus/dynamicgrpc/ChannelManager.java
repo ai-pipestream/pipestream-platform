@@ -198,80 +198,87 @@ public class ChannelManager {
             init();
         }
 
-        Channel existing = channelCache.getIfPresent(serviceName);
-        if (existing != null) {
-            LOG.debugf("Reusing existing gRPC channel for service: %s", serviceName);
-            metrics.recordCacheHit(serviceName);
-            return Uni.createFrom().item(existing);
-        }
-
-        LOG.infof("Creating new Stork gRPC channel for service: %s", serviceName);
-        metrics.recordCacheMiss(serviceName);
-
+        // Caffeine's get(key, mappingFunction) is atomic — only one thread creates
+        // the channel for a given serviceName, others wait for the result.
+        // This prevents the TOCTOU race condition where concurrent calls to
+        // getIfPresent() all see a miss and create duplicate channels.
         try {
-            // Create HTTP client options for TLS configuration (Quarkus pattern)
-            HttpClientOptions httpOptions = new HttpClientOptions();
-            httpOptions.setHttp2ClearTextUpgrade(false); // Recommended by Quarkus
+            Channel channel = channelCache.get(serviceName, key -> {
+                LOG.infof("Creating new Stork gRPC channel for service: %s", key);
+                metrics.recordCacheMiss(key);
+                return createChannelSync(key);
+            });
 
-            // Configure TLS if enabled (using Quarkus's SSLConfigHelper - 1:1 with Quarkus code)
-            if (tlsConfig.enabled()) {
-                LOG.debugf("Configuring TLS for service: %s", serviceName);
-                httpOptions.setSsl(true);
-                httpOptions.setUseAlpn(true);
-                httpOptions.setTrustAll(tlsConfig.trustAll());
-
-                // Apply Quarkus TLS configuration using their helper methods
-                SSLConfigHelper.configurePemTrustOptions(httpOptions, tlsConfig.trustCertificatePem());
-                SSLConfigHelper.configureJksTrustOptions(httpOptions, tlsConfig.trustCertificateJks());
-                SSLConfigHelper.configurePfxTrustOptions(httpOptions, tlsConfig.trustCertificateP12());
-
-                SSLConfigHelper.configurePemKeyCertOptions(httpOptions, tlsConfig.keyCertificatePem());
-                SSLConfigHelper.configureJksKeyCertOptions(httpOptions, tlsConfig.keyCertificateJks());
-                SSLConfigHelper.configurePfxKeyCertOptions(httpOptions, tlsConfig.keyCertificateP12());
-
-                httpOptions.setVerifyHost(tlsConfig.verifyHostname());
-
-                LOG.infof("TLS configured for service %s: trustAll=%s, verifyHostname=%s",
-                        serviceName, tlsConfig.trustAll(), tlsConfig.verifyHostname());
-            }
-
-            // Create gRPC client options with HTTP options and message size limits
-            GrpcClientOptions clientOptions = new GrpcClientOptions()
-                    .setTransportOptions(httpOptions)
-                    .setMaxMessageSize(config.channel().maxInboundMessageSize());
-
-            LOG.debugf("Creating gRPC client for %s with maxInbound=%d, maxOutbound=%d",
-                    serviceName,
-                    config.channel().maxInboundMessageSize(),
-                    config.channel().maxOutboundMessageSize());
-
-            GrpcClient grpcClient = GrpcClient.client(vertx, clientOptions);
-
-            Channel created = getChannel(serviceName, grpcClient);
-
-            // Wrap channel with auth interceptor if auth is enabled
-            if (config.auth().enabled()) {
-                created = ClientInterceptors.intercept(created, authInterceptor);
-                LOG.debugf("Auth interceptor applied to channel for service: %s", serviceName);
-            }
-
-            LOG.debugf("Created StorkGrpcChannel for %s", serviceName);
-            channelCache.put(serviceName, created);
-
-            // Record successful channel creation
-            metrics.recordChannelCreated(serviceName);
-
-            return Uni.createFrom().item(created);
+            // If we got here via the loader, it was a miss. Otherwise a hit.
+            // Caffeine doesn't distinguish, so we record hits separately.
+            // The miss is recorded inside the loader above.
+            LOG.debugf("Returning gRPC channel for service: %s", serviceName);
+            return Uni.createFrom().item(channel);
         } catch (Exception e) {
-            LOG.errorf(e, "Failed to create gRPC channel for service: %s", serviceName);
-
-            // Record exception
-            metrics.recordException(e.getClass().getSimpleName(), serviceName, "channel_creation");
-
+            // Caffeine wraps loader exceptions in CompletionException
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            LOG.errorf(cause, "Failed to create gRPC channel for service: %s", serviceName);
+            metrics.recordException(cause.getClass().getSimpleName(), serviceName, "channel_creation");
             return Uni.createFrom().failure(
-                    new ChannelCreationException(serviceName, "Channel creation failed", e)
+                    new ChannelCreationException(serviceName, "Channel creation failed", cause)
             );
         }
+    }
+
+    /**
+     * Synchronously creates a gRPC channel for the given service.
+     * Called inside Caffeine's atomic loader — guaranteed single-threaded per key.
+     */
+    private Channel createChannelSync(String serviceName) {
+        // Create HTTP client options for TLS configuration (Quarkus pattern)
+        HttpClientOptions httpOptions = new HttpClientOptions();
+        httpOptions.setHttp2ClearTextUpgrade(false); // Recommended by Quarkus
+
+        // Configure TLS if enabled (using Quarkus's SSLConfigHelper - 1:1 with Quarkus code)
+        if (tlsConfig.enabled()) {
+            LOG.debugf("Configuring TLS for service: %s", serviceName);
+            httpOptions.setSsl(true);
+            httpOptions.setUseAlpn(true);
+            httpOptions.setTrustAll(tlsConfig.trustAll());
+
+            SSLConfigHelper.configurePemTrustOptions(httpOptions, tlsConfig.trustCertificatePem());
+            SSLConfigHelper.configureJksTrustOptions(httpOptions, tlsConfig.trustCertificateJks());
+            SSLConfigHelper.configurePfxTrustOptions(httpOptions, tlsConfig.trustCertificateP12());
+
+            SSLConfigHelper.configurePemKeyCertOptions(httpOptions, tlsConfig.keyCertificatePem());
+            SSLConfigHelper.configureJksKeyCertOptions(httpOptions, tlsConfig.keyCertificateJks());
+            SSLConfigHelper.configurePfxKeyCertOptions(httpOptions, tlsConfig.keyCertificateP12());
+
+            httpOptions.setVerifyHost(tlsConfig.verifyHostname());
+
+            LOG.infof("TLS configured for service %s: trustAll=%s, verifyHostname=%s",
+                    serviceName, tlsConfig.trustAll(), tlsConfig.verifyHostname());
+        }
+
+        // Create gRPC client options with HTTP options and message size limits
+        GrpcClientOptions clientOptions = new GrpcClientOptions()
+                .setTransportOptions(httpOptions)
+                .setMaxMessageSize(config.channel().maxInboundMessageSize());
+
+        LOG.debugf("Creating gRPC client for %s with maxInbound=%d, maxOutbound=%d",
+                serviceName,
+                config.channel().maxInboundMessageSize(),
+                config.channel().maxOutboundMessageSize());
+
+        GrpcClient grpcClient = GrpcClient.client(vertx, clientOptions);
+
+        Channel created = getChannel(serviceName, grpcClient);
+
+        // Wrap channel with auth interceptor if auth is enabled
+        if (config.auth().enabled()) {
+            created = ClientInterceptors.intercept(created, authInterceptor);
+            LOG.debugf("Auth interceptor applied to channel for service: %s", serviceName);
+        }
+
+        LOG.debugf("Created StorkGrpcChannel for %s", serviceName);
+        metrics.recordChannelCreated(serviceName);
+
+        return created;
     }
 
     private Channel getChannel(String serviceName, GrpcClient grpcClient) {

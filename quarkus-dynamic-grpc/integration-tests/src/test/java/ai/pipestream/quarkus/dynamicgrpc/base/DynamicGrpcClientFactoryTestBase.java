@@ -12,14 +12,19 @@ import io.smallrye.mutiny.Uni;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.time.Duration;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /**
  * Base test class with real greeter gRPC server and real Consul service discovery.
@@ -32,8 +37,10 @@ public abstract class DynamicGrpcClientFactoryTestBase {
 
     protected static Server testGrpcServer;
     protected static int testGrpcPort;
-    protected static final String TEST_SERVICE_NAME = "greeter-test";
-    protected static ConsulServiceRegistration consulRegistration;
+    
+    // Use instance-level service name for better isolation between tests
+    protected String serviceName;
+    protected ConsulServiceRegistration consulRegistration;
 
     @ConfigProperty(name = "quarkus.dynamic-grpc.consul.host")
     String consulHost;
@@ -44,7 +51,7 @@ public abstract class DynamicGrpcClientFactoryTestBase {
     protected abstract GrpcClientFactory getFactory();
 
     @BeforeAll
-    static void startTestServer() throws IOException, InterruptedException {
+    static void startTestServer() throws IOException {
         // Find an available random port
         try (ServerSocket socket = new ServerSocket(0)) {
             testGrpcPort = socket.getLocalPort();
@@ -59,51 +66,65 @@ public abstract class DynamicGrpcClientFactoryTestBase {
         LOG.infof("Test gRPC server started on port: %d", testGrpcPort);
     }
 
+    @BeforeEach
+    void setupBase() {
+        serviceName = "greeter-test-" + UUID.randomUUID().toString().substring(0, 8);
+        consulRegistration = new ConsulServiceRegistration(consulHost, consulPort);
+    }
+
     /**
      * Register the gRPC service in Consul after Quarkus test starts
      * (called from subclass @BeforeEach after injection is available)
      */
     protected void registerServiceInConsul() {
-        if (consulRegistration == null) {
-            consulRegistration = new ConsulServiceRegistration(consulHost, consulPort);
-        }
-
         // Register our test gRPC server in Consul
         consulRegistration.registerService(
-            TEST_SERVICE_NAME,
-            TEST_SERVICE_NAME + "-1",
+            serviceName,
+            serviceName + "-1",
             "127.0.0.1",
             testGrpcPort
         );
 
-        LOG.infof("Registered %s in Consul at 127.0.0.1:%d", TEST_SERVICE_NAME, testGrpcPort);
+        LOG.infof("Registered %s in Consul at 127.0.0.1:%d (Consul at %s:%d)", 
+            serviceName, testGrpcPort, consulHost, consulPort);
     }
 
     @AfterAll
     static void stopTestServer() throws InterruptedException {
-        if (consulRegistration != null) {
-            consulRegistration.deregisterService(TEST_SERVICE_NAME + "-1");
-        }
-
         if (testGrpcServer != null) {
             testGrpcServer.shutdown();
             testGrpcServer.awaitTermination(5, TimeUnit.SECONDS);
         }
     }
 
+    @AfterEach
+    void cleanupBase() {
+        if (consulRegistration != null && serviceName != null) {
+            try {
+                consulRegistration.deregisterService(serviceName + "-1");
+            } catch (Exception e) {
+                LOG.warn("Failed to deregister service from Consul", e);
+            }
+        }
+    }
+
     @Test
-    void testClientCreationAndCall() throws InterruptedException {
-        // Wait a moment for Consul registration to propagate
-        Thread.sleep(500);
+    void testClientCreationAndCall() {
+        registerServiceInConsul();
 
-        // Get a Mutiny client stub using the factory - will discover via Consul
-        var clientUni = getFactory().getClient(
-            TEST_SERVICE_NAME,
-            MutinyGreeterGrpc::newMutinyStub
-        );
+        // Wait for Consul registration to propagate
+        await().atMost(Duration.ofSeconds(5))
+            .alias("Wait for service discovery")
+            .untilAsserted(() -> {
+                var clientUni = getFactory().getClient(serviceName, MutinyGreeterGrpc::newMutinyStub);
+                assertThat(clientUni.await().atMost(Duration.ofSeconds(1)))
+                    .as("Client should be discoverable in Stork")
+                    .isNotNull();
+            });
 
-        var client = clientUni.await().atMost(java.time.Duration.ofSeconds(10));
-        assertThat(client).isNotNull();
+        // Get a Mutiny client stub using the factory
+        var client = getFactory().getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+            .await().atMost(Duration.ofSeconds(5));
 
         // Make a real gRPC call
         HelloRequest request = HelloRequest.newBuilder()
@@ -111,82 +132,107 @@ public abstract class DynamicGrpcClientFactoryTestBase {
             .build();
 
         HelloReply response = client.sayHello(request)
-            .await().atMost(java.time.Duration.ofSeconds(5));
+            .await().atMost(Duration.ofSeconds(5));
 
-        assertThat(response).isNotNull();
-        assertThat(response.getMessage()).isEqualTo("Hello Factory Test");
+        assertThat(response)
+            .as("gRPC response should not be null")
+            .isNotNull();
+        assertThat(response.getMessage())
+            .as("Response message should contain the name sent")
+            .isEqualTo("Hello Factory Test");
     }
 
     @Test
-    void testClientReuse() throws InterruptedException {
-        Thread.sleep(500);
+    void testClientReuse() {
+        registerServiceInConsul();
+
+        // Wait for Consul registration to propagate
+        await().atMost(Duration.ofSeconds(5))
+            .alias("Wait for service discovery")
+            .untilAsserted(() -> {
+                assertThat(getFactory().getClient(serviceName, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1)))
+                    .as("Client should be discoverable")
+                    .isNotNull();
+            });
 
         GrpcClientFactory factory = getFactory();
 
         // Request the same client twice - should use cached channel
-        var client1Uni = factory.getClient(TEST_SERVICE_NAME, MutinyGreeterGrpc::newMutinyStub);
-        var client2Uni = factory.getClient(TEST_SERVICE_NAME, MutinyGreeterGrpc::newMutinyStub);
+        var client1 = factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(10));
+        var client2 = factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(10));
 
-        var client1 = client1Uni.await().atMost(java.time.Duration.ofSeconds(10));
-        var client2 = client2Uni.await().atMost(java.time.Duration.ofSeconds(10));
-
-        // Should have cached the channel - only 1 active service
-        assertThat(factory.getActiveServiceCount()).isGreaterThanOrEqualTo(1);
+        // Should have cached the channel
+        assertThat(factory.getActiveServiceCount())
+            .as("Should have at least one active service in cache")
+            .isGreaterThanOrEqualTo(1);
 
         // Both clients should work
         HelloRequest request = HelloRequest.newBuilder()
             .setName("Reuse Test")
             .build();
 
-        HelloReply response1 = client1.sayHello(request)
-            .await().atMost(java.time.Duration.ofSeconds(5));
-        HelloReply response2 = client2.sayHello(request)
-            .await().atMost(java.time.Duration.ofSeconds(5));
+        HelloReply response1 = client1.sayHello(request).await().atMost(Duration.ofSeconds(5));
+        HelloReply response2 = client2.sayHello(request).await().atMost(Duration.ofSeconds(5));
 
-        assertThat(response1.getMessage()).isEqualTo("Hello Reuse Test");
-        assertThat(response2.getMessage()).isEqualTo("Hello Reuse Test");
+        assertThat(response1.getMessage()).as("First client should work").isEqualTo("Hello Reuse Test");
+        assertThat(response2.getMessage()).as("Second client should work and return same result").isEqualTo("Hello Reuse Test");
     }
 
     @Test
-    void testCacheStats() throws InterruptedException {
-        Thread.sleep(500);
+    void testCacheStats() {
+        registerServiceInConsul();
+
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            assertThat(getFactory().getClient(serviceName, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1))).isNotNull();
+        });
 
         GrpcClientFactory factory = getFactory();
 
         // Make a call to populate cache
-        factory.getClient(TEST_SERVICE_NAME, MutinyGreeterGrpc::newMutinyStub)
-            .await().atMost(java.time.Duration.ofSeconds(10));
+        factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+            .await().atMost(Duration.ofSeconds(10));
 
         String stats = factory.getCacheStats();
-        assertThat(stats).isNotNull();
-        assertThat(stats.toLowerCase()).contains("hit");
+        assertThat(stats)
+            .as("Cache stats should be available")
+            .isNotNull();
+        assertThat(stats.toLowerCase())
+            .as("Cache stats should contain hit information")
+            .contains("hit");
     }
 
     @Test
-    void testChannelEviction() throws InterruptedException {
-        Thread.sleep(500);
+    void testChannelEviction() {
+        registerServiceInConsul();
+
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            assertThat(getFactory().getClient(serviceName, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1))).isNotNull();
+        });
 
         GrpcClientFactory factory = getFactory();
 
         // Create a client to populate cache
-        factory.getClient(TEST_SERVICE_NAME, MutinyGreeterGrpc::newMutinyStub)
-            .await().atMost(java.time.Duration.ofSeconds(10));
+        factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+            .await().atMost(Duration.ofSeconds(10));
 
         int countBeforeEviction = factory.getActiveServiceCount();
-        assertThat(countBeforeEviction).isGreaterThanOrEqualTo(1);
+        assertThat(countBeforeEviction).as("Should have at least one active service before eviction").isGreaterThanOrEqualTo(1);
 
         // Evict the channel
-        factory.evictChannel(TEST_SERVICE_NAME);
+        factory.evictChannel(serviceName);
 
-        // Count may stay the same or decrease (eviction can be async)
-        int countAfterEviction = factory.getActiveServiceCount();
-        assertThat(countAfterEviction).isLessThanOrEqualTo(countBeforeEviction);
+        // Eviction might be async, wait for count to potentially decrease
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            assertThat(factory.getActiveServiceCount())
+                .as("Active service count should be less than or equal to count before eviction")
+                .isLessThanOrEqualTo(countBeforeEviction);
+        });
     }
 
     /**
      * Test implementation of the Greeter service.
      */
-    static class TestGreeterService extends MutinyGreeterGrpc.GreeterImplBase {
+    public static class TestGreeterService extends MutinyGreeterGrpc.GreeterImplBase {
         @Override
         public Uni<HelloReply> sayHello(HelloRequest request) {
             HelloReply response = HelloReply.newBuilder()

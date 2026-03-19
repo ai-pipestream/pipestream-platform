@@ -1,6 +1,5 @@
 package ai.pipestream.quarkus.dynamicgrpc;
 
-import ai.pipestream.quarkus.dynamicgrpc.GrpcClientFactory;
 import ai.pipestream.quarkus.dynamicgrpc.base.ConsulServiceRegistration;
 import ai.pipestream.test.support.ConsulTestResource;
 import ai.pipestream.quarkus.dynamicgrpc.it.proto.HelloReply;
@@ -15,6 +14,7 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,6 +25,7 @@ import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -32,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /**
  * Stress tests for GrpcClientFactory under heavy load.
@@ -55,6 +57,7 @@ public class StressTest {
     private static final List<Server> stressServers = new ArrayList<>();
     private static final List<Integer> stressPorts = new ArrayList<>();
     private ConsulServiceRegistration consulRegistration;
+    private String baseServiceName;
 
     @BeforeAll
     static void startStressServers() throws IOException {
@@ -87,6 +90,18 @@ public class StressTest {
     @BeforeEach
     void setup() {
         consulRegistration = new ConsulServiceRegistration(consulHost, consulPort);
+        baseServiceName = "stress-" + UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    @AfterEach
+    void cleanup() {
+        if (consulRegistration != null && baseServiceName != null) {
+            for (int i = 0; i < 10; i++) {
+                try {
+                    consulRegistration.deregisterService(baseServiceName + "-" + i + "-instance");
+                } catch (Exception ignore) {}
+            }
+        }
     }
 
     @Test
@@ -94,16 +109,19 @@ public class StressTest {
     void testHighConcurrencyMultipleServices() throws InterruptedException {
         // Register 10 services
         for (int i = 0; i < 10; i++) {
-            String serviceName = "stress-service-" + i;
-            consulRegistration.registerService(
-                serviceName,
-                serviceName + "-instance",
-                "127.0.0.1",
-                stressPorts.get(i)
-            );
+            String name = baseServiceName + "-" + i;
+            consulRegistration.registerService(name, name + "-instance", "127.0.0.1", stressPorts.get(i));
         }
 
-        Thread.sleep(1000); // Wait for registration
+        // Wait for all to be discoverable
+        for (int i = 0; i < 10; i++) {
+            String name = baseServiceName + "-" + i;
+            await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+                assertThat(clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1)))
+                    .as("Service " + name + " should be discoverable")
+                    .isNotNull();
+            });
+        }
 
         ExecutorService executor = Executors.newFixedThreadPool(20);
         CountDownLatch latch = new CountDownLatch(100);
@@ -112,21 +130,20 @@ public class StressTest {
 
         // Submit 100 concurrent requests across different services
         for (int i = 0; i < 100; i++) {
-            final int serviceIndex = i % 10; // Round-robin across services
+            final int serviceIndex = i % 10;
             final int requestNum = i;
 
             executor.submit(() -> {
                 try {
-                    String serviceName = "stress-service-" + serviceIndex;
-                    var client = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+                    String name = baseServiceName + "-" + serviceIndex;
+                    var client = clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub)
                         .await().atMost(Duration.ofSeconds(10));
 
                     HelloRequest request = HelloRequest.newBuilder()
                         .setName("Request-" + requestNum)
                         .build();
 
-                    HelloReply reply = client.sayHello(request)
-                        .await().atMost(Duration.ofSeconds(5));
+                    HelloReply reply = client.sayHello(request).await().atMost(Duration.ofSeconds(5));
 
                     if (reply.getMessage().contains("Hello")) {
                         successCount.incrementAndGet();
@@ -140,33 +157,30 @@ public class StressTest {
             });
         }
 
-        // Wait for all requests to complete
         boolean completed = latch.await(60, TimeUnit.SECONDS);
         executor.shutdown();
 
-        assertThat(completed).isTrue();
-        assertThat(successCount.get()).isGreaterThanOrEqualTo(95); // At least 95% success rate
+        assertThat(completed).as("Stress test should complete within timeout").isTrue();
+        assertThat(successCount.get())
+            .as("Should have a high success rate (at least 95%) under load")
+            .isGreaterThanOrEqualTo(95);
+        
         LOG.infof("Stress test: %d successes, %d failures out of 100 requests",
             successCount.get(), failureCount.get());
-
-        // Cleanup
-        for (int i = 0; i < 10; i++) {
-            consulRegistration.deregisterService("stress-service-" + i + "-instance");
-        }
     }
 
     @Test
     @DisplayName("Sustained load - 500 requests over 10 seconds")
     void testSustainedLoad() throws InterruptedException {
-        String serviceName = "sustained-load-service";
-        consulRegistration.registerService(
-            serviceName,
-            serviceName + "-instance",
-            "127.0.0.1",
-            stressPorts.get(0)
-        );
+        String name = baseServiceName + "-sustained";
+        consulRegistration.registerService(name, name + "-instance", "127.0.0.1", stressPorts.get(0));
 
-        Thread.sleep(500);
+        // Wait for discovery
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            assertThat(clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1)))
+                .as("Sustained load service should be discoverable")
+                .isNotNull();
+        });
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
@@ -174,21 +188,16 @@ public class StressTest {
 
         ExecutorService executor = Executors.newFixedThreadPool(10);
 
-        // Submit 500 requests over time
+        // Submit 500 requests
         for (int i = 0; i < 500; i++) {
             final int requestNum = i;
-
             executor.submit(() -> {
                 try {
-                    var client = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+                    var client = clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub)
                         .await().atMost(Duration.ofSeconds(5));
 
-                    HelloRequest request = HelloRequest.newBuilder()
-                        .setName("Sustained-" + requestNum)
-                        .build();
-
-                    HelloReply reply = client.sayHello(request)
-                        .await().atMost(Duration.ofSeconds(5));
+                    HelloRequest request = HelloRequest.newBuilder().setName("S-" + requestNum).build();
+                    HelloReply reply = client.sayHello(request).await().atMost(Duration.ofSeconds(5));
 
                     if (reply.getMessage().contains("Hello")) {
                         successCount.incrementAndGet();
@@ -198,7 +207,6 @@ public class StressTest {
                 }
             });
 
-            // Small delay between submissions to simulate real load
             if (i % 50 == 0) {
                 Thread.sleep(100);
             }
@@ -208,104 +216,101 @@ public class StressTest {
         boolean completed = executor.awaitTermination(30, TimeUnit.SECONDS);
         long duration = System.currentTimeMillis() - startTime;
 
-        assertThat(completed).isTrue();
-        assertThat(successCount.get()).isGreaterThanOrEqualTo(490); // 98% success rate
+        assertThat(completed).as("Sustained load test should complete").isTrue();
+        assertThat(successCount.get())
+            .as("Should have very high success rate (at least 98%) for sustained load")
+            .isGreaterThanOrEqualTo(490);
+        
         LOG.infof("Sustained load: %d successes, %d failures in %dms",
             successCount.get(), failureCount.get(), duration);
 
-        consulRegistration.deregisterService(serviceName + "-instance");
+        consulRegistration.deregisterService(name + "-instance");
     }
 
     @Test
     @DisplayName("Rapid service switching - many services accessed quickly")
-    void testRapidServiceSwitching() throws InterruptedException {
+    void testRapidServiceSwitching() {
         // Register 10 services
         for (int i = 0; i < 10; i++) {
-            String serviceName = "switch-service-" + i;
-            consulRegistration.registerService(
-                serviceName,
-                serviceName + "-instance",
-                "127.0.0.1",
-                stressPorts.get(i)
-            );
+            String name = baseServiceName + "-switch-" + i;
+            consulRegistration.registerService(name, name + "-instance", "127.0.0.1", stressPorts.get(i));
         }
 
-        Thread.sleep(1000);
+        // Wait for all to be discoverable
+        for (int i = 0; i < 10; i++) {
+            String name = baseServiceName + "-switch-" + i;
+            await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+                assertThat(clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1)))
+                    .as("Service " + name + " should be discoverable for switching test")
+                    .isNotNull();
+            });
+        }
 
         AtomicInteger successCount = new AtomicInteger(0);
 
         // Rapidly switch between services
         for (int round = 0; round < 20; round++) {
-            for (int serviceIdx = 0; serviceIdx < 10; serviceIdx++) {
-                String serviceName = "switch-service-" + serviceIdx;
-
+            for (int i = 0; i < 10; i++) {
+                String name = baseServiceName + "-switch-" + i;
                 try {
-                    var client = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+                    var client = clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub)
                         .await().atMost(Duration.ofSeconds(5));
 
-                    HelloRequest request = HelloRequest.newBuilder()
-                        .setName("Switch-" + round + "-" + serviceIdx)
-                        .build();
-
-                    HelloReply reply = client.sayHello(request)
-                        .await().atMost(Duration.ofSeconds(3));
+                    HelloRequest request = HelloRequest.newBuilder().setName("R-" + round + "-" + i).build();
+                    HelloReply reply = client.sayHello(request).await().atMost(Duration.ofSeconds(3));
 
                     if (reply.getMessage().contains("Hello")) {
                         successCount.incrementAndGet();
                     }
                 } catch (Exception e) {
-                    LOG.errorf(e, "Failed on service %s", serviceName);
+                    LOG.errorf(e, "Failed on service %s", name);
                 }
             }
         }
 
-        // 200 total requests (20 rounds * 10 services)
-        assertThat(successCount.get()).isGreaterThanOrEqualTo(190); // 95% success
+        assertThat(successCount.get())
+            .as("Should handle rapid switching between services with high success rate")
+            .isGreaterThanOrEqualTo(190);
 
-        // Should have cached 10 channels
-        assertThat(clientFactory.getActiveServiceCount()).isGreaterThanOrEqualTo(10);
+        assertThat(clientFactory.getActiveServiceCount())
+            .as("Cache should have all 10 services")
+            .isGreaterThanOrEqualTo(10);
 
-        // Cleanup
         for (int i = 0; i < 10; i++) {
-            consulRegistration.deregisterService("switch-service-" + i + "-instance");
+            try {
+                consulRegistration.deregisterService(baseServiceName + "-switch-" + i + "-instance");
+            } catch (Exception ignore) {}
         }
     }
 
     @Test
     @DisplayName("Memory stability - ensure no leaks with repeated access")
-    void testMemoryStability() throws InterruptedException {
-        String serviceName = "memory-test-service";
-        consulRegistration.registerService(
-            serviceName,
-            serviceName + "-instance",
-            "127.0.0.1",
-            stressPorts.get(0)
-        );
+    void testMemoryStability() {
+        String name = baseServiceName + "-memory";
+        consulRegistration.registerService(name, name + "-instance", "127.0.0.1", stressPorts.get(0));
 
-        Thread.sleep(500);
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            assertThat(clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1)))
+                .as("Memory test service should be discoverable")
+                .isNotNull();
+        });
 
         int initialChannelCount = clientFactory.getActiveServiceCount();
 
         // Access same service 1000 times
         for (int i = 0; i < 1000; i++) {
-            var client = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+            var client = clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub)
                 .await().atMost(Duration.ofSeconds(3));
 
-            HelloRequest request = HelloRequest.newBuilder()
-                .setName("Memory-" + i)
-                .build();
-
-            client.sayHello(request)
-                .await().atMost(Duration.ofSeconds(2));
+            HelloRequest request = HelloRequest.newBuilder().setName("M-" + i).build();
+            client.sayHello(request).await().atMost(Duration.ofSeconds(2));
         }
 
-        // Should still only have ONE channel for this service (no leak)
-        int finalChannelCount = clientFactory.getActiveServiceCount();
-        assertThat(finalChannelCount).isLessThanOrEqualTo(initialChannelCount + 1);
+        assertThat(clientFactory.getActiveServiceCount())
+            .as("Should not leak channels after repeated access to same service")
+            .isLessThanOrEqualTo(initialChannelCount + 1);
 
-        LOG.infof("Memory stability: %d channels after 1000 requests", finalChannelCount);
-
-        consulRegistration.deregisterService(serviceName + "-instance");
+        consulRegistration.deregisterService(name + "-instance");
     }
 
     /**

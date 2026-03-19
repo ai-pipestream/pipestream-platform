@@ -14,24 +14,24 @@ httpclient5 = "5.6"
 caffeine = "3.2.3"
 # gRPC and Protobuf versions - match Quarkus defaults
 
-grpc = "1.79.0"
+grpc = "1.80.0"
 protobufVersion = "4.34.0"
 
 # Quarkiverse extensions
 quinoa = "2.7.2"
-wiremock = "4.0.0-beta.29"
-wiremock-standalone = "4.0.0-beta.29"
+wiremock = "4.0.0-beta.30"
+wiremock-standalone = "4.0.0-beta.30"
 wiremock-grpc-extension = "1.0.0-beta.5"
 hibernate-types = "2.2.0"
-quarkus-mcp-server = "1.10.2"
+quarkus-mcp-server = "1.10.3"
 quarkus-docling = "1.2.3"
 # AWS SDK
-aws-sdk = "2.42.11"
+aws-sdk = "2.42.16"
 # Apicurio
-apicurio = "3.1.7"
+apicurio = "3.2.0"
 # Testing
 awaitility = "4.3.0"
-testcontainersVersion = "2.0.3"
+testcontainersVersion = "2.0.4"
 testcontainers-redis = "2.2.4"
 assertj = "3.27.7"
 hamcrest = "3.0"
@@ -74,7 +74,7 @@ axion-release = "1.21.1"
 nmcp = "1.4.4"
 protobuf-plugin = "0.9.6"
 buf-plugin = "0.11.0"
-shadow-plugin = "9.3.2"
+shadow-plugin = "9.4.0"
 proto-toolchain = "0.7.19"
 quarkus-buf-grpc-generator = "0.7.19"
 

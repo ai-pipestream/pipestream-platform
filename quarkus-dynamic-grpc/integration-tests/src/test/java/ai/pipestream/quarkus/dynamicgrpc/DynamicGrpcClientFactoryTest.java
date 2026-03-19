@@ -2,6 +2,8 @@ package ai.pipestream.quarkus.dynamicgrpc;
 
 import ai.pipestream.quarkus.dynamicgrpc.GrpcClientFactory;
 import ai.pipestream.quarkus.dynamicgrpc.base.DynamicGrpcClientFactoryTestBase;
+import ai.pipestream.test.support.ConsulTestResource;
+import io.quarkus.test.common.WithTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
  * </p>
  */
 @QuarkusTest
+@WithTestResource(ConsulTestResource.class)
 class DynamicGrpcClientFactoryTest extends DynamicGrpcClientFactoryTestBase {
 
     @Inject

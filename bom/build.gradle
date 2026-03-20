@@ -70,8 +70,7 @@ dependencies {
         api project(':pipestream-descriptor-apicurio')
         api project(':pipestream-descriptor-apicurio-deployment')
 
-        api project(':pipestream-djl-serving')
-        api project(':pipestream-djl-serving-deployment')
+        // pipestream-djl-serving removed — now maintained in module-embedder repo
 
         // Shared test fixtures
         api project(':pipestream-test-support')

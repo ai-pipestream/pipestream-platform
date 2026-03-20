@@ -11,6 +11,7 @@ import ai.pipestream.registration.model.ServiceInfo;
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
+import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.subscription.Cancellable;
 import io.vertx.mutiny.core.Vertx;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -20,6 +21,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -320,6 +322,23 @@ public class ServiceRegistrationManager {
      */
     public String getServiceId() {
         return serviceId.get();
+    }
+
+    /**
+     * Updates the Consul tags for this service instance.
+     * Uses the cached registration to re-register with updated tags.
+     * Works regardless of registration mode (direct or gRPC).
+     *
+     * @param tags Complete replacement tag list
+     * @return Uni indicating success or failure
+     */
+    public Uni<Boolean> updateTags(List<String> tags) {
+        String currentServiceId = serviceId.get();
+        if (currentServiceId == null || state.get() != RegistrationState.REGISTERED) {
+            LOG.debugf("Cannot update tags: not registered (state=%s)", state.get());
+            return Uni.createFrom().item(false);
+        }
+        return consulRegistrar.updateTags(currentServiceId, tags);
     }
 
     /**

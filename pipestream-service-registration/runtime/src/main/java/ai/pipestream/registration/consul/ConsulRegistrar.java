@@ -14,7 +14,9 @@ import org.jboss.logging.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Handles service registration and unregistration with Consul.
@@ -26,6 +28,9 @@ public class ConsulRegistrar {
     private static final Logger LOG = Logger.getLogger(ConsulRegistrar.class);
 
     private final ConsulClient consulClient;
+
+    /** Cached ServiceOptions per service ID for tag-only updates. */
+    private final Map<String, ServiceOptions> registeredOptions = new ConcurrentHashMap<>();
 
     @Inject
     public ConsulRegistrar(ConsulClient consulClient) {
@@ -201,6 +206,7 @@ public class ConsulRegistrar {
         return consulClient.registerService(serviceOptions)
                 .map(v -> {
                     LOG.infof("Successfully registered service: %s", serviceId);
+                    registeredOptions.put(serviceId, serviceOptions);
                     return true;
                 })
                 .onFailure().recoverWithItem(throwable -> {
@@ -248,6 +254,38 @@ public class ConsulRegistrar {
                 })
                 .onFailure().recoverWithItem(throwable -> {
                     LOG.warnf(throwable, "Failed to add HTTP readiness check for %s", serviceId);
+                    return false;
+                });
+    }
+
+    /**
+     * Update the tags on an already-registered Consul service.
+     * Re-registers with the same ID and all original options, replacing only the tags.
+     *
+     * @param serviceId The Consul service ID (must have been registered via this registrar)
+     * @param tags      Complete replacement tag list
+     * @return Uni indicating success or failure
+     */
+    public Uni<Boolean> updateTags(String serviceId, List<String> tags) {
+        ServiceOptions cached = registeredOptions.get(serviceId);
+        if (cached == null) {
+            LOG.warnf("Cannot update tags: no cached registration for %s", serviceId);
+            return Uni.createFrom().item(false);
+        }
+
+        ServiceOptions updated = new ServiceOptions(cached.toJson());
+        updated.setTags(new ArrayList<>(tags));
+
+        LOG.infof("Updating tags for %s: %s", serviceId, tags);
+
+        return consulClient.registerService(updated)
+                .map(v -> {
+                    registeredOptions.put(serviceId, updated);
+                    LOG.infof("Tags updated for %s", serviceId);
+                    return true;
+                })
+                .onFailure().recoverWithItem(throwable -> {
+                    LOG.warnf(throwable, "Failed to update tags for %s", serviceId);
                     return false;
                 });
     }

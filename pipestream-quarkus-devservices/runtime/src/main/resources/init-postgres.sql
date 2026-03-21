@@ -23,3 +23,6 @@ GRANT ALL PRIVILEGES ON DATABASE s3_connector TO pipeline;
 
 CREATE DATABASE opensearch_manager;
 GRANT ALL PRIVILEGES ON DATABASE opensearch_manager TO pipeline;
+
+CREATE DATABASE jdbc_connector;
+GRANT ALL PRIVILEGES ON DATABASE jdbc_connector TO pipeline;

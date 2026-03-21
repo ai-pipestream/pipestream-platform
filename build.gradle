@@ -1,5 +1,6 @@
 buildscript {
     repositories {
+        mavenLocal()
         mavenCentral()
         gradlePluginPortal()
     }
@@ -33,6 +34,7 @@ allprojects {
 
 // Repositories for root project (needed for nmcp plugin's internal dependencies)
 repositories {
+    mavenLocal()
     mavenCentral()
     gradlePluginPortal()
 }
@@ -54,8 +56,8 @@ subprojects {
     apply plugin: 'signing'
 
     repositories {
-        mavenCentral()
         mavenLocal()
+        mavenCentral()
         maven {
             name = 'GitHubPackages'
             url = uri('https://maven.pkg.github.com/ai-pipestream/pipestream-platform')

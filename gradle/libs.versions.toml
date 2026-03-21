@@ -1,5 +1,6 @@
 [versions]
-quarkusVersion = "3.32.4"
+# Quarkus platform BOM (aligned with gradle.properties quarkusVersion).
+quarkusVersion = "3.32.3"
 jandex-plugin = "2.3.0"
 commons-lang3 = "3.20.0"
 opennlp-tools = "2.5.7"

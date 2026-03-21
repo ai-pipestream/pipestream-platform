@@ -278,6 +278,8 @@ public class ServiceRegistrationManager {
             serviceId.set(newServiceId);
             state.set(RegistrationState.REGISTERED);
             cancelRequiredTimeout();
+            // Prime the Consul cache so updateTags() works without a fallback registration
+            consulRegistrar.primeCache(newServiceId, metadataCollector.collect());
             LOG.infof("Service registered successfully with ID: %s", newServiceId);
         } else if (event.getEventType() == PlatformEventType.PLATFORM_EVENT_TYPE_FAILED) {
             LOG.errorf("Registration failed: %s", event.getErrorDetail());
@@ -326,9 +328,8 @@ public class ServiceRegistrationManager {
 
     /**
      * Updates the Consul tags for this service instance.
-     * Tries the cached registration first; if unavailable (gRPC mode where
-     * platform-registration-service registered on our behalf), falls back
-     * to a fresh Consul registration built from current metadata.
+     * Requires the registration cache to have been primed (direct mode does this
+     * on registration; gRPC mode primes it in {@link #handleGrpcRegistrationResponse}).
      *
      * @param tags Complete replacement tag list
      * @return Uni indicating success or failure
@@ -339,38 +340,7 @@ public class ServiceRegistrationManager {
             LOG.debugf("Cannot update tags: not registered (state=%s)", state.get());
             return Uni.createFrom().item(false);
         }
-        return consulRegistrar.updateTags(currentServiceId, tags)
-                .chain(success -> {
-                    if (success) {
-                        return Uni.createFrom().item(true);
-                    }
-                    // Cache miss (gRPC mode) — register directly with Consul using current metadata
-                    LOG.info("No cached registration; performing direct Consul registration with updated tags");
-                    ServiceInfo info = metadataCollector.collect();
-                    ServiceInfo withTags = rebuildWithTags(info, tags);
-                    return consulRegistrar.registerService(withTags, currentServiceId);
-                });
-    }
-
-    private static ServiceInfo rebuildWithTags(ServiceInfo source, List<String> tags) {
-        return ServiceInfo.builder()
-                .name(source.getName())
-                .type(source.getType())
-                .version(source.getVersion())
-                .advertisedHost(source.getAdvertisedHost())
-                .advertisedPort(source.getAdvertisedPort())
-                .internalHost(source.getInternalHost())
-                .internalPort(source.getInternalPort())
-                .tlsEnabled(source.isTlsEnabled())
-                .metadata(source.getMetadata())
-                .tags(tags)
-                .capabilities(source.getCapabilities())
-                .httpEndpoints(source.getHttpEndpoints())
-                .grpcServices(source.getGrpcServices())
-                .httpSchema(source.getHttpSchema())
-                .httpSchemaVersion(source.getHttpSchemaVersion())
-                .httpSchemaArtifactId(source.getHttpSchemaArtifactId())
-                .build();
+        return consulRegistrar.updateTags(currentServiceId, tags);
     }
 
     /**

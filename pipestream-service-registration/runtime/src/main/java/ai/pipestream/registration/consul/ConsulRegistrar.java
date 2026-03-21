@@ -259,6 +259,45 @@ public class ConsulRegistrar {
     }
 
     /**
+     * Primes the registration cache for a service ID without making a Consul API call.
+     * <p>
+     * Used after gRPC registration succeeds (where the platform-registration-service
+     * registered on our behalf) so that subsequent {@link #updateTags} calls have
+     * cached options to work with.
+     */
+    public void primeCache(String serviceId, ServiceInfo serviceInfo) {
+        RegisterRequest request = buildRegisterRequest(serviceInfo);
+        Connectivity connectivity = request.getConnectivity();
+
+        String consulHost = connectivity.hasInternalHost()
+                ? connectivity.getInternalHost()
+                : connectivity.getAdvertisedHost();
+        int consulPort = connectivity.hasInternalPort()
+                ? connectivity.getInternalPort()
+                : connectivity.getAdvertisedPort();
+
+        Map<String, String> sanitizedMetadata = sanitizeMetadataKeys(request.getMetadataMap());
+        sanitizedMetadata.put("advertised-host", connectivity.getAdvertisedHost());
+        sanitizedMetadata.put("advertised-port", String.valueOf(connectivity.getAdvertisedPort()));
+        sanitizedMetadata.put("version", request.getVersion());
+        sanitizedMetadata.put("service-type", request.getType().name());
+
+        ServiceOptions serviceOptions = new ServiceOptions()
+                .setId(serviceId)
+                .setName(request.getName())
+                .setAddress(consulHost)
+                .setPort(consulPort)
+                .setTags(new ArrayList<>(request.getTagsList()))
+                .setMeta(sanitizedMetadata);
+
+        request.getCapabilitiesList().forEach(cap ->
+                serviceOptions.getTags().add("capability:" + cap));
+
+        registeredOptions.put(serviceId, serviceOptions);
+        LOG.infof("Registration cache primed for %s", serviceId);
+    }
+
+    /**
      * Update the tags on an already-registered Consul service.
      * Re-registers with the same ID and all original options, replacing only the tags.
      *
@@ -269,7 +308,8 @@ public class ConsulRegistrar {
     public Uni<Boolean> updateTags(String serviceId, List<String> tags) {
         ServiceOptions cached = registeredOptions.get(serviceId);
         if (cached == null) {
-            LOG.warnf("Cannot update tags: no cached registration for %s", serviceId);
+            LOG.warnf("Cannot update tags: no cached registration for %s. "
+                    + "Cache should have been primed after registration.", serviceId);
             return Uni.createFrom().item(false);
         }
 

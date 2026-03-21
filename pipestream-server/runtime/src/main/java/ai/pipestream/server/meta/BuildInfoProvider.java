@@ -3,12 +3,13 @@ package ai.pipestream.server.meta;
 import io.quarkus.info.BuildInfo;
 import io.quarkus.info.GitInfo;
 import io.quarkus.runtime.Quarkus;
+import io.quarkus.runtime.configuration.ConfigUtils;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @ApplicationScoped
@@ -22,9 +23,6 @@ public class BuildInfoProvider {
     @Inject
     Instance<GitInfo> gitInfo;
 
-    @ConfigProperty(name = "quarkus.profile", defaultValue = "prod")
-    String profile;
-
     public Map<String, Object> endpointPayload() {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("build", Map.of(
@@ -36,7 +34,7 @@ public class BuildInfoProvider {
         result.put("runtime", Map.of(
                 "java", System.getProperty("java.version", UNKNOWN),
                 "quarkus", quarkusVersion(),
-                "profile", profile,
+                "profile", activeProfilesString(),
                 "hostname", System.getenv().getOrDefault("HOSTNAME", UNKNOWN)
         ));
         return result;
@@ -50,7 +48,7 @@ public class BuildInfoProvider {
         metadata.put("build.time", buildTime());
         metadata.put("runtime.java", System.getProperty("java.version", UNKNOWN));
         metadata.put("runtime.quarkus", quarkusVersion());
-        metadata.put("runtime.profile", profile);
+        metadata.put("runtime.profile", activeProfilesString());
         metadata.put("runtime.hostname", System.getenv().getOrDefault("HOSTNAME", UNKNOWN));
         return metadata;
     }
@@ -96,5 +94,15 @@ public class BuildInfoProvider {
             return quarkusPackage.getImplementationVersion();
         }
         return UNKNOWN;
+    }
+
+    /** Active config profiles from the runtime (never default to {@code prod} when unset). */
+    private static String activeProfilesString() {
+        List<String> profiles = ConfigUtils.getProfiles();
+        if (profiles != null && !profiles.isEmpty()) {
+            return String.join(",", profiles);
+        }
+        String sys = System.getProperty("quarkus.profile");
+        return (sys != null && !sys.isBlank()) ? sys : UNKNOWN;
     }
 }

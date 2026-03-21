@@ -69,6 +69,7 @@ consul-client = "1.10.1"
 # External Pipestream Libraries (not part of this monorepo)
 # ========================
 pipestream-wiremock-server = "0.1.52"
+pipestream-opensearch-client = "0.1.0-SNAPSHOT"
 
 # Gradle plugins
 axion-release = "1.21.1"
@@ -147,6 +148,10 @@ quarkus-junit5-mockito = { module = "io.quarkus:quarkus-junit5-mockito" }
 opensearch-java = { module = "org.opensearch.client:opensearch-java", version.ref = "opensearch" }
 opensearch-testcontainers = { module = "org.opensearch:opensearch-testcontainers", version.ref = "opensearch-testcontainers" }
 opensearch-protobufs = { module = "org.opensearch:protobufs", version.ref = "opensearch-protobufs" }
+
+# Pipestream OpenSearch Client Extension (extracted from this monorepo)
+pipestream-opensearch-client = { module = "ai.pipestream:pipestream-opensearch-client", version.ref = "pipestream-opensearch-client" }
+pipestream-opensearch-client-deployment = { module = "ai.pipestream:pipestream-opensearch-client-deployment", version.ref = "pipestream-opensearch-client" }
 
 # Apache HTTP Client
 httpclient5 = { module = "org.apache.httpcomponents.client5:httpclient5", version.ref = "httpclient5" }

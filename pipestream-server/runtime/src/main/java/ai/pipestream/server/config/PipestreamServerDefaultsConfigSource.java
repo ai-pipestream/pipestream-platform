@@ -91,6 +91,16 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         applyIfMissing(context, values, "%dev.pipestream.security.admin-fallback-enabled", "true");
         applyIfMissing(context, values, "%test.pipestream.security.admin-fallback-enabled", "true");
 
+        // Testcontainers: disable container reuse in test mode.
+        // When reuse is enabled, Testcontainers skips starting Ryuk (the cleanup daemon),
+        // but Quarkus DevServices creates a new container per test run (unique process-uuid).
+        // This causes containers to accumulate indefinitely. Force reuse off so Ryuk cleans up.
+        if (isTestProfile(context)) {
+            LOG.info("Test mode active for Pipestream server. Setting testcontainers.reuse.enable=false "
+                    + "to prevent container leaks from Quarkus DevServices.");
+            System.setProperty("testcontainers.reuse.enable", "false");
+        }
+
         // Dev profile: compose devservices defaults (shared infra)
         applyIfMissing(context, values, "%dev.quarkus.devservices.enabled", "true");
         applyIfMissing(context, values, "%dev.quarkus.compose.devservices.enabled", "true");

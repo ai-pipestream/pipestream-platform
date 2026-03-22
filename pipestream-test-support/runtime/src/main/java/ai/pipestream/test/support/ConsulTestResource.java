@@ -32,6 +32,7 @@ public class ConsulTestResource implements QuarkusTestResourceLifecycleManager {
 
     @Override
     public Map<String, String> start() {
+        TestcontainersReuseGuard.ensureReuseDisabled();
         if (consulContainer != null && consulContainer.isRunning()) {
             log.info("Reusing existing Consul container at {}:{}", host, mappedHttpPort);
             return buildConfig();

@@ -23,6 +23,7 @@ public abstract class BaseWireMockTestResource implements QuarkusTestResourceLif
     @SuppressWarnings("resource")
     @Override
     public Map<String, String> start() {
+        TestcontainersReuseGuard.ensureReuseDisabled();
         wireMockContainer = new GenericContainer<>(DockerImageName.parse(resolveImage()))
                 .withExposedPorts(exposedPorts())
                 .waitingFor(Wait.forLogMessage(readyLogPattern(), 1));

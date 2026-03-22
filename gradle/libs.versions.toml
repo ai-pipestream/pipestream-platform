@@ -68,7 +68,7 @@ consul-client = "1.10.1"
 # ========================
 # External Pipestream Libraries (not part of this monorepo)
 # ========================
-pipestream-wiremock-server = "0.1.52"
+pipestream-wiremock-server = "0.1.53"
 pipestream-opensearch-client = "0.1.0-SNAPSHOT"
 
 # Gradle plugins

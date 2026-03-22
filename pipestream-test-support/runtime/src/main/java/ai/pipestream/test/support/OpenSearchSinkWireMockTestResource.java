@@ -20,7 +20,7 @@ public class OpenSearchSinkWireMockTestResource implements QuarkusTestResourceLi
 
     private static final Logger LOG = Logger.getLogger(OpenSearchSinkWireMockTestResource.class);
     private static final String OPENSEARCH_IMAGE = "opensearchproject/opensearch:3.5.0";
-    private static final String WIREMOCK_IMAGE = BaseWireMockTestResource.resolveImage(BaseWireMockTestResource.DEFAULT_GHCR_IMAGE);
+    private static final String WIREMOCK_IMAGE = BaseWireMockTestResource.resolveImage();
 
     private OpenSearchContainer<?> opensearchContainer;
     private GenericContainer<?> wiremockContainer;

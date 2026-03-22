@@ -9,19 +9,14 @@ import java.util.Map;
 
 /**
  * Base class for WireMock test resources that provides common container setup and configuration.
+ * Uses {@link TestContainerConstants.WireMock} as the single source of truth for image version
+ * and resolution. Defaults to {@code docker.io} for production image registry.
  * Subclasses should override {@link #buildConfig(GenericContainer)} to provide service-specific configuration.
  */
 public abstract class BaseWireMockTestResource implements QuarkusTestResourceLifecycleManager {
 
-    static final String WIREMOCK_VERSION = "0.1.53";
-    static final String IMAGE_PROPERTY = "pipestream.wiremock.image";
-    static final String IMAGE_ENV = "PIPESTREAM_WIREMOCK_IMAGE";
-    static final String IMAGE_ENV_FALLBACK = "WIREMOCK_IMAGE";
-    static final String DEFAULT_GHCR_IMAGE = "ghcr.io/ai-pipestream/pipestream-wiremock-server:" + WIREMOCK_VERSION;
-    static final String DEFAULT_DOCKER_IO_IMAGE = "docker.io/pipestreamai/pipestream-wiremock-server:" + WIREMOCK_VERSION;
-
-    protected static final int DEFAULT_HTTP_PORT = 8080;
-    protected static final int DEFAULT_GRPC_PORT = 50052;
+    protected static final int DEFAULT_HTTP_PORT = TestContainerConstants.WireMock.DEFAULT_HTTP_PORT;
+    protected static final int DEFAULT_GRPC_PORT = TestContainerConstants.WireMock.DEFAULT_GRPC_PORT;
 
     private GenericContainer<?> wireMockContainer;
 
@@ -67,21 +62,15 @@ public abstract class BaseWireMockTestResource implements QuarkusTestResourceLif
         return wireMockContainer.getMappedPort(port);
     }
 
+    /**
+     * Resolves the WireMock container image from system properties, environment variables,
+     * or the default {@code docker.io} image defined in {@link TestContainerConstants.WireMock}.
+     */
     static String resolveImage() {
-        return resolveImage(DEFAULT_DOCKER_IO_IMAGE);
-    }
-
-    static String resolveImage(String defaultImage) {
-        String image = System.getProperty(IMAGE_PROPERTY);
-        if (image == null || image.isBlank()) {
-            image = System.getenv(IMAGE_ENV);
-        }
-        if (image == null || image.isBlank()) {
-            image = System.getenv(IMAGE_ENV_FALLBACK);
-        }
-        if (image == null || image.isBlank()) {
-            image = defaultImage;
-        }
-        return image;
+        return TestContainerConstants.resolveImage(
+                TestContainerConstants.WireMock.IMAGE_PROPERTY,
+                TestContainerConstants.WireMock.IMAGE_ENV,
+                TestContainerConstants.WireMock.IMAGE_ENV_FALLBACK,
+                TestContainerConstants.WireMock.DEFAULT_IMAGE);
     }
 }

@@ -14,8 +14,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Wrapper around Apicurio's {@link ProtobufKafkaDeserializer} that fixes two issues
- * in Quarkus:
+ * Wrapper around Apicurio's {@link ProtobufKafkaDeserializer} that provides
+ * resilient deserialization with automatic fallback to direct protobuf parsing.
  *
  * <h3>1. Classloading fix</h3>
  * <p>Apicurio's {@code AbstractConfig.getClass()} uses the library's own classloader
@@ -25,11 +25,16 @@ import java.util.Map;
  * and replaces the String value with the actual {@code Class} object.</p>
  *
  * <h3>2. Schema resolution fallback</h3>
- * <p>Apicurio v3's {@code ProtobufSchemaParser.parseSchema()} throws NPE when
- * {@code FileDescriptorUtils.toDescriptor()} returns null for proto schemas with
- * unresolved dependencies (e.g. {@code google/protobuf/timestamp.proto}). When a
- * {@code specificReturnClass} is configured, this wrapper catches the failure and
- * falls back to direct protobuf parsing, bypassing schema resolution entirely.</p>
+ * <p>When Apicurio cannot resolve proto schemas (missing transitive imports, registry
+ * unreachable, schema not yet registered), this deserializer falls back to direct
+ * protobuf parsing using the configured {@code specificReturnClass}. This provides
+ * resilience against:</p>
+ * <ul>
+ *   <li>Missing transitive proto imports in the registry (SchemaException)</li>
+ *   <li>NPE from ProtobufSchemaParser when dependencies are unresolved</li>
+ *   <li>Registry HTTP 404 for content IDs not yet propagated</li>
+ *   <li>Registry downtime or network failures</li>
+ * </ul>
  */
 public class PipestreamProtobufDeserializer<U extends Message> extends ProtobufKafkaDeserializer<U> {
 
@@ -38,18 +43,14 @@ public class PipestreamProtobufDeserializer<U extends Message> extends ProtobufK
     private static final String KEY_RETURN_CLASS = "apicurio.registry.deserializer.key.return-class";
     private static final String APICURIO_PROBLEM_DETAILS_CLASS =
             "io.apicurio.registry.rest.client.models.ProblemDetails";
-    private static final String DEBUG_RUN_ID = "pre-fix";
 
     private Method fallbackParseMethod;
+    private String configuredReturnClassName;
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         String classKey = isKey ? KEY_RETURN_CLASS : VALUE_RETURN_CLASS;
         Object returnClass = configs.get(classKey);
-        // #region agent log
-        LOG.infof("DBG runId=%s hypothesisId=H1 location=PipestreamProtobufDeserializer.configure message=configure-called isKey=%s classKey=%s returnClassType=%s",
-                DEBUG_RUN_ID, isKey, classKey, returnClass == null ? "null" : returnClass.getClass().getName());
-        // #endregion
 
         if (returnClass instanceof String className && !className.isEmpty()) {
             try {
@@ -58,26 +59,18 @@ public class PipestreamProtobufDeserializer<U extends Message> extends ProtobufK
                 fixedConfigs.put(classKey, clazz);
                 super.configure(fixedConfigs, isKey);
                 initFallbackParseMethod(clazz);
-                // #region agent log
-                LOG.infof("DBG runId=%s hypothesisId=H1 location=PipestreamProtobufDeserializer.configure message=configured-with-tccl className=%s fallbackParseMethodReady=%s",
-                        DEBUG_RUN_ID, className, fallbackParseMethod != null);
-                // #endregion
+                configuredReturnClassName = className;
+                LOG.debugf("Configured with TCCL-loaded class: %s (fallback %s)",
+                        className, fallbackParseMethod != null ? "ready" : "unavailable");
                 return;
             } catch (ClassNotFoundException e) {
-                // Fall through to default behavior
-                // #region agent log
-                LOG.infof("DBG runId=%s hypothesisId=H1 location=PipestreamProtobufDeserializer.configure message=tccl-class-load-failed className=%s errorClass=%s error=%s",
-                        DEBUG_RUN_ID, className, e.getClass().getName(), String.valueOf(e.getMessage()));
-                // #endregion
+                LOG.warnf("Failed to load return class via TCCL: %s", returnClass);
             }
         } else if (returnClass instanceof Class<?> clazz) {
             initFallbackParseMethod(clazz);
+            configuredReturnClassName = clazz.getName();
         }
         super.configure(configs, isKey);
-        // #region agent log
-        LOG.infof("DBG runId=%s hypothesisId=H1 location=PipestreamProtobufDeserializer.configure message=configured-with-original-configs fallbackParseMethodReady=%s",
-                DEBUG_RUN_ID, fallbackParseMethod != null);
-        // #endregion
     }
 
     @Override
@@ -86,47 +79,17 @@ public class PipestreamProtobufDeserializer<U extends Message> extends ProtobufK
         try {
             U result = super.deserialize(topic, headers, data);
             if (data != null && result == null) {
-                // #region agent log
-                LOG.infof("DBG runId=%s hypothesisId=H5 location=PipestreamProtobufDeserializer.deserialize message=primary-deserialize-returned-null topic=%s dataLength=%s",
-                        DEBUG_RUN_ID, topic, data.length);
-                // #endregion
                 throw new IllegalStateException("Deserializer returned null for non-null payload");
             }
             return result;
         } catch (RuntimeException e) {
-            boolean schemaResolutionFailure = isSchemaResolutionFailure(e);
-            boolean missingContentIdProblem = hasMissingContentIdProblemDetails(e);
-            boolean shouldFallback = fallbackParseMethod != null && (schemaResolutionFailure || missingContentIdProblem);
-            // #region agent log
-            LOG.infof("DBG runId=%s hypothesisId=H2 location=PipestreamProtobufDeserializer.deserialize message=deserialize-failed topic=%s dataLength=%s fallbackReady=%s schemaResolutionFailure=%s missingContentIdProblem=%s shouldFallback=%s errorClass=%s error=%s",
-                    DEBUG_RUN_ID,
-                    topic,
-                    data == null ? -1 : data.length,
-                    fallbackParseMethod != null,
-                    schemaResolutionFailure,
-                    missingContentIdProblem,
-                    shouldFallback,
-                    e.getClass().getName(),
-                    String.valueOf(e.getMessage()));
-            // #endregion
-            if (shouldFallback) {
-                // #region agent log
-                LOG.infof("DBG runId=%s hypothesisId=H4 location=PipestreamProtobufDeserializer.deserialize message=fallback-branch-entered topic=%s reason=%s",
-                        DEBUG_RUN_ID,
-                        topic,
-                        schemaResolutionFailure ? "schema-resolution-failure"
-                                : "problem-details-missing-content-id");
-                // #endregion
+            if (fallbackParseMethod != null && isRecoverableSchemaFailure(e)) {
+                LOG.warnf("Schema resolution failed for topic '%s' (%s: %s) — falling back to direct protobuf parsing with %s",
+                        topic, e.getClass().getSimpleName(), rootCauseMessage(e), configuredReturnClassName);
                 try {
                     return (U) parseFallback(data);
                 } catch (RuntimeException fallbackEx) {
-                    // #region agent log
-                    LOG.infof("DBG runId=%s hypothesisId=H4 location=PipestreamProtobufDeserializer.deserialize message=fallback-branch-failed topic=%s fallbackErrorClass=%s fallbackError=%s",
-                            DEBUG_RUN_ID,
-                            topic,
-                            fallbackEx.getClass().getName(),
-                            String.valueOf(fallbackEx.getMessage()));
-                    // #endregion
+                    LOG.errorf(fallbackEx, "Fallback protobuf parsing also failed for topic '%s'", topic);
                     fallbackEx.addSuppressed(e);
                     throw fallbackEx;
                 }
@@ -143,10 +106,28 @@ public class PipestreamProtobufDeserializer<U extends Message> extends ProtobufK
         }
     }
 
-    private static boolean isSchemaResolutionFailure(Throwable e) {
-        // Walk the cause chain looking for NPE from ProtobufSchemaParser.parseSchema()
+    /**
+     * Determines if the exception represents a recoverable schema resolution failure
+     * where falling back to direct protobuf parsing is appropriate.
+     *
+     * Walks the entire cause chain looking for:
+     * <ul>
+     *   <li>SchemaException from wire-schema ("unable to find *.proto")</li>
+     *   <li>NPE from ProtobufSchemaParser.parseSchema() (unresolved dependencies)</li>
+     *   <li>Apicurio ProblemDetails with "not found" / 404 (content ID not in registry)</li>
+     *   <li>Any exception with a message indicating missing proto files</li>
+     *   <li>Connection/IO failures reaching the registry</li>
+     * </ul>
+     */
+    static boolean isRecoverableSchemaFailure(Throwable e) {
         Throwable cause = e;
         while (cause != null) {
+            // SchemaException from com.squareup.wire.schema (missing proto imports)
+            if (cause.getClass().getSimpleName().equals("SchemaException")) {
+                return true;
+            }
+
+            // NPE from Apicurio's ProtobufSchemaParser.parseSchema()
             if (cause instanceof NullPointerException) {
                 for (StackTraceElement ste : cause.getStackTrace()) {
                     if ("parseSchema".equals(ste.getMethodName())
@@ -155,6 +136,26 @@ public class PipestreamProtobufDeserializer<U extends Message> extends ProtobufK
                     }
                 }
             }
+
+            // Apicurio ProblemDetails with "content not found" (404)
+            if (APICURIO_PROBLEM_DETAILS_CLASS.equals(cause.getClass().getName())) {
+                if (containsNotFoundText(cause)) {
+                    return true;
+                }
+            }
+
+            // Generic: any exception mentioning missing .proto files
+            String msg = cause.getMessage();
+            if (msg != null && msg.contains(".proto") && msg.contains("unable to find")) {
+                return true;
+            }
+
+            // Connection failures to the registry
+            if (cause instanceof java.net.ConnectException
+                    || cause instanceof java.net.SocketTimeoutException) {
+                return true;
+            }
+
             cause = cause.getCause();
         }
         return false;
@@ -177,10 +178,6 @@ public class PipestreamProtobufDeserializer<U extends Message> extends ProtobufK
 
         try {
             InputStream is = new ByteArrayInputStream(data);
-            // #region agent log
-            LOG.infof("DBG runId=%s hypothesisId=H3 location=PipestreamProtobufDeserializer.parseFallback message=parse-fallback-start dataLength=%s",
-                    DEBUG_RUN_ID, data.length);
-            // #endregion
 
             // Non-headers mode (default): skip magic byte + schema ID
             if (data.length > 0 && data[0] == 0x00) {
@@ -202,40 +199,43 @@ public class PipestreamProtobufDeserializer<U extends Message> extends ProtobufK
 
             Message result = (Message) fallbackParseMethod.invoke(null, is);
             if (result == null) {
-                // #region agent log
-                LOG.infof("DBG runId=%s hypothesisId=H5 location=PipestreamProtobufDeserializer.parseFallback message=fallback-returned-null dataLength=%s",
-                        DEBUG_RUN_ID, data.length);
-                // #endregion
                 throw new IllegalStateException("Fallback parser returned null for non-null payload");
             }
-            // #region agent log
-            LOG.infof("DBG runId=%s hypothesisId=H3 location=PipestreamProtobufDeserializer.parseFallback message=parse-fallback-success resultClass=%s",
-                    DEBUG_RUN_ID, result == null ? "null" : result.getClass().getName());
-            // #endregion
+            LOG.debugf("Fallback parsing succeeded: %s", result.getClass().getSimpleName());
             return result;
         } catch (IllegalAccessException | InvocationTargetException | IOException ex) {
-            // #region agent log
-            LOG.infof("DBG runId=%s hypothesisId=H3 location=PipestreamProtobufDeserializer.parseFallback message=parse-fallback-failed errorClass=%s error=%s",
-                    DEBUG_RUN_ID, ex.getClass().getName(), String.valueOf(ex.getMessage()));
-            // #endregion
             throw new IllegalStateException("Fallback protobuf parsing failed", ex);
         }
     }
 
-    private static boolean hasMissingContentIdProblemDetails(Throwable e) {
-        Throwable cause = e;
-        while (cause != null) {
-            String className = cause.getClass().getName();
-            String message = String.valueOf(cause.getMessage());
-            String lowerMessage = message.toLowerCase();
-            if (APICURIO_PROBLEM_DETAILS_CLASS.equals(className)
-                    && lowerMessage.contains("content")
-                    && (lowerMessage.contains("not found") || lowerMessage.contains("404"))) {
-                return true;
+    /**
+     * Checks ProblemDetails for "not found" text in getMessage(), getDetail(), or getTitle().
+     * Uses reflection since ProblemDetails may not be on the compile classpath.
+     */
+    private static boolean containsNotFoundText(Throwable cause) {
+        for (String methodName : new String[]{"getMessage", "getDetail", "getTitle"}) {
+            try {
+                Method m = cause.getClass().getMethod(methodName);
+                Object result = m.invoke(cause);
+                if (result instanceof String text) {
+                    String lower = text.toLowerCase();
+                    if (lower.contains("not found") || lower.contains("404")) {
+                        return true;
+                    }
+                }
+            } catch (Exception ignored) {
+                // Method doesn't exist or failed — skip
             }
-            cause = cause.getCause();
         }
         return false;
+    }
+
+    private static String rootCauseMessage(Throwable e) {
+        Throwable cause = e;
+        while (cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        return cause.getMessage();
     }
 
     private static void skipDelimitedMessage(InputStream is) throws IOException {

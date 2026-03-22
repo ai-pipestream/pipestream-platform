@@ -35,6 +35,7 @@ dependencies {
 
     // Testing
     testImplementation 'io.quarkus:quarkus-junit5'
+    testImplementation libs.assertj.core
 }
 
 // Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution

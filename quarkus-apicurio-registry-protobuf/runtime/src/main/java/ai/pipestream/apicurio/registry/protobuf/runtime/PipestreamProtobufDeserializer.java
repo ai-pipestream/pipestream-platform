@@ -164,9 +164,18 @@ public class PipestreamProtobufDeserializer<U extends Message> extends ProtobufK
     /**
      * Parses protobuf data directly using the configured return class, skipping
      * the Apicurio wire-format prefix before the actual protobuf bytes.
+     * <p>
+     * The wire format depends on the configured {@link io.apicurio.registry.serde.IdHandler}:
+     * <pre>
+     * Non-headers mode: [0x00 magic][ID bytes (size from IdHandler)][Ref delimited][protobuf payload]
+     * Headers mode:     [Ref delimited][protobuf payload]
+     * </pre>
+     * </p>
      *
-     * <p>In non-headers mode (default): {@code [0x00 magic][ID bytes][Ref][Data]}
-     * <br>In headers mode: {@code [Ref][Data]}</p>
+     * @param data the raw Kafka message value bytes including wire-format prefix
+     * @return the deserialized protobuf message
+     * @throws IllegalArgumentException if data is null
+     * @throws IllegalStateException if fallback parsing fails
      */
     private Message parseFallback(byte[] data) {
         if (data == null) {
@@ -179,19 +188,13 @@ public class PipestreamProtobufDeserializer<U extends Message> extends ProtobufK
         try {
             InputStream is = new ByteArrayInputStream(data);
 
-            // Non-headers mode (default): skip magic byte + schema ID
+            // Non-headers mode (default): skip magic byte + ID using the configured IdHandler size
             if (data.length > 0 && data[0] == 0x00) {
                 //noinspection ResultOfMethodCallIgnored
                 is.skip(1); // magic byte
-                // Detect ID size: 4-byte (Default4ByteIdHandler) or 8-byte (Legacy8ByteIdHandler)
-                byte[] idStart = new byte[4];
-                if (is.read(idStart) == 4
-                        && idStart[0] == 0 && idStart[1] == 0
-                        && idStart[2] == 0 && idStart[3] == 0) {
-                    //noinspection ResultOfMethodCallIgnored
-                    is.skip(4); // 8-byte ID: skip remaining 4 bytes
-                }
-                // else: 4-byte ID already consumed
+                int idSize = delegatedDeserializer.getSerdeConfigurer().getIdHandler().idSize();
+                //noinspection ResultOfMethodCallIgnored
+                is.skip(idSize);
             }
 
             // Skip the Ref length-delimited message prefix written by Apicurio serializer

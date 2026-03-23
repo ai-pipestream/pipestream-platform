@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.quarkus.extension)
 }
 
+description = 'Quarkus Dynamic gRPC Extension - Runtime'
+
 quarkusExtension {
     deploymentModule = 'quarkus-dynamic-grpc-deployment'
 }

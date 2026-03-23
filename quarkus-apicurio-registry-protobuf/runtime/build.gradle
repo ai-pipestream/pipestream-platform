@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.quarkus.extension)
 }
 
+description = 'Quarkus Apicurio Registry Protobuf Extension - Runtime'
+
 quarkusExtension {
     deploymentModule = 'quarkus-apicurio-registry-protobuf-deployment'
 }
@@ -23,6 +25,9 @@ dependencies {
 
     // SmallRye Reactive Messaging Kafka
     implementation 'io.smallrye.reactive:smallrye-reactive-messaging-kafka'
+    // Required Quarkus runtime extension to match deployment module's
+    // quarkus-messaging-kafka-deployment dependency and provide runtime config roots.
+    implementation 'io.quarkus:quarkus-messaging-kafka'
 
     // Protobuf
     implementation libs.protobuf.java

@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.quarkus.extension)
 }
 
+description = 'Pipestream Server Defaults Extension - Runtime'
+
 quarkusExtension {
     deploymentModule = 'pipestream-server-deployment'
 }

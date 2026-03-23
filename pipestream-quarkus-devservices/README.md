@@ -185,6 +185,14 @@ The extension tracks compose file versions using SHA-256 hashes:
 - **Database connection failures**: Verify PostgreSQL initialization completed
 - **Extension not loading**: Confirm dependency is added and properties are set
 
+#### Dev UI console errors (`method not found devui-footer-log_Compose Dev ServicesLog`)
+
+When Compose Dev Services is enabled, **Quarkus** (not this extension) registers a dev service named `Compose Dev Services` and adds a Dev UI footer log for it. In Quarkus 3.32.x, the footer’s JSON-RPC method name is built **without** spaces, but the Dev UI metadata still uses the **display name with spaces**, so the browser calls a method the server never registered—hence `method not found`, `onNext` on `undefined`, and sometimes broken extension cards on `/q/dev-ui/extensions`.
+
+This extension only **enables** `quarkus.compose.devservices.*` and extracts `compose-devservices.yml`; its own `DevServicesResultBuildItem` uses the feature id `pipeline-devservices` (no spaces). The defect is in **`quarkus-devui-deployment`** (`DevUIProcessor.processFooterLogs`): metadata should use the same sanitized name as the subscription method (or Quarkus should avoid spaces in the compose service label).
+
+**Mitigations until Quarkus fixes it:** ignore the Dev UI footer errors, or set `%dev.quarkus.compose.devservices.enabled=false` if you run the same infrastructure with plain `docker compose` and do not need Quarkus to orchestrate it.
+
 ### Development Workflow
 
 1. **Initial setup**: Add dependency, run once to get properties, configure `application.properties`

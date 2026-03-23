@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.quarkus.extension)
 }
 
+description = 'Pipestream Descriptor Apicurio Extension - Runtime'
+
 quarkusExtension {
     deploymentModule = 'pipestream-descriptor-apicurio-deployment'
 }

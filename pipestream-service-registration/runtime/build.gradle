@@ -4,6 +4,8 @@ plugins {
     alias(libs.plugins.proto.toolchain)
 }
 
+description = 'Pipestream Service Registration Extension - Runtime'
+
 quarkusExtension {
     deploymentModule = 'pipestream-service-registration-deployment'
 }

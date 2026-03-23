@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.java.library)
 }
 
+description = 'Pipestream Server Defaults Extension - Deployment'
+
 dependencies {
     implementation platform(libs.quarkus.bom)
     implementation 'io.quarkus:quarkus-arc-deployment'

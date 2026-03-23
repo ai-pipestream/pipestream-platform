@@ -25,6 +25,19 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Provisions the shared {@code compose-devservices.yml} and wires {@code quarkus.compose.devservices.*}.
+ *
+ * <p><strong>Dev UI note (Quarkus core):</strong> Enabling Compose Dev Services causes Quarkus to register a
+ * dev service named {@code "Compose Dev Services"} (with spaces). Quarkus 3.32.x {@code DevUIProcessor} registers
+ * the footer JSON-RPC method using a space-stripped name but embeds the <em>unsanitized</em> name in Dev UI
+ * metadata, so every app that turns on compose sees {@code method not found} for
+ * {@code devui-footer-log_Compose Dev ServicesLog} and related console errors. That bug is not in this
+ * extension—we publish {@link #FEATURE} as {@code pipeline-devservices} (no spaces). The fix belongs in
+ * {@code quarkus-devui-deployment} (metadata should use the same sanitized suffix as the RPC method), or upstream
+ * Quarkus changing the compose display name. Until then, teams can set
+ * {@code %dev.quarkus.compose.devservices.enabled=false} if they run the same stack via Docker Compose manually.
+ */
 class PipelineDevServicesProcessor {
 
     private static final Logger LOG = Logger.getLogger(PipelineDevServicesProcessor.class);

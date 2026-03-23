@@ -1,0 +1,11 @@
+name: "Pipestream Descriptor - Apicurio"
+artifact: ${project.groupId}:${project.artifactId}:${project.version}
+description: "Pipestream descriptor implementation for Apicurio Registry"
+metadata:
+  keywords:
+    - "pipestream"
+    - "descriptor"
+    - "apicurio"
+  categories:
+    - "data"
+  status: "stable"

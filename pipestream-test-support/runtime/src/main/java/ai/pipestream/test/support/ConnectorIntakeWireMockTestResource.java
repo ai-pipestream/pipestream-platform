@@ -62,8 +62,8 @@ public class ConnectorIntakeWireMockTestResource extends BaseWireMockTestResourc
         config.put("stork.connector-admin.service-discovery.address-list", standardServiceAddress);
 
         // Configure Stork for engine (unary gRPC via standard port)
-        config.put("stork.pipestream-engine.service-discovery.type", "static");
-        config.put("stork.pipestream-engine.service-discovery.address-list", standardServiceAddress);
+        config.put("stork.engine.service-discovery.type", "static");
+        config.put("stork.engine.service-discovery.address-list", standardServiceAddress);
 
         // Configure Stork for account-manager (unary gRPC via standard port)
         config.put("stork.account-manager.service-discovery.type", "static");
@@ -74,8 +74,8 @@ public class ConnectorIntakeWireMockTestResource extends BaseWireMockTestResourc
         config.put("quarkus.grpc.clients.repository.port", repoServicePort);
         config.put("quarkus.grpc.clients.connector-admin.host", host);
         config.put("quarkus.grpc.clients.connector-admin.port", standardPort);
-        config.put("quarkus.grpc.clients.pipestream-engine.host", host);
-        config.put("quarkus.grpc.clients.pipestream-engine.port", standardPort);
+        config.put("quarkus.grpc.clients.engine.host", host);
+        config.put("quarkus.grpc.clients.engine.port", standardPort);
         config.put("quarkus.grpc.clients.account-manager.host", host);
         config.put("quarkus.grpc.clients.account-manager.port", standardPort);
 

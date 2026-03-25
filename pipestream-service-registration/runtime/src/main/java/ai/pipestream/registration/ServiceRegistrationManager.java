@@ -33,7 +33,6 @@ import java.util.concurrent.atomic.AtomicReference;
  *   <li>{@code grpc} — uses the legacy gRPC streaming path via {@link RegistrationClient}</li>
  * </ul>
  */
-@SuppressWarnings("unused")
 @ApplicationScoped
 public class ServiceRegistrationManager {
 
@@ -77,6 +76,12 @@ public class ServiceRegistrationManager {
         this.vertx = vertx;
     }
 
+    /**
+     * Initializes service registration on application startup.
+     * Schedules the registration timeout and initiates the first registration attempt.
+     *
+     * @param ev Startup event
+     */
     void onStart(@Observes StartupEvent ev) {
         if (!config.enabled()) {
             LOG.info("Service registration is disabled");
@@ -88,6 +93,12 @@ public class ServiceRegistrationManager {
         registerWithRetry();
     }
 
+    /**
+     * Cleans up registration resources on application shutdown.
+     * Cancels any active timers and ongoing registration attempts.
+     *
+     * @param ev Shutdown event
+     */
     void onStop(@Observes ShutdownEvent ev) {
         if (!config.enabled()) {
             return;

@@ -10,6 +10,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Provides default configuration properties for Pipestream services.
+ * <p>
+ * This {@link ConfigSource} has a low ordinal (100) so that it can be overridden
+ * by {@code application.properties}, environment variables, or other configuration sources.
+ * It centralizes platform-wide defaults for gRPC, HTTP, and registration.
+ */
 public class PipestreamServerDefaultsConfigSource implements ConfigSource {
 
     private static final Logger LOG = Logger.getLogger(PipestreamServerDefaultsConfigSource.class);

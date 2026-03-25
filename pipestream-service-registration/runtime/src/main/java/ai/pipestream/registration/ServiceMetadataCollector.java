@@ -29,6 +29,10 @@ import java.util.stream.Collectors;
 public class ServiceMetadataCollector {
 
     private static final Logger LOG = Logger.getLogger(ServiceMetadataCollector.class);
+    /**
+     * Set of gRPC services that are part of the core gRPC infrastructure (health, reflection)
+     * and should not be advertised as part of the application's business logic.
+     */
     private static final Set<String> RESERVED_GRPC_SERVICES = Set.of(
             "grpc.health.v1.Health",
             "grpc.reflection.v1.ServerReflection",
@@ -104,6 +108,12 @@ public class ServiceMetadataCollector {
         return serviceInfo;
     }
 
+    /**
+     * Resolves the actual HTTP port Quarkus is listening on.
+     * Takes into account test-port and random port assignment (0).
+     *
+     * @return The resolved HTTP port
+     */
     private int resolveQuarkusHttpPort() {
         // Only check test-port in test mode; skip 0 (random port assignment)
         if (LaunchMode.current() == LaunchMode.TEST) {
@@ -118,6 +128,11 @@ public class ServiceMetadataCollector {
                 .orElse(0);
     }
 
+    /**
+     * Resolves the actual gRPC port Quarkus is listening on.
+     *
+     * @return The resolved gRPC port
+     */
     private int resolveQuarkusGrpcPort() {
         // Only check test-port in test mode; skip 0 (random port assignment)
         if (LaunchMode.current() == LaunchMode.TEST) {
@@ -132,6 +147,11 @@ public class ServiceMetadataCollector {
                 .orElse(0);
     }
 
+    /**
+     * Determines if the gRPC server is using a separate port from the HTTP server.
+     *
+     * @return true if gRPC has its own port
+     */
     private boolean isSeparateGrpcServer() {
         return quarkusConfig.getOptionalValue("quarkus.grpc.server.use-separate-server", Boolean.class)
                 .orElse(false);

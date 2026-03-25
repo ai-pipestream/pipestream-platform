@@ -9,6 +9,17 @@ import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.HealthCheckResponseBuilder;
 import org.eclipse.microprofile.health.Readiness;
 
+/**
+ * Readiness check for Pipestream service registration.
+ * <p>
+ * Reports UP if:
+ * <ul>
+ *   <li>Registration is disabled</li>
+ *   <li>Registration is not required for readiness</li>
+ *   <li>Service is successfully registered</li>
+ * </ul>
+ * Reports DOWN if registration is required and the service is not yet registered.
+ */
 @Readiness
 @ApplicationScoped
 public class RegistrationReadinessCheck implements HealthCheck {

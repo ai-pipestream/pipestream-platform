@@ -143,10 +143,14 @@ public class ProtobufChannelConfigSource implements ConfigSource {
             properties.put(prefix + "key.deserializer", UUID_DESERIALIZER);
             properties.put(prefix + "value.deserializer", PROTOBUF_DESERIALIZER);
             properties.put(prefix + "auto.offset.reset", "earliest");
-            // Prevent a single failed message from killing the channel and deregistering
-            // the service from Consul. Services can override to "dead-letter-queue" in
-            // their application.properties when DLQ infrastructure is ready.
-            properties.put(prefix + "failure-strategy", "ignore");
+            // Route failed messages to a dead-letter-queue topic instead of dropping them.
+            // Failed messages are preserved for inspection and replay.
+            // DLQ topic: {channel-name}.dlq (services can override in application.properties).
+            properties.put(prefix + "failure-strategy", "dead-letter-queue");
+            properties.put(prefix + "dead-letter-queue.topic", channelName + ".dlq");
+            // Serialize the DLQ value as raw bytes (original message preserved as-is)
+            properties.put(prefix + "dead-letter-queue.value.serializer",
+                    "org.apache.kafka.common.serialization.ByteArraySerializer");
             // Set specific return class to bypass Apicurio schema lookup for deserialization.
             // This prevents NPE when Apicurio registry doesn't have the schema (e.g. after restart).
             if (protobufClass != null && !protobufClass.isEmpty()) {

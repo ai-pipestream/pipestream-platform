@@ -65,3 +65,4 @@ bin/
 #gemini
 .gemini
 /pipestream-quarkus-devservices/IdeaProjects.code-workspace
+.cursor

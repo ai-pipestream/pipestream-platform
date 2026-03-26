@@ -140,6 +140,8 @@ public class ProtobufChannelConfigSource implements ConfigSource {
             String protobufClass = entry.getValue();
             String prefix = "mp.messaging.incoming." + channelName + ".";
             properties.put(prefix + "connector", "smallrye-kafka");
+            // Derive clean topic name by stripping -in/-out suffixes from channel name
+            properties.put(prefix + "topic", stripChannelSuffix(channelName));
             properties.put(prefix + "key.deserializer", UUID_DESERIALIZER);
             properties.put(prefix + "value.deserializer", PROTOBUF_DESERIALIZER);
             properties.put(prefix + "auto.offset.reset", "earliest");
@@ -156,6 +158,8 @@ public class ProtobufChannelConfigSource implements ConfigSource {
         for (String channelName : outgoingChannels.keySet()) {
             String prefix = "mp.messaging.outgoing." + channelName + ".";
             properties.put(prefix + "connector", "smallrye-kafka");
+            // Derive clean topic name by stripping -in/-out suffixes from channel name
+            properties.put(prefix + "topic", stripChannelSuffix(channelName));
             properties.put(prefix + "key.serializer", UUID_SERIALIZER);
             properties.put(prefix + "value.serializer", PROTOBUF_SERIALIZER);
         }
@@ -193,6 +197,20 @@ public class ProtobufChannelConfigSource implements ConfigSource {
     @Override
     public String getName() {
         return "ProtobufChannelConfigSource";
+    }
+
+    /**
+     * Strips {@code -in} or {@code -out} suffix from a channel name to derive a clean Kafka topic name.
+     * e.g., {@code "document-uploaded-events-out"} becomes {@code "document-uploaded-events"}
+     */
+    private static String stripChannelSuffix(String channelName) {
+        if (channelName.endsWith("-in")) {
+            return channelName.substring(0, channelName.length() - 3);
+        }
+        if (channelName.endsWith("-out")) {
+            return channelName.substring(0, channelName.length() - 4);
+        }
+        return channelName;
     }
 
     @Override

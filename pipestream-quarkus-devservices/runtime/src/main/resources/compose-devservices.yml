@@ -289,6 +289,26 @@ services:
       retries: 5
       start_period: 5s    # Start checking almost immediately
 
+  # Redis for hot cache layer (repository-service document buffer)
+  redis:
+    container_name: pipeline-redis
+    image: redis:7-alpine
+    hostname: redis
+    networks:
+      - pipeline-test-network
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "no", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    labels:
+      quarkus-dev-service-redis: shared
+      io.quarkus.devservices.compose.wait_for.logs: ".*Ready to accept connections.*"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
   # Kafka UI for monitoring and management
   kafka-ui:
     container_name: pipeline-kafka-ui

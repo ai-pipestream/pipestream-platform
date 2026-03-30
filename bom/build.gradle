@@ -63,9 +63,6 @@ dependencies {
         api project(':pipestream-server')
         api project(':pipestream-server-deployment')
 
-        // pipestream-opensearch removed — now maintained in pipestream-opensearch-client repo
-        // Consumers use libs.pipestream.opensearch.client from the version catalog
-
         api project(':pipestream-descriptor-api')
         api project(':pipestream-descriptor-apicurio')
         api project(':pipestream-descriptor-apicurio-deployment')

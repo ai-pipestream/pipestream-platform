@@ -176,7 +176,6 @@ public class ConsulRegistrar {
                     httpCheck = new CheckOptions()
                             .setName(request.getName() + " HTTP Health Check")
                             .setInterval("10s")
-                            .setDeregisterAfter("1m")
                             .setHttp(checkUrl);
 
                     if (endpoint.getTlsEnabled()) {
@@ -238,7 +237,6 @@ public class ConsulRegistrar {
                 .setName(serviceName + " HTTP Readiness Check")
                 .setServiceId(serviceId)
                 .setInterval("10s")
-                .setDeregisterAfter("1m")
                 .setHttp(checkUrl);
 
         if (tlsEnabled) {
@@ -465,10 +463,11 @@ public class ConsulRegistrar {
                 ? serviceName + " gRPC Health Check"
                 : serviceName + " gRPC Health Check (" + grpcServiceName + ")";
 
+        // TODO: make deregisterAfter configurable — removed 1m auto-deregister
+        // that was nuking services under load (see bugs-2026-03-30.md)
         CheckOptions check = new CheckOptions()
                 .setName(checkName)
                 .setInterval("10s")
-                .setDeregisterAfter("1m")
                 .setGrpc(target);
 
         if (tlsEnabled) {

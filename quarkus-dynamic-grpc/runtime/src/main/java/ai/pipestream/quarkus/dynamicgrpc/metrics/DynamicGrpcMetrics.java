@@ -61,6 +61,7 @@ public class DynamicGrpcMetrics {
         Counter.builder(METRIC_PREFIX + ".client.created")
                 .tag("service", serviceName)
                 .tag("result", "success")
+                .tag("exception", "none")
                 .description("Number of gRPC clients successfully created")
                 .register(registry)
                 .increment();

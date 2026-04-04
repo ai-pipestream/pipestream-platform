@@ -34,15 +34,4 @@ public interface PipelineDevServicesConfig {
      */
     Optional<String> projectName();
 
-    /**
-     * Whether to auto-update the compose file if version changes.
-     */
-    @WithDefault("true")
-    boolean autoUpdate();
-
-    /**
-     * Force update even if file was edited.
-     */
-    @WithDefault("false")
-    boolean forceUpdate();
 }

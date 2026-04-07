@@ -290,7 +290,7 @@ public class ChannelManager {
 
             @Override
             public long deadline() {
-                return 5000;
+                return config.channel().deadlineMs();
             }
 
             @Override

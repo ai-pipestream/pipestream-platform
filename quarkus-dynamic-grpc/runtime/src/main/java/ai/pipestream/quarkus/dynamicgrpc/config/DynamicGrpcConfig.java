@@ -88,6 +88,15 @@ public interface DynamicGrpcConfig {
          */
         @WithDefault("2147483647")
         int maxOutboundMessageSize();
+
+        /**
+         * gRPC call deadline in milliseconds.
+         * Default is 15 seconds. Override per-service via application.properties.
+         *
+         * @return the deadline in milliseconds
+         */
+        @WithDefault("15000")
+        long deadlineMs();
     }
 
     /**

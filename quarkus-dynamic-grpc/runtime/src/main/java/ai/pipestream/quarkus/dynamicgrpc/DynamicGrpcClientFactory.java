@@ -97,15 +97,15 @@ public class DynamicGrpcClientFactory implements GrpcClientFactory {
             return Uni.createFrom().failure(ex);
         }
 
-        LOG.debugf("Getting channel for service: %s", serviceName);
+        LOG.tracef("Getting channel for service: %s", serviceName);
 
         return serviceDiscoveryManager.ensureServiceDefined(serviceName)
                 .chain(ignored -> {
-                    LOG.debugf("Step 1: Service %s defined", serviceName);
+                    LOG.tracef("Step 1: Service %s defined", serviceName);
                     return serviceDiscoveryManager.getServiceInstances(serviceName);
                 })
                 .chain(instances -> {
-                    LOG.debugf("Step 2: Got %d instances for %s", instances.size(), serviceName);
+                    LOG.tracef("Step 2: Got %d instances for %s", instances.size(), serviceName);
                     return channelManager.getOrCreateChannel(serviceName, instances);
                 });
     }

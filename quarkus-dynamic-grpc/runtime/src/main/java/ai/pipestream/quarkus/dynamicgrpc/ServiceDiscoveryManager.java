@@ -103,7 +103,7 @@ public class ServiceDiscoveryManager {
         // First check if this service is already programmatically defined
         Optional<Service> existingService = Stork.getInstance().getServiceOptional(storkServiceName);
         if (existingService.isPresent()) {
-            LOG.debugf("Service %s already defined in Stork (programmatic)", storkServiceName);
+            LOG.tracef("Service %s already defined in Stork (programmatic)", storkServiceName);
             return Uni.createFrom().voidItem();
         }
 
@@ -260,7 +260,7 @@ public class ServiceDiscoveryManager {
                             LOG.warnf("No instances found for service: %s", serviceName);
                             metrics.recordServiceDiscovery(serviceName, true, 0);
                         } else {
-                            LOG.debugf("Found %d instances for service: %s", instances.size(), serviceName);
+                            LOG.tracef("Found %d instances for service: %s", instances.size(), serviceName);
                             metrics.recordServiceDiscovery(serviceName, true, instances.size());
                         }
                         return instances;

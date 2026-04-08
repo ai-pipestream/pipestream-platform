@@ -212,7 +212,7 @@ public class ChannelManager {
             // If we got here via the loader, it was a miss. Otherwise a hit.
             // Caffeine doesn't distinguish, so we record hits separately.
             // The miss is recorded inside the loader above.
-            LOG.debugf("Returning gRPC channel for service: %s", serviceName);
+            LOG.tracef("Returning gRPC channel for service: %s", serviceName);
             return Uni.createFrom().item(channel);
         } catch (Exception e) {
             // Caffeine wraps loader exceptions in CompletionException

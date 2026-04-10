@@ -22,8 +22,8 @@ tasks.matching { it.name == 'validateExtension' }.configureEach {
 pipestreamProtos {
     // git-proto-workspace clones the repo directly (no buf export / no BSR auth needed)
     sourceMode = 'git-proto-workspace'
-    gitRepo = System.getenv('PROTO_GIT_REPO') ?: "https://github.com/ai-pipestream/pipestream-protos.git"
-    gitRef = System.getenv('PROTO_GIT_REF') ?: "main"
+    gitRepo = "https://github.com/ai-pipestream/pipestream-protos.git"
+    gitRef = "main"
 
     modules {
         register("registration")

@@ -110,21 +110,11 @@ public abstract class DynamicGrpcClientFactoryTestBase {
 
     @Test
     void testClientCreationAndCall() {
-        registerServiceInConsul();
-
-        // Wait for Consul registration to propagate
-        await().atMost(Duration.ofSeconds(5))
-            .alias("Wait for service discovery")
-            .untilAsserted(() -> {
-                var clientUni = getFactory().getClient(serviceName, MutinyGreeterGrpc::newMutinyStub);
-                assertThat(clientUni.await().atMost(Duration.ofSeconds(1)))
-                    .as("Client should be discoverable in Stork")
-                    .isNotNull();
-            });
-
-        // Get a Mutiny client stub using the factory
         var client = getFactory().getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-            .await().atMost(Duration.ofSeconds(5));
+            .await().atMost(Duration.ofSeconds(10));
+        assertThat(client)
+            .as("Client should be discoverable in Stork")
+            .isNotNull();
 
         // Make a real gRPC call
         HelloRequest request = HelloRequest.newBuilder()
@@ -144,17 +134,6 @@ public abstract class DynamicGrpcClientFactoryTestBase {
 
     @Test
     void testClientReuse() {
-        registerServiceInConsul();
-
-        // Wait for Consul registration to propagate
-        await().atMost(Duration.ofSeconds(5))
-            .alias("Wait for service discovery")
-            .untilAsserted(() -> {
-                assertThat(getFactory().getClient(serviceName, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1)))
-                    .as("Client should be discoverable")
-                    .isNotNull();
-            });
-
         GrpcClientFactory factory = getFactory();
 
         // Request the same client twice - should use cached channel
@@ -180,12 +159,6 @@ public abstract class DynamicGrpcClientFactoryTestBase {
 
     @Test
     void testCacheStats() {
-        registerServiceInConsul();
-
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(getFactory().getClient(serviceName, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1))).isNotNull();
-        });
-
         GrpcClientFactory factory = getFactory();
 
         // Make a call to populate cache
@@ -203,12 +176,6 @@ public abstract class DynamicGrpcClientFactoryTestBase {
 
     @Test
     void testChannelEviction() {
-        registerServiceInConsul();
-
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(getFactory().getClient(serviceName, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1))).isNotNull();
-        });
-
         GrpcClientFactory factory = getFactory();
 
         // Create a client to populate cache

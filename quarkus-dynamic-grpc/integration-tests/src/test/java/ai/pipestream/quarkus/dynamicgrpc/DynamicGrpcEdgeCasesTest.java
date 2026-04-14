@@ -134,12 +134,10 @@ public class DynamicGrpcEdgeCasesTest {
         String id = serviceName + "-temp";
         consulRegistration.registerService(serviceName, id, "127.0.0.1", 9999);
         
-        // Verify it's discoverable
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(1)))
-                .as("Service should be discoverable after registration")
-                .isNotNull();
-        });
+        // Verify it's discoverable — generous budget covers initial warmup
+        assertThat(clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(10)))
+            .as("Service should be discoverable after registration")
+            .isNotNull();
 
         // Deregister it
         consulRegistration.deregisterService(id);
@@ -164,12 +162,8 @@ public class DynamicGrpcEdgeCasesTest {
         String id = serviceName + "-1-instance";
         consulRegistration.registerService(serviceName, id, "127.0.0.1", 9998);
         
-        // Wait for discovery
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(1)))
-                .as("Service should be discoverable for concurrent test")
-                .isNotNull();
-        });
+        // Warm up discovery + cache before concurrent test
+        clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(10));
 
         int initialCount = clientFactory.getActiveServiceCount();
 

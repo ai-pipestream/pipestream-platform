@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 
 /**
  * Performance tests for GrpcClientFactory with real Consul.
@@ -57,13 +56,11 @@ public class DynamicGrpcPerformanceTest {
         String serviceId = serviceName + "-1";
 
         consulRegistration.registerService(serviceName, serviceId, "127.0.0.1", 9997);
-        
-        // Wait for discovery to be possible
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(1))).isNotNull();
-        });
 
-        // Measure time with cache likely populated
+        // Warm up discovery + cache so the measured call below is a genuine cache hit.
+        clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(10));
+
+        // Measure time on a cache-hot channel
         long start = System.nanoTime();
         clientFactory.getChannel(serviceName)
             .await().atMost(Duration.ofSeconds(5));
@@ -100,11 +97,9 @@ public class DynamicGrpcPerformanceTest {
         String serviceId = serviceName + "-1";
 
         consulRegistration.registerService(serviceName, serviceId, "127.0.0.1", 9996);
-        
-        // Wait for discovery
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(1))).isNotNull();
-        });
+
+        // Warm up discovery before the concurrent test
+        clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(10));
 
         int initialCount = clientFactory.getActiveServiceCount();
 
@@ -156,12 +151,10 @@ public class DynamicGrpcPerformanceTest {
             consulRegistration.registerService(serviceName, serviceId, "127.0.0.1", port);
         }
 
-        // Wait for all to be discoverable
+        // Populate cache for each (generous budget handles discovery warmup)
         for (int i = 0; i < 5; i++) {
             String serviceName = "multi-service-" + i;
-            await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-                assertThat(clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(1))).isNotNull();
-            });
+            clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(10));
         }
 
         // Should have 5 new channels (one per service)
@@ -183,11 +176,9 @@ public class DynamicGrpcPerformanceTest {
         String serviceId = serviceName + "-1";
 
         consulRegistration.registerService(serviceName, serviceId, "127.0.0.1", 9995);
-        
-        // Wait for discovery
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(1))).isNotNull();
-        });
+
+        // Warm up discovery + cache
+        clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(10));
 
         int initialCount = clientFactory.getActiveServiceCount();
 

@@ -89,16 +89,9 @@ public class ChannelLifecycleTest {
     @DisplayName("Channel cache hit ratio should improve over time")
     void testCacheHitRatio() {
         consulRegistration.registerService(serviceName, serviceName + "-1", "127.0.0.1", lifecyclePort);
-        
-        // Wait for discovery
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(1)))
-                .as("Channel should be discoverable")
-                .isNotNull();
-        });
 
-        // First call - miss (creates channel)
-        clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(5));
+        // First call - miss (creates channel). Generous budget covers warmup.
+        clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(10));
 
         String stats1 = clientFactory.getCacheStats();
         LOG.infof("After 1 call: %s", stats1);
@@ -125,11 +118,7 @@ public class ChannelLifecycleTest {
         int initialCount = clientFactory.getActiveServiceCount();
 
         // Create a channel (wait for Consul discovery + cache population)
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(1)))
-                .as("Channel should be discoverable")
-                .isNotNull();
-        });
+        clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(10));
 
         int afterCreation = clientFactory.getActiveServiceCount();
         assertThat(afterCreation)
@@ -151,16 +140,9 @@ public class ChannelLifecycleTest {
     @DisplayName("Multiple evictions of same service should be safe")
     void testMultipleEvictions() {
         consulRegistration.registerService(serviceName, serviceName + "-1", "127.0.0.1", lifecyclePort);
-        
-        // Wait for discovery
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(1)))
-                .as("Channel should be discoverable")
-                .isNotNull();
-        });
 
         // Create channel
-        clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(5));
+        clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(10));
 
         // Evict multiple times - should not crash
         clientFactory.evictChannel(serviceName);
@@ -181,16 +163,9 @@ public class ChannelLifecycleTest {
         // Capture count BEFORE channel creation (randomized service not in cache yet)
         int initialCount = clientFactory.getActiveServiceCount();
 
-        // Wait for discovery
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(1)))
-                .as("Channel should be discoverable")
-                .isNotNull();
-        });
-
-        // Get Mutiny stub (should reuse cached channel)
+        // Get Mutiny stub (populates cache; generous budget covers discovery warmup)
         var mutinyStub = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-            .await().atMost(Duration.ofSeconds(5));
+            .await().atMost(Duration.ofSeconds(10));
 
         // Get raw channel again (should reuse cached channel)
         var channel = clientFactory.getChannel(serviceName)
@@ -221,14 +196,10 @@ public class ChannelLifecycleTest {
             consulRegistration.registerService(name, name + "-1", "127.0.0.1", lifecyclePort);
         }
 
-        // Wait for discovery and populate cache
+        // Populate cache (generous budget per service covers discovery warmup)
         for (int i = 0; i < 5; i++) {
             String name = serviceName + "-" + i;
-            await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-                assertThat(clientFactory.getChannel(name).await().atMost(Duration.ofSeconds(1)))
-                    .as("Service " + name + " should be discoverable")
-                    .isNotNull();
-            });
+            clientFactory.getChannel(name).await().atMost(Duration.ofSeconds(10));
         }
 
         assertThat(clientFactory.getActiveServiceCount())
@@ -257,16 +228,10 @@ public class ChannelLifecycleTest {
     @DisplayName("Cache stats should provide useful debugging information")
     void testCacheStatsContent() {
         consulRegistration.registerService(serviceName, serviceName + "-1", "127.0.0.1", lifecyclePort);
-        
-        // Wait for discovery
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(1)))
-                .as("Channel should be discoverable")
-                .isNotNull();
-        });
 
-        // Make some calls
-        for (int i = 0; i < 5; i++) {
+        // First call takes the discovery hit; subsequent calls hit the cache.
+        clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(10));
+        for (int i = 0; i < 4; i++) {
             clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(3));
         }
 

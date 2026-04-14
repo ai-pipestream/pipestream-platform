@@ -34,7 +34,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 
 /**
  * Integration tests for authentication token functionality.
@@ -137,17 +136,9 @@ class AuthTokenTest {
 
     @Test
     void shouldAddAuthTokenToRequest() {
-        // Wait for Consul registration
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-                .await().atMost(Duration.ofSeconds(1)))
-                .as("Client should be discoverable for auth test")
-                .isNotNull();
-        });
-
         // Create client and make request
         var client = factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-            .await().atMost(Duration.ofSeconds(5));
+            .await().atMost(Duration.ofSeconds(10));
 
         HelloRequest request = HelloRequest.newBuilder()
             .setName("Auth Test")
@@ -168,14 +159,6 @@ class AuthTokenTest {
 
     @Test
     void shouldIncludeTokenInMultipleRequests() {
-        // Wait for Consul registration
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-                .await().atMost(Duration.ofSeconds(1)))
-                .as("Client should be discoverable")
-                .isNotNull();
-        });
-
         var client = factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
             .await().atMost(Duration.ofSeconds(10));
 

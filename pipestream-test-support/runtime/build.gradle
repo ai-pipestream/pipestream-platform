@@ -1,12 +1,41 @@
 plugins {
     alias(libs.plugins.java.library)
     alias(libs.plugins.quarkus.extension)
+    alias(libs.plugins.proto.toolchain)
 }
 
 description = 'Pipestream Test Support - Runtime'
 
 quarkusExtension {
     deploymentModule = 'pipestream-test-support-deployment'
+}
+
+// ============================================================
+// PROTOBUF CONFIGURATION - Using proto-toolchain plugin
+// ============================================================
+
+pipestreamProtos {
+    // git-proto-workspace clones the repo directly (no buf export / no BSR auth needed)
+    sourceMode = 'git-proto-workspace'
+    gitRepo = "https://github.com/ai-pipestream/pipestream-protos.git"
+    gitRef = "main"
+    generateGrpc = false
+    generateMutiny = false
+
+    modules {
+        register("common")
+    }
+}
+
+// ============================================================
+// END PROTOBUF CONFIGURATION
+// ============================================================
+
+configurations.configureEach {
+    resolutionStrategy {
+        force libs.protobuf.java
+        force libs.protobuf.java.util
+    }
 }
 
 dependencies {
@@ -30,8 +59,14 @@ dependencies {
     implementation 'software.amazon.awssdk:s3'
 
     implementation libs.pipestream.test.documents
+    implementation libs.protobuf.java
+    // AssertJ is a main-scope dependency because SemanticPipelineInvariants lives in
+    // src/main/java and is shipped in the jar for use as testImplementation by consumers.
+    implementation libs.assertj.core
 
     annotationProcessor 'io.quarkus:quarkus-extension-processor'
+
+    testImplementation 'io.quarkus:quarkus-junit5'
 }
 
 tasks.matching { it.name == 'validateExtension' }.configureEach {

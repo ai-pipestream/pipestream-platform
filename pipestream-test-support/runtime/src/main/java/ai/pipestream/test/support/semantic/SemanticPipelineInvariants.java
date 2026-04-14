@@ -1,0 +1,172 @@
+package ai.pipestream.test.support.semantic;
+
+import ai.pipestream.data.v1.ChunkEmbedding;
+import ai.pipestream.data.v1.PipeDoc;
+import ai.pipestream.data.v1.SearchMetadata;
+import ai.pipestream.data.v1.SemanticChunk;
+import ai.pipestream.data.v1.SemanticProcessingResult;
+
+import java.util.Comparator;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Stage invariants for the three-step semantic pipeline (see
+ * pipestream-protos/docs/semantic-pipeline/DESIGN.md §5).
+ *
+ * This class is shared by all four semantic-pipeline consumers
+ * (module-chunker, module-embedder, module-semantic-graph, and
+ * pipestream-wiremock-server) as testImplementation so every test suite
+ * agrees on the shape a PipeDoc must have at each stage.
+ *
+ * Only assertPostChunker is implemented today; assertPostEmbedder and
+ * assertPostSemanticGraph land in follow-up commits on this branch.
+ */
+public final class SemanticPipelineInvariants {
+
+    private SemanticPipelineInvariants() {}
+
+    /**
+     * Asserts that the given {@code doc} satisfies the post-chunker stage invariant
+     * as defined in DESIGN.md §5.1 and §21.2.
+     *
+     * <p>Checks performed:
+     * <ol>
+     *   <li>{@code search_metadata} is set on the doc.</li>
+     *   <li>For every {@code SemanticProcessingResult} in {@code semantic_results}:
+     *     <ul>
+     *       <li>{@code embedding_config_id} is empty (placeholder, not yet embedded).</li>
+     *       <li>{@code source_field_name} is non-empty.</li>
+     *       <li>{@code chunk_config_id} is non-empty.</li>
+     *       <li>{@code chunks} is non-empty.</li>
+     *       <li>For every {@code SemanticChunk}:
+     *         <ul>
+     *           <li>{@code embedding_info.text_content} is non-empty.</li>
+     *           <li>{@code embedding_info.vector} is empty (not yet embedded).</li>
+     *           <li>{@code chunk_id} is non-empty.</li>
+     *           <li>{@code original_char_start_offset} is non-negative.</li>
+     *           <li>{@code original_char_end_offset} >= {@code original_char_start_offset}.</li>
+     *         </ul>
+     *       </li>
+     *       <li>{@code metadata} contains a {@code "directive_key"} entry (per §21.2).</li>
+     *     </ul>
+     *   </li>
+     *   <li>{@code semantic_results[]} is lex-sorted by
+     *       {@code (source_field_name, chunk_config_id, embedding_config_id, result_id)}.</li>
+     * </ol>
+     *
+     * @param doc the PipeDoc to validate
+     * @throws AssertionError if any invariant is violated
+     */
+    public static void assertPostChunker(PipeDoc doc) {
+        assertThat(doc.hasSearchMetadata())
+                .as("post-chunker: search_metadata must be set on the PipeDoc")
+                .isTrue();
+
+        SearchMetadata sm = doc.getSearchMetadata();
+        List<SemanticProcessingResult> results = sm.getSemanticResultsList();
+
+        for (int i = 0; i < results.size(); i++) {
+            SemanticProcessingResult spr = results.get(i);
+            String sprContext = "post-chunker: semantic_results[" + i + "]"
+                    + " (source_field_name='" + spr.getSourceFieldName()
+                    + "', chunk_config_id='" + spr.getChunkConfigId()
+                    + "', result_id='" + spr.getResultId() + "')";
+
+            assertThat(spr.getEmbeddingConfigId())
+                    .as(sprContext + ": embedding_config_id must be empty (placeholder SPR — not yet embedded)")
+                    .isEmpty();
+
+            assertThat(spr.getSourceFieldName())
+                    .as(sprContext + ": source_field_name must be non-empty")
+                    .isNotEmpty();
+
+            assertThat(spr.getChunkConfigId())
+                    .as(sprContext + ": chunk_config_id must be non-empty")
+                    .isNotEmpty();
+
+            assertThat(spr.getChunksList())
+                    .as(sprContext + ": chunks must be non-empty")
+                    .isNotEmpty();
+
+            assertThat(spr.getMetadataMap())
+                    .as(sprContext + ": metadata must contain 'directive_key' entry (per DESIGN.md §21.2)")
+                    .containsKey("directive_key");
+
+            List<SemanticChunk> chunks = spr.getChunksList();
+            for (int j = 0; j < chunks.size(); j++) {
+                SemanticChunk chunk = chunks.get(j);
+                String chunkContext = sprContext + " chunk[" + j + "] (chunk_id='" + chunk.getChunkId() + "')";
+
+                ChunkEmbedding embeddingInfo = chunk.getEmbeddingInfo();
+
+                assertThat(embeddingInfo.getTextContent())
+                        .as(chunkContext + ": embedding_info.text_content must be non-empty")
+                        .isNotEmpty();
+
+                assertThat(embeddingInfo.getVectorList())
+                        .as(chunkContext + ": embedding_info.vector must be empty (chunk not yet embedded)")
+                        .isEmpty();
+
+                assertThat(chunk.getChunkId())
+                        .as(chunkContext + ": chunk_id must be non-empty (deterministic ID required per §21.5)")
+                        .isNotEmpty();
+
+                int startOffset = embeddingInfo.hasOriginalCharStartOffset()
+                        ? embeddingInfo.getOriginalCharStartOffset()
+                        : 0;
+                int endOffset = embeddingInfo.hasOriginalCharEndOffset()
+                        ? embeddingInfo.getOriginalCharEndOffset()
+                        : 0;
+
+                assertThat(startOffset)
+                        .as(chunkContext + ": embedding_info.original_char_start_offset must be >= 0")
+                        .isGreaterThanOrEqualTo(0);
+
+                assertThat(endOffset)
+                        .as(chunkContext + ": embedding_info.original_char_end_offset must be >= original_char_start_offset")
+                        .isGreaterThanOrEqualTo(startOffset);
+            }
+        }
+
+        assertLexSorted(sm);
+    }
+
+    /**
+     * Verifies that {@code semantic_results[]} is sorted in lexicographic ascending order
+     * on the tuple {@code (source_field_name, chunk_config_id, embedding_config_id, result_id)},
+     * as required by DESIGN.md §5.1 and §21.8.
+     *
+     * @param sm the SearchMetadata whose semantic_results to validate
+     * @throws AssertionError if the list is not sorted
+     */
+    private static void assertLexSorted(SearchMetadata sm) {
+        List<SemanticProcessingResult> results = sm.getSemanticResultsList();
+
+        Comparator<SemanticProcessingResult> lexOrder = Comparator
+                .comparing(SemanticProcessingResult::getSourceFieldName)
+                .thenComparing(SemanticProcessingResult::getChunkConfigId)
+                .thenComparing(SemanticProcessingResult::getEmbeddingConfigId)
+                .thenComparing(SemanticProcessingResult::getResultId);
+
+        for (int i = 1; i < results.size(); i++) {
+            SemanticProcessingResult prev = results.get(i - 1);
+            SemanticProcessingResult curr = results.get(i);
+            int cmp = lexOrder.compare(prev, curr);
+            assertThat(cmp)
+                    .as("post-chunker: semantic_results must be lex-sorted by "
+                            + "(source_field_name, chunk_config_id, embedding_config_id, result_id). "
+                            + "Element at index " + (i - 1) + " (source_field='" + prev.getSourceFieldName()
+                            + "', chunk_config='" + prev.getChunkConfigId()
+                            + "', embedding_config='" + prev.getEmbeddingConfigId()
+                            + "', result_id='" + prev.getResultId() + "') "
+                            + "must come before or equal element at index " + i
+                            + " (source_field='" + curr.getSourceFieldName()
+                            + "', chunk_config='" + curr.getChunkConfigId()
+                            + "', embedding_config='" + curr.getEmbeddingConfigId()
+                            + "', result_id='" + curr.getResultId() + "')")
+                    .isLessThanOrEqualTo(0);
+        }
+    }
+}

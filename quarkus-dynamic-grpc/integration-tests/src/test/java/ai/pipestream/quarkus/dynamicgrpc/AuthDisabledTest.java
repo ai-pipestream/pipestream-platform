@@ -34,7 +34,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 
 /**
  * Integration tests to verify behavior when auth is disabled.
@@ -129,17 +128,9 @@ class AuthDisabledTest {
 
     @Test
     void shouldNotAddAuthTokenWhenDisabled() {
-        // Wait for Consul registration
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-                .await().atMost(Duration.ofSeconds(1)))
-                .as("Client should be discoverable")
-                .isNotNull();
-        });
-
         // Create client and make request
         var client = factory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-            .await().atMost(Duration.ofSeconds(5));
+            .await().atMost(Duration.ofSeconds(10));
 
         HelloRequest request = HelloRequest.newBuilder()
             .setName("No Auth Test")

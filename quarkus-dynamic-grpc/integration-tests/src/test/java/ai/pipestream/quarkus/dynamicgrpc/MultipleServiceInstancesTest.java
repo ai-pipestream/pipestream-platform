@@ -9,6 +9,7 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.quarkus.test.common.WithTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+import io.smallrye.mutiny.TimeoutException;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -114,13 +115,6 @@ public class MultipleServiceInstancesTest {
     @Test
     @DisplayName("Should discover all service instances")
     void testDiscoverAllInstances() {
-        // Wait for discovery to work
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1)))
-                .as("Client should be discoverable with multiple instances")
-                .isNotNull();
-        });
-
         // The factory should be able to create a client (discovers at least one instance)
         var client = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
             .await().atMost(Duration.ofSeconds(10));
@@ -145,13 +139,6 @@ public class MultipleServiceInstancesTest {
     @Test
     @DisplayName("Multiple requests should potentially hit different instances")
     void testLoadDistribution() {
-        // Wait for discovery
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1)))
-                .as("Client should be discoverable for load distribution test")
-                .isNotNull();
-        });
-
         var client = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
             .await().atMost(Duration.ofSeconds(10));
 
@@ -198,36 +185,35 @@ public class MultipleServiceInstancesTest {
         consulRegistration.registerService(ftServiceName, ftServiceName + "-1", "127.0.0.1", ftPort1);
         consulRegistration.registerService(ftServiceName, ftServiceName + "-2", "127.0.0.1", ftPort2);
 
-        // Wait for discovery
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            var c = clientFactory.getClient(ftServiceName, MutinyGreeterGrpc::newMutinyStub)
-                .await().atMost(Duration.ofSeconds(1));
-            HelloReply r = c.sayHello(HelloRequest.newBuilder().setName("Init").build())
-                .await().atMost(Duration.ofSeconds(2));
-            assertThat(r.getMessage()).contains("Hello");
-        });
+        // Warm up discovery and verify the initial round-trip works
+        var initClient = clientFactory.getClient(ftServiceName, MutinyGreeterGrpc::newMutinyStub)
+            .await().atMost(Duration.ofSeconds(10));
+        HelloReply initReply = initClient.sayHello(HelloRequest.newBuilder().setName("Init").build())
+            .await().atMost(Duration.ofSeconds(5));
+        assertThat(initReply.getMessage())
+            .as("Initial round-trip should work before failover test")
+            .contains("Hello");
 
         // Shut down one instance
         ftServer1.shutdownNow();
         consulRegistration.deregisterService(ftServiceName + "-1");
         clientFactory.evictChannel(ftServiceName);
 
-        // Service should still work via ftServer2 — get a fresh client after eviction
+        // Service should still work via ftServer2 — retry until Stork picks
+        // up the surviving instance. Transient Mutiny TimeoutExceptions during
+        // polling are expected while discovery converges on the survivor.
         await().atMost(Duration.ofSeconds(15))
             .pollInterval(Duration.ofMillis(500))
+            .ignoreException(TimeoutException.class)
             .untilAsserted(() -> {
-                try {
-                    var newClient = clientFactory.getClient(ftServiceName, MutinyGreeterGrpc::newMutinyStub)
-                        .await().atMost(Duration.ofSeconds(2));
-                    HelloReply reply = newClient.sayHello(HelloRequest.newBuilder().setName("After Shutdown").build())
-                        .await().atMost(Duration.ofSeconds(2));
-                    assertThat(reply.getMessage())
-                        .as("Should fall back to surviving instance")
-                        .contains("Hello");
-                } catch (Exception e) {
-                    clientFactory.evictChannel(ftServiceName);
-                    throw e;
-                }
+                clientFactory.evictChannel(ftServiceName);
+                var newClient = clientFactory.getClient(ftServiceName, MutinyGreeterGrpc::newMutinyStub)
+                    .await().atMost(Duration.ofSeconds(2));
+                HelloReply reply = newClient.sayHello(HelloRequest.newBuilder().setName("After Shutdown").build())
+                    .await().atMost(Duration.ofSeconds(2));
+                assertThat(reply.getMessage())
+                    .as("Should fall back to surviving instance")
+                    .contains("Hello");
             });
 
         // Cleanup

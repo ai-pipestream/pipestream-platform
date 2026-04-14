@@ -11,6 +11,7 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.quarkus.test.common.WithTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+import io.smallrye.mutiny.TimeoutException;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -82,17 +83,9 @@ public class FailureRecoveryTest {
 
         consulRegistration.registerService(serviceName, serviceName + "-1", "127.0.0.1", port);
 
-        // Wait for service to be discoverable
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            var clientUni = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub);
-            assertThat(clientUni.await().atMost(Duration.ofSeconds(1)))
-                .as("Initial client should be discoverable")
-                .isNotNull();
-        });
-
-        // Make a call
+        // Make a call (generous budget covers initial discovery warmup)
         var client = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-            .await().atMost(Duration.ofSeconds(5));
+            .await().atMost(Duration.ofSeconds(10));
         HelloReply response = client.sayHello(HelloRequest.newBuilder().setName("Before Crash").build())
             .await().atMost(Duration.ofSeconds(2));
         assertThat(response.getMessage())
@@ -125,16 +118,21 @@ public class FailureRecoveryTest {
             .start();
         consulRegistration.registerService(serviceName, serviceName + "-1", "127.0.0.1", port);
 
-        // Verify recovery
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            var recoveredClient = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-                .await().atMost(Duration.ofSeconds(1));
-            HelloReply resp = recoveredClient.sayHello(HelloRequest.newBuilder().setName("After Crash").build())
-                .await().atMost(Duration.ofSeconds(2));
-            assertThat(resp.getMessage())
-                .as("Response after restart should be correct")
-                .isEqualTo("Hello After Crash");
-        });
+        // Verify recovery. awaitility is genuinely useful here: after the server
+        // restart, Stork needs to re-discover and the gRPC connection needs to
+        // re-establish — transient Mutiny TimeoutExceptions during polling are
+        // expected, so we tell awaitility to ignore that specific type.
+        await().atMost(Duration.ofSeconds(10))
+            .ignoreException(TimeoutException.class)
+            .untilAsserted(() -> {
+                var recoveredClient = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+                    .await().atMost(Duration.ofSeconds(1));
+                HelloReply resp = recoveredClient.sayHello(HelloRequest.newBuilder().setName("After Crash").build())
+                    .await().atMost(Duration.ofSeconds(2));
+                assertThat(resp.getMessage())
+                    .as("Response after restart should be correct")
+                    .isEqualTo("Hello After Crash");
+            });
 
         server.shutdownNow();
     }
@@ -156,13 +154,9 @@ public class FailureRecoveryTest {
         consulRegistration.registerService(serviceName, serviceName + "-1", "127.0.0.1", port1);
         consulRegistration.registerService(serviceName, serviceName + "-2", "127.0.0.1", port2);
 
-        // Wait for both to be up
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-                .await().atMost(Duration.ofSeconds(1)))
-                .as("Client should be discoverable with multiple instances")
-                .isNotNull();
-        });
+        // Warm up discovery (generous budget covers initial Consul poll)
+        clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+            .await().atMost(Duration.ofSeconds(10));
 
         // Kill one server
         server1.shutdownNow();
@@ -175,10 +169,11 @@ public class FailureRecoveryTest {
         Thread.sleep(2000);
 
         // Should still work via server2 — retry with eviction until Stork
-        // picks up the surviving instance
+        // picks up the surviving instance. Transient Mutiny TimeoutExceptions
+        // during polling are expected while discovery re-converges.
         await().atMost(Duration.ofSeconds(30))
             .pollInterval(Duration.ofMillis(500))
-            .ignoreExceptions()
+            .ignoreException(TimeoutException.class)
             .untilAsserted(() -> {
                 // Evict before each attempt so Stork re-discovers
                 clientFactory.evictChannel(serviceName);
@@ -209,15 +204,19 @@ public class FailureRecoveryTest {
         consulRegistration.deregisterService(serviceName + "-temp");
         consulRegistration.registerService(serviceName, serviceName + "-final", "127.0.0.1", port);
 
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            var client = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-                .await().atMost(Duration.ofSeconds(1));
-            HelloReply resp = client.sayHello(HelloRequest.newBuilder().setName("Rapid").build())
-                .await().atMost(Duration.ofSeconds(2));
-            assertThat(resp.getMessage())
-                .as("Should work after rapid registration changes")
-                .isEqualTo("Hello Rapid");
-        });
+        // Poll until discovery stabilizes on the final registration.
+        // Transient Mutiny TimeoutExceptions during poll are expected.
+        await().atMost(Duration.ofSeconds(10))
+            .ignoreException(TimeoutException.class)
+            .untilAsserted(() -> {
+                var client = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+                    .await().atMost(Duration.ofSeconds(1));
+                HelloReply resp = client.sayHello(HelloRequest.newBuilder().setName("Rapid").build())
+                    .await().atMost(Duration.ofSeconds(2));
+                assertThat(resp.getMessage())
+                    .as("Should work after rapid registration changes")
+                    .isEqualTo("Hello Rapid");
+            });
 
         server.shutdownNow();
         consulRegistration.deregisterService(serviceName + "-final");
@@ -234,14 +233,10 @@ public class FailureRecoveryTest {
             .build().start();
 
         consulRegistration.registerService(serviceName, serviceName + "-1", "127.0.0.1", port);
-        
-        // Wait for up
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-                .await().atMost(Duration.ofSeconds(1)))
-                .as("Should be discoverable while up")
-                .isNotNull();
-        });
+
+        // Warm up discovery
+        clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
+            .await().atMost(Duration.ofSeconds(10));
 
         // Shut down server and deregister
         server.shutdownNow();
@@ -287,16 +282,9 @@ public class FailureRecoveryTest {
 
         consulRegistration.registerService(serviceName, serviceName + "-1", "127.0.0.1", port);
 
-        // Wait for up
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-                .await().atMost(Duration.ofSeconds(1)))
-                .as("Should be discoverable")
-                .isNotNull();
-        });
-
+        // Warm up discovery (generous budget covers the first Consul poll)
         var client = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
-            .await().atMost(Duration.ofSeconds(5));
+            .await().atMost(Duration.ofSeconds(10));
 
         // Call should timeout
         assertThatThrownBy(() ->

@@ -33,7 +33,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
 
 /**
  * Stress tests for GrpcClientFactory under heavy load.
@@ -113,14 +112,11 @@ public class StressTest {
             consulRegistration.registerService(name, name + "-instance", "127.0.0.1", stressPorts.get(i));
         }
 
-        // Wait for all to be discoverable
+        // Warm up discovery for every service before the stress phase
         for (int i = 0; i < 10; i++) {
             String name = baseServiceName + "-" + i;
-            await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-                assertThat(clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1)))
-                    .as("Service " + name + " should be discoverable")
-                    .isNotNull();
-            });
+            clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub)
+                .await().atMost(Duration.ofSeconds(10));
         }
 
         ExecutorService executor = Executors.newFixedThreadPool(20);
@@ -175,12 +171,9 @@ public class StressTest {
         String name = baseServiceName + "-sustained";
         consulRegistration.registerService(name, name + "-instance", "127.0.0.1", stressPorts.get(0));
 
-        // Wait for discovery
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1)))
-                .as("Sustained load service should be discoverable")
-                .isNotNull();
-        });
+        // Warm up discovery before the sustained load phase
+        clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub)
+            .await().atMost(Duration.ofSeconds(10));
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
@@ -236,14 +229,11 @@ public class StressTest {
             consulRegistration.registerService(name, name + "-instance", "127.0.0.1", stressPorts.get(i));
         }
 
-        // Wait for all to be discoverable
+        // Warm up discovery for every service before rapid-switching phase
         for (int i = 0; i < 10; i++) {
             String name = baseServiceName + "-switch-" + i;
-            await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-                assertThat(clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1)))
-                    .as("Service " + name + " should be discoverable for switching test")
-                    .isNotNull();
-            });
+            clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub)
+                .await().atMost(Duration.ofSeconds(10));
         }
 
         AtomicInteger successCount = new AtomicInteger(0);
@@ -289,11 +279,9 @@ public class StressTest {
         String name = baseServiceName + "-memory";
         consulRegistration.registerService(name, name + "-instance", "127.0.0.1", stressPorts.get(0));
 
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            assertThat(clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub).await().atMost(Duration.ofSeconds(1)))
-                .as("Memory test service should be discoverable")
-                .isNotNull();
-        });
+        // Warm up discovery before the memory stability loop
+        clientFactory.getClient(name, MutinyGreeterGrpc::newMutinyStub)
+            .await().atMost(Duration.ofSeconds(10));
 
         int initialChannelCount = clientFactory.getActiveServiceCount();
 

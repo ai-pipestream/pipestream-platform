@@ -1,10 +1,12 @@
 package ai.pipestream.test.support.semantic;
 
 import ai.pipestream.data.v1.ChunkEmbedding;
+import ai.pipestream.data.v1.NlpDocumentAnalysis;
 import ai.pipestream.data.v1.PipeDoc;
 import ai.pipestream.data.v1.SearchMetadata;
 import ai.pipestream.data.v1.SemanticChunk;
 import ai.pipestream.data.v1.SemanticProcessingResult;
+import ai.pipestream.data.v1.SourceFieldAnalytics;
 import com.google.protobuf.Value;
 import org.junit.jupiter.api.Test;
 
@@ -51,7 +53,8 @@ class SemanticPipelineInvariantsTest {
     /**
      * Builds a {@link SemanticProcessingResult} that satisfies all post-chunker
      * SPR-level invariants: empty embedding_config_id, non-empty source_field_name
-     * and chunk_config_id, at least one valid chunk, and a directive_key in metadata.
+     * and chunk_config_id, at least one valid chunk, a directive_key in metadata,
+     * and nlp_analysis set (required per DESIGN.md §5.1).
      */
     private static SemanticProcessingResult validSpr(
             String resultId,
@@ -65,11 +68,26 @@ class SemanticPipelineInvariantsTest {
                 .setEmbeddingConfigId("") // placeholder — not yet embedded
                 .addChunks(validChunk("chunk-0", "Hello world, this is a test chunk.", 0, 34))
                 .putMetadata("directive_key", Value.newBuilder().setStringValue(directiveKey).build())
+                .setNlpAnalysis(NlpDocumentAnalysis.getDefaultInstance())
                 .build();
     }
 
     /**
-     * Builds a minimal valid {@link PipeDoc} with a single SPR that passes
+     * Builds a minimal {@link SourceFieldAnalytics} entry for the given
+     * (source_field, chunk_config_id) pair, satisfying the post-chunker
+     * requirement that source_field_analytics[] has one entry per unique pair
+     * present in semantic_results.
+     */
+    private static SourceFieldAnalytics validSourceFieldAnalytics(String sourceField, String chunkConfigId) {
+        return SourceFieldAnalytics.newBuilder()
+                .setSourceField(sourceField)
+                .setChunkConfigId(chunkConfigId)
+                .build();
+    }
+
+    /**
+     * Builds a minimal valid {@link PipeDoc} with a single SPR and a matching
+     * source_field_analytics entry that passes
      * {@link SemanticPipelineInvariants#assertPostChunker(PipeDoc)}.
      */
     private static PipeDoc validPostChunkerDoc() {
@@ -81,6 +99,7 @@ class SemanticPipelineInvariantsTest {
 
         SearchMetadata sm = SearchMetadata.newBuilder()
                 .addSemanticResults(spr)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
                 .build();
 
         return PipeDoc.newBuilder()
@@ -190,9 +209,13 @@ class SemanticPipelineInvariantsTest {
                 "key-abstract");
 
         // Deliberately put body before abstract — wrong lex order.
+        // Include source_field_analytics for both pairs so that check passes
+        // and the lex-sort check is the one that fires.
         SearchMetadata sm = SearchMetadata.newBuilder()
                 .addSemanticResults(sprBody)
                 .addSemanticResults(sprAbstract)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("abstract", "sentence_v1"))
                 .build();
 
         PipeDoc doc = PipeDoc.newBuilder()
@@ -206,5 +229,61 @@ class SemanticPipelineInvariantsTest {
                 .as("a PipeDoc whose semantic_results are not lex-sorted must fail the post-chunker assertion")
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("lex-sorted");
+    }
+
+    @Test
+    void invalidPostChunkerDocFails_missingNlpAnalysis() {
+        // Build an SPR WITHOUT nlp_analysis — explicit omission of setNlpAnalysis().
+        SemanticProcessingResult sprWithoutNlp = SemanticProcessingResult.newBuilder()
+                .setResultId("stage1:docHash123:body:sentence_v1:")
+                .setSourceFieldName("body")
+                .setChunkConfigId("sentence_v1")
+                .setEmbeddingConfigId("")
+                .addChunks(validChunk("chunk-0", "Hello world, this is a test chunk.", 0, 34))
+                .putMetadata("directive_key", Value.newBuilder().setStringValue("sha256b64url-abc123").build())
+                // deliberately NOT calling .setNlpAnalysis(...)
+                .build();
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(sprWithoutNlp)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .build();
+
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-005")
+                .setSearchMetadata(sm)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostChunker(doc))
+                .as("a PipeDoc where no SPR for source_field='body' has nlp_analysis must "
+                        + "fail the post-chunker assertion")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("nlp_analysis");
+    }
+
+    @Test
+    void invalidPostChunkerDocFails_missingSourceFieldAnalytics() {
+        // Build a valid SPR but DO NOT add the corresponding source_field_analytics entry.
+        SemanticProcessingResult spr = validSpr(
+                "stage1:docHash123:body:sentence_v1:",
+                "body",
+                "sentence_v1",
+                "sha256b64url-abc123");
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(spr)
+                // deliberately NOT adding source_field_analytics for (body, sentence_v1)
+                .build();
+
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-006")
+                .setSearchMetadata(sm)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostChunker(doc))
+                .as("a PipeDoc missing a source_field_analytics entry for its (body, sentence_v1) "
+                        + "pair must fail the post-chunker assertion")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("source_field_analytics");
     }
 }

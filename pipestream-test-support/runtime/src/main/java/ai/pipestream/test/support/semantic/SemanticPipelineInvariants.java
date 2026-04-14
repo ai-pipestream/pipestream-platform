@@ -8,6 +8,8 @@ import ai.pipestream.data.v1.SemanticProcessingResult;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -52,6 +54,12 @@ public final class SemanticPipelineInvariants {
      *       <li>{@code metadata} contains a {@code "directive_key"} entry (per §21.2).</li>
      *     </ul>
      *   </li>
+     *   <li>For every unique {@code source_field_name} appearing in {@code semantic_results},
+     *       at least one SPR with that source_field_name has {@code nlp_analysis} set
+     *       (per DESIGN.md §5.1).</li>
+     *   <li>{@code search_metadata.source_field_analytics[]} contains one entry per unique
+     *       {@code (source_field, chunk_config_id)} pair present in {@code semantic_results}
+     *       (per DESIGN.md §5.1).</li>
      *   <li>{@code semantic_results[]} is lex-sorted by
      *       {@code (source_field_name, chunk_config_id, embedding_config_id, result_id)}.</li>
      * </ol>
@@ -128,6 +136,39 @@ public final class SemanticPipelineInvariants {
                         .as(chunkContext + ": embedding_info.original_char_end_offset must be >= original_char_start_offset")
                         .isGreaterThanOrEqualTo(startOffset);
             }
+        }
+
+        // §5.1: for every unique source_field_name in semantic_results,
+        // at least one SPR with that source_field_name must have nlp_analysis set.
+        Set<String> sourceFieldsInResults = results.stream()
+                .map(SemanticProcessingResult::getSourceFieldName)
+                .collect(Collectors.toSet());
+
+        for (String sourceField : sourceFieldsInResults) {
+            boolean hasNlpForSource = results.stream()
+                    .filter(spr -> sourceField.equals(spr.getSourceFieldName()))
+                    .anyMatch(SemanticProcessingResult::hasNlpAnalysis);
+            assertThat(hasNlpForSource)
+                    .as("post-chunker: at least one SPR with source_field_name='%s' "
+                            + "must have nlp_analysis set (per DESIGN.md §5.1)", sourceField)
+                    .isTrue();
+        }
+
+        // §5.1: source_field_analytics[] must contain an entry per unique
+        // (source_field, chunk_config_id) pair present in semantic_results.
+        Set<String> pairsInResults = results.stream()
+                .map(spr -> spr.getSourceFieldName() + "|" + spr.getChunkConfigId())
+                .collect(Collectors.toSet());
+
+        Set<String> pairsInAnalytics = sm.getSourceFieldAnalyticsList().stream()
+                .map(sfa -> sfa.getSourceField() + "|" + sfa.getChunkConfigId())
+                .collect(Collectors.toSet());
+
+        for (String pair : pairsInResults) {
+            assertThat(pairsInAnalytics)
+                    .as("post-chunker: source_field_analytics[] must contain an entry for "
+                            + "(source_field, chunk_config_id)='%s' (per DESIGN.md §5.1)", pair)
+                    .contains(pair);
         }
 
         assertLexSorted(sm);

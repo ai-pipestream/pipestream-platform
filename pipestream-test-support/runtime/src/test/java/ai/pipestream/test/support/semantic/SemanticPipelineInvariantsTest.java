@@ -20,8 +20,11 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies both the happy path and the failure path for
- * {@link SemanticPipelineInvariants#assertPostChunker(PipeDoc)}.
+ * Verifies the happy path and failure paths for all three stage invariants in
+ * {@link SemanticPipelineInvariants}:
+ * {@link SemanticPipelineInvariants#assertPostChunker(PipeDoc)},
+ * {@link SemanticPipelineInvariants#assertPostEmbedder(PipeDoc)}, and
+ * {@link SemanticPipelineInvariants#assertPostSemanticGraph(PipeDoc)}.
  */
 class SemanticPipelineInvariantsTest {
 
@@ -623,6 +626,62 @@ class SemanticPipelineInvariantsTest {
     }
 
     @Test
+    void validPostEmbedderDocWithoutDirectivesPasses() {
+        // If vector_set_directives is cleared after stage 1 processing, the
+        // advertised-config-id cross-check must be silently skipped rather than
+        // failing. This test exercises that guard.
+        PipeDoc doc = validPostEmbedderDoc().toBuilder()
+                .setSearchMetadata(validPostEmbedderDoc().getSearchMetadata().toBuilder()
+                        .clearVectorSetDirectives()
+                        .build())
+                .build();
+
+        assertThatCode(() -> SemanticPipelineInvariants.assertPostEmbedder(doc))
+                .as("a valid post-embedder doc without vector_set_directives should still pass "
+                        + "(the advertised-config-id cross-check is skipped when directives are absent)")
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void invalidPostEmbedderDocFails_outOfOrderResults() {
+        // Two valid stage-2 SPRs deliberately inserted in wrong lex order
+        // (body before abstract). Source analytics entries + directives present
+        // for both so the lex-sort check is the one that fires.
+        SemanticProcessingResult sprBody = validStage2Spr(
+                "stage2:docHash:body:sentence_v1:minilm",
+                "body",
+                "sentence_v1",
+                "minilm",
+                "sha256b64url-body",
+                4);
+        SemanticProcessingResult sprAbstract = validStage2Spr(
+                "stage2:docHash:abstract:sentence_v1:minilm",
+                "abstract",
+                "sentence_v1",
+                "minilm",
+                "sha256b64url-abstract",
+                4);
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(sprBody)
+                .addSemanticResults(sprAbstract)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("abstract", "sentence_v1"))
+                .setVectorSetDirectives(directivesAdvertising("body", "minilm"))
+                .build();
+
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-stage2-006")
+                .setSearchMetadata(sm)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostEmbedder(doc))
+                .as("a post-embedder doc whose semantic_results are not lex-sorted must fail")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("lex-sorted");
+    }
+
+    @Test
     void invalidPostEmbedderDocFails_missingSearchMetadata() {
         // Bare PipeDoc with no search_metadata must fail the first guard.
         PipeDoc doc = PipeDoc.newBuilder()
@@ -844,6 +903,88 @@ class SemanticPipelineInvariantsTest {
                         SemanticPipelineInvariants.MAX_SEMANTIC_CHUNKS_PER_DOC_DEFAULT)
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("chunk count must be <=");
+    }
+
+    @Test
+    void invalidPostGraphDocFails_centroidMultipleChunks() {
+        // Centroid SPR with TWO chunks — must fail the "exactly one chunk" rule.
+        SemanticProcessingResult multiChunkCentroid = SemanticProcessingResult.newBuilder()
+                .setResultId("stage3:docHash123:body:document_centroid:minilm")
+                .setSourceFieldName("body")
+                .setChunkConfigId("document_centroid")
+                .setEmbeddingConfigId("minilm")
+                .addChunks(validStage2Chunk("centroid-0", "First centroid chunk", 0, 20, 4))
+                .addChunks(validStage2Chunk("centroid-1", "Second centroid chunk", 0, 21, 4))
+                .putMetadata("directive_key", Value.newBuilder().setStringValue("sha256b64url-abc123").build())
+                .setCentroidMetadata(CentroidMetadata.newBuilder()
+                        .setGranularity(GranularityLevel.GRANULARITY_LEVEL_DOCUMENT)
+                        .setSourceVectorCount(4)
+                        .build())
+                .build();
+
+        SemanticProcessingResult stage2Spr = validStage2Spr(
+                "stage2:docHash123:body:sentence_v1:minilm",
+                "body",
+                "sentence_v1",
+                "minilm",
+                "sha256b64url-abc123",
+                4);
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(multiChunkCentroid)
+                .addSemanticResults(stage2Spr)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .setVectorSetDirectives(directivesAdvertising("body", "minilm"))
+                .build();
+
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-stage3-008")
+                .setSearchMetadata(sm)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostSemanticGraph(doc))
+                .as("a centroid SPR with more than one chunk must fail the post-graph assertion")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("exactly one chunk");
+    }
+
+    @Test
+    void invalidPostGraphDocFails_outOfOrderResults() {
+        // Build two valid stage-2 SPRs in wrong lex order. No centroid/boundary
+        // at source_field="abstract" so the analytics-pair check on preserved
+        // SPRs covers both, and the lex-sort check is what fires.
+        SemanticProcessingResult sprBody = validStage2Spr(
+                "stage2:docHash:body:sentence_v1:minilm",
+                "body",
+                "sentence_v1",
+                "minilm",
+                "sha256b64url-body",
+                4);
+        SemanticProcessingResult sprAbstract = validStage2Spr(
+                "stage2:docHash:abstract:sentence_v1:minilm",
+                "abstract",
+                "sentence_v1",
+                "minilm",
+                "sha256b64url-abstract",
+                4);
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(sprBody)
+                .addSemanticResults(sprAbstract)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("abstract", "sentence_v1"))
+                .setVectorSetDirectives(directivesAdvertising("body", "minilm"))
+                .build();
+
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-stage3-009")
+                .setSearchMetadata(sm)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostSemanticGraph(doc))
+                .as("a post-graph doc whose semantic_results are not lex-sorted must fail")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("lex-sorted");
     }
 
     @Test

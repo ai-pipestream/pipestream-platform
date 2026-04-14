@@ -385,7 +385,7 @@ public final class SemanticPipelineInvariants {
      *       <li>{@code centroid_metadata} is set.</li>
      *       <li>{@code centroid_metadata.granularity} is not {@code UNSPECIFIED}.</li>
      *       <li>{@code centroid_metadata.source_vector_count} is strictly positive.</li>
-     *       <li>Exactly one chunk with a populated vector (enforced by the basic checks above).</li>
+     *       <li>Exactly one chunk (enforced by the centroid-specific assertion below).</li>
      *     </ul>
      *   </li>
      *   <li>For every semantic-boundary SPR ({@code chunk_config_id == "semantic"}):
@@ -412,6 +412,14 @@ public final class SemanticPipelineInvariants {
      * {@code semantic_results[]}. That check needs the Stage 2 doc as input and
      * cannot be performed with a single-arg method. Callers that need byte-identity
      * must diff their own stage-2 input against the stage-3 output.
+     *
+     * <p>Naming note: DESIGN.md §5.3 uses the identifier
+     * {@code semantic_granularity == "SEMANTIC_CHUNK"}. That text predates the
+     * proto definition; the actual field on {@code SemanticProcessingResult} is
+     * {@code optional GranularityLevel granularity = 11}. This method therefore
+     * checks {@code spr.getGranularity() == GRANULARITY_LEVEL_SEMANTIC_CHUNK},
+     * which is the semantic equivalent. A future DESIGN.md amendment will inline
+     * this reconciliation.
      *
      * @param doc the PipeDoc to validate
      * @throws AssertionError if any invariant is violated

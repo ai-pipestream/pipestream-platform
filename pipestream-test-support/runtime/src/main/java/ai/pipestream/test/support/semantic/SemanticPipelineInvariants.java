@@ -1,6 +1,8 @@
 package ai.pipestream.test.support.semantic;
 
+import ai.pipestream.data.v1.CentroidMetadata;
 import ai.pipestream.data.v1.ChunkEmbedding;
+import ai.pipestream.data.v1.GranularityLevel;
 import ai.pipestream.data.v1.NamedEmbedderConfig;
 import ai.pipestream.data.v1.PipeDoc;
 import ai.pipestream.data.v1.SearchMetadata;
@@ -24,12 +26,17 @@ import static org.assertj.core.api.Assertions.assertThat;
  * (module-chunker, module-embedder, module-semantic-graph, and
  * pipestream-wiremock-server) as testImplementation so every test suite
  * agrees on the shape a PipeDoc must have at each stage.
- *
- * {@link #assertPostChunker(PipeDoc)} and {@link #assertPostEmbedder(PipeDoc)}
- * are implemented; {@code assertPostSemanticGraph} lands in a follow-up
- * commit on this branch.
  */
 public final class SemanticPipelineInvariants {
+
+    /**
+     * Default cap on the number of semantic-boundary chunks a semantic-graph
+     * step may emit per doc, per DESIGN.md §6.3 {@code max_semantic_chunks_per_doc}.
+     * The production step can override this via config; the invariant only
+     * checks the default. Module tests that use a non-default config should
+     * perform their own cap check.
+     */
+    public static final int MAX_SEMANTIC_CHUNKS_PER_DOC_DEFAULT = 50;
 
     private SemanticPipelineInvariants() {}
 
@@ -359,6 +366,223 @@ public final class SemanticPipelineInvariants {
         }
 
         assertLexSorted(sm, "post-embedder");
+    }
+
+    /**
+     * Asserts that the given {@code doc} satisfies the post-semantic-graph stage
+     * invariant as defined in DESIGN.md §5.3.
+     *
+     * <p>Checks performed:
+     * <ol>
+     *   <li>All the post-embedder-style structural checks (§5.2) on every SPR:
+     *       non-empty {@code embedding_config_id}, non-empty chunks, populated
+     *       text_content and vector on every chunk, non-empty {@code chunk_id},
+     *       non-negative and ordered offsets, {@code directive_key} preserved in
+     *       metadata, and embedder-config-id matches a VectorDirective when
+     *       directives are still present.</li>
+     *   <li>For every centroid SPR ({@code chunk_config_id} ends in {@code _centroid}):
+     *     <ul>
+     *       <li>{@code centroid_metadata} is set.</li>
+     *       <li>{@code centroid_metadata.granularity} is not {@code UNSPECIFIED}.</li>
+     *       <li>{@code centroid_metadata.source_vector_count} is strictly positive.</li>
+     *       <li>Exactly one chunk with a populated vector (enforced by the basic checks above).</li>
+     *     </ul>
+     *   </li>
+     *   <li>For every semantic-boundary SPR ({@code chunk_config_id == "semantic"}):
+     *     <ul>
+     *       <li>{@code granularity == GRANULARITY_LEVEL_SEMANTIC_CHUNK}.</li>
+     *       <li>{@code semantic_config_id} is non-empty.</li>
+     *       <li>Chunk count is in {@code [1, MAX_SEMANTIC_CHUNKS_PER_DOC_DEFAULT]}.</li>
+     *     </ul>
+     *   </li>
+     *   <li>{@code nlp_analysis} preserved: for every unique {@code source_field_name}
+     *       in the results, at least one SPR with that source_field_name has
+     *       {@code nlp_analysis} set.</li>
+     *   <li>{@code source_field_analytics[]} preserved: for every unique
+     *       {@code (source_field, chunk_config_id)} pair where chunk_config_id is
+     *       NOT a centroid suffix and NOT {@code "semantic"}, the analytics entry
+     *       must still exist. Stage-3-added centroid and boundary SPRs do not
+     *       contribute to this check because they introduce new chunk_config_id
+     *       values that were never produced by the chunker step.</li>
+     *   <li>{@code semantic_results[]} is lex-sorted.</li>
+     * </ol>
+     *
+     * <p>Note: DESIGN.md §5.3 also requires a deep-equal check that all Stage 2
+     * SPRs are preserved unchanged in the pre-append portion of
+     * {@code semantic_results[]}. That check needs the Stage 2 doc as input and
+     * cannot be performed with a single-arg method. Callers that need byte-identity
+     * must diff their own stage-2 input against the stage-3 output.
+     *
+     * @param doc the PipeDoc to validate
+     * @throws AssertionError if any invariant is violated
+     */
+    public static void assertPostSemanticGraph(PipeDoc doc) {
+        assertThat(doc.hasSearchMetadata())
+                .as("post-graph: search_metadata must be set on the PipeDoc")
+                .isTrue();
+
+        SearchMetadata sm = doc.getSearchMetadata();
+        List<SemanticProcessingResult> results = sm.getSemanticResultsList();
+
+        Set<String> advertisedEmbedderConfigIds = Collections.emptySet();
+        if (sm.hasVectorSetDirectives()) {
+            advertisedEmbedderConfigIds = sm.getVectorSetDirectives().getDirectivesList().stream()
+                    .map(VectorDirective::getEmbedderConfigsList)
+                    .flatMap(List::stream)
+                    .map(NamedEmbedderConfig::getConfigId)
+                    .collect(Collectors.toSet());
+        }
+
+        for (int i = 0; i < results.size(); i++) {
+            SemanticProcessingResult spr = results.get(i);
+            String sprContext = "post-graph: semantic_results[" + i + "]"
+                    + " (source_field_name='" + spr.getSourceFieldName()
+                    + "', chunk_config_id='" + spr.getChunkConfigId()
+                    + "', embedding_config_id='" + spr.getEmbeddingConfigId()
+                    + "', result_id='" + spr.getResultId() + "')";
+
+            // Post-embedder-style structural checks on every SPR.
+            assertThat(spr.getEmbeddingConfigId())
+                    .as(sprContext + ": embedding_config_id must be non-empty")
+                    .isNotEmpty();
+
+            assertThat(spr.getSourceFieldName())
+                    .as(sprContext + ": source_field_name must be non-empty")
+                    .isNotEmpty();
+
+            assertThat(spr.getChunkConfigId())
+                    .as(sprContext + ": chunk_config_id must be non-empty")
+                    .isNotEmpty();
+
+            assertThat(spr.getChunksList())
+                    .as(sprContext + ": chunks must be non-empty")
+                    .isNotEmpty();
+
+            assertThat(spr.getMetadataMap())
+                    .as(sprContext + ": metadata must contain 'directive_key' entry (inherited through all stages per DESIGN.md §21.2)")
+                    .containsKey("directive_key");
+
+            if (!advertisedEmbedderConfigIds.isEmpty()) {
+                assertThat(advertisedEmbedderConfigIds)
+                        .as(sprContext + ": embedding_config_id must match a NamedEmbedderConfig "
+                                + "advertised in vector_set_directives (per DESIGN.md §5.3)")
+                        .contains(spr.getEmbeddingConfigId());
+            }
+
+            List<SemanticChunk> chunks = spr.getChunksList();
+            for (int j = 0; j < chunks.size(); j++) {
+                SemanticChunk chunk = chunks.get(j);
+                String chunkContext = sprContext + " chunk[" + j + "] (chunk_id='" + chunk.getChunkId() + "')";
+
+                ChunkEmbedding embeddingInfo = chunk.getEmbeddingInfo();
+
+                assertThat(embeddingInfo.getTextContent())
+                        .as(chunkContext + ": embedding_info.text_content must be non-empty")
+                        .isNotEmpty();
+
+                assertThat(embeddingInfo.getVectorList())
+                        .as(chunkContext + ": embedding_info.vector must be populated at stage 3")
+                        .isNotEmpty();
+
+                assertThat(chunk.getChunkId())
+                        .as(chunkContext + ": chunk_id must be non-empty")
+                        .isNotEmpty();
+
+                int startOffset = embeddingInfo.hasOriginalCharStartOffset()
+                        ? embeddingInfo.getOriginalCharStartOffset()
+                        : 0;
+                int endOffset = embeddingInfo.hasOriginalCharEndOffset()
+                        ? embeddingInfo.getOriginalCharEndOffset()
+                        : 0;
+
+                assertThat(startOffset)
+                        .as(chunkContext + ": embedding_info.original_char_start_offset must be >= 0")
+                        .isGreaterThanOrEqualTo(0);
+
+                assertThat(endOffset)
+                        .as(chunkContext + ": embedding_info.original_char_end_offset must be >= original_char_start_offset")
+                        .isGreaterThanOrEqualTo(startOffset);
+            }
+
+            // Stage-3-specific checks keyed on chunk_config_id shape.
+            String cfg = spr.getChunkConfigId();
+            if (cfg.endsWith("_centroid")) {
+                assertThat(spr.hasCentroidMetadata())
+                        .as(sprContext + ": centroid SPR must have centroid_metadata set")
+                        .isTrue();
+
+                CentroidMetadata cm = spr.getCentroidMetadata();
+                assertThat(cm.getGranularity())
+                        .as(sprContext + ": centroid_metadata.granularity must not be GRANULARITY_LEVEL_UNSPECIFIED")
+                        .isNotEqualTo(GranularityLevel.GRANULARITY_LEVEL_UNSPECIFIED);
+
+                assertThat(cm.getSourceVectorCount())
+                        .as(sprContext + ": centroid_metadata.source_vector_count must be strictly positive")
+                        .isGreaterThan(0);
+
+                assertThat(spr.getChunksCount())
+                        .as(sprContext + ": centroid SPR must have exactly one chunk")
+                        .isEqualTo(1);
+            }
+
+            if ("semantic".equals(cfg)) {
+                assertThat(spr.hasGranularity())
+                        .as(sprContext + ": semantic-boundary SPR must have granularity set")
+                        .isTrue();
+
+                assertThat(spr.getGranularity())
+                        .as(sprContext + ": semantic-boundary SPR granularity must be GRANULARITY_LEVEL_SEMANTIC_CHUNK")
+                        .isEqualTo(GranularityLevel.GRANULARITY_LEVEL_SEMANTIC_CHUNK);
+
+                assertThat(spr.getSemanticConfigId())
+                        .as(sprContext + ": semantic-boundary SPR must have semantic_config_id set")
+                        .isNotEmpty();
+
+                assertThat(spr.getChunksCount())
+                        .as(sprContext + ": semantic-boundary SPR chunk count must be <= %d (default cap)",
+                                MAX_SEMANTIC_CHUNKS_PER_DOC_DEFAULT)
+                        .isLessThanOrEqualTo(MAX_SEMANTIC_CHUNKS_PER_DOC_DEFAULT);
+            }
+        }
+
+        // nlp_analysis preserved: at least one SPR per unique source_field_name
+        // must still have nlp_analysis set.
+        Set<String> sourceFieldsInResults = results.stream()
+                .map(SemanticProcessingResult::getSourceFieldName)
+                .collect(Collectors.toSet());
+
+        for (String sourceField : sourceFieldsInResults) {
+            boolean hasNlpForSource = results.stream()
+                    .filter(spr -> sourceField.equals(spr.getSourceFieldName()))
+                    .anyMatch(SemanticProcessingResult::hasNlpAnalysis);
+            assertThat(hasNlpForSource)
+                    .as("post-graph: at least one SPR with source_field_name='%s' "
+                            + "must have nlp_analysis set (preserved from stage 1 per DESIGN.md §5.3)", sourceField)
+                    .isTrue();
+        }
+
+        // source_field_analytics preserved: check only non-centroid, non-boundary SPRs.
+        // Stage-3-added SPRs (centroids, boundaries) introduce chunk_config_id values
+        // that the chunker step never produced, so they are not expected to have
+        // matching analytics entries.
+        Set<String> stage1Pairs = results.stream()
+                .filter(spr -> !spr.getChunkConfigId().endsWith("_centroid"))
+                .filter(spr -> !"semantic".equals(spr.getChunkConfigId()))
+                .map(spr -> spr.getSourceFieldName() + "|" + spr.getChunkConfigId())
+                .collect(Collectors.toSet());
+
+        Set<String> pairsInAnalytics = sm.getSourceFieldAnalyticsList().stream()
+                .map(sfa -> sfa.getSourceField() + "|" + sfa.getChunkConfigId())
+                .collect(Collectors.toSet());
+
+        for (String pair : stage1Pairs) {
+            assertThat(pairsInAnalytics)
+                    .as("post-graph: source_field_analytics[] must contain an entry for "
+                            + "(source_field, chunk_config_id)='%s' (preserved from stage 1 per DESIGN.md §5.3)", pair)
+                    .contains(pair);
+        }
+
+        assertLexSorted(sm, "post-graph");
     }
 
     /**

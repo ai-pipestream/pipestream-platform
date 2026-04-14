@@ -1,6 +1,8 @@
 package ai.pipestream.test.support.semantic;
 
+import ai.pipestream.data.v1.CentroidMetadata;
 import ai.pipestream.data.v1.ChunkEmbedding;
+import ai.pipestream.data.v1.GranularityLevel;
 import ai.pipestream.data.v1.NamedEmbedderConfig;
 import ai.pipestream.data.v1.NlpDocumentAnalysis;
 import ai.pipestream.data.v1.PipeDoc;
@@ -144,6 +146,114 @@ class SemanticPipelineInvariantsTest {
         }
         return VectorSetDirectives.newBuilder()
                 .addDirectives(directive.build())
+                .build();
+    }
+
+    /**
+     * Builds a minimal valid stage-3 centroid {@link SemanticProcessingResult}:
+     * chunk_config_id ends in "_centroid", centroid_metadata set with valid
+     * granularity and positive source_vector_count, exactly one chunk with a
+     * populated vector. Inherits the parent SPR's embedding_config_id and
+     * directive_key so the post-graph structural checks still pass.
+     */
+    private static SemanticProcessingResult validCentroidSpr(
+            String sourceFieldName,
+            String chunkConfigIdWithCentroidSuffix,
+            String embeddingConfigId,
+            String directiveKey,
+            GranularityLevel granularity,
+            int sourceVectorCount,
+            int vectorDimension) {
+        return SemanticProcessingResult.newBuilder()
+                .setResultId("stage3:docHash123:" + sourceFieldName + ":" + chunkConfigIdWithCentroidSuffix + ":" + embeddingConfigId)
+                .setSourceFieldName(sourceFieldName)
+                .setChunkConfigId(chunkConfigIdWithCentroidSuffix)
+                .setEmbeddingConfigId(embeddingConfigId)
+                .addChunks(validStage2Chunk("centroid-0", "Representative centroid text", 0, 28, vectorDimension))
+                .putMetadata("directive_key", Value.newBuilder().setStringValue(directiveKey).build())
+                .setCentroidMetadata(CentroidMetadata.newBuilder()
+                        .setGranularity(granularity)
+                        .setSourceVectorCount(sourceVectorCount)
+                        .build())
+                .build();
+    }
+
+    /**
+     * Builds a minimal valid stage-3 semantic-boundary {@link SemanticProcessingResult}:
+     * chunk_config_id="semantic", granularity=SEMANTIC_CHUNK, non-empty
+     * semantic_config_id, and the given number of chunks each with populated vectors.
+     */
+    private static SemanticProcessingResult validBoundarySpr(
+            String sourceFieldName,
+            String embeddingConfigId,
+            String directiveKey,
+            String semanticConfigId,
+            int chunkCount,
+            int vectorDimension) {
+        SemanticProcessingResult.Builder builder = SemanticProcessingResult.newBuilder()
+                .setResultId("stage3:docHash123:" + sourceFieldName + ":semantic:" + embeddingConfigId)
+                .setSourceFieldName(sourceFieldName)
+                .setChunkConfigId("semantic")
+                .setEmbeddingConfigId(embeddingConfigId)
+                .setGranularity(GranularityLevel.GRANULARITY_LEVEL_SEMANTIC_CHUNK)
+                .setSemanticConfigId(semanticConfigId)
+                .putMetadata("directive_key", Value.newBuilder().setStringValue(directiveKey).build());
+        for (int i = 0; i < chunkCount; i++) {
+            builder.addChunks(validStage2Chunk("semantic-" + i, "Boundary chunk " + i, 0, 20, vectorDimension));
+        }
+        return builder.build();
+    }
+
+    /**
+     * Builds a minimal valid stage-3 {@link PipeDoc}: one preserved stage-2 SPR
+     * (for source_field=body, chunk_config=sentence_v1, embedder=minilm), one
+     * centroid SPR for the document, one semantic-boundary SPR, matching
+     * source_field_analytics for the stage-2 pair only, and directives that
+     * advertise the embedder config id. Passes
+     * {@link SemanticPipelineInvariants#assertPostSemanticGraph(PipeDoc)}.
+     *
+     * <p>The result list is lex-sorted by (source_field, chunk_config_id,
+     * embedding_config_id, result_id). At source_field="body":
+     * document_centroid &lt; semantic &lt; sentence_v1, so the centroid comes first,
+     * boundary second, stage-2 third.
+     */
+    private static PipeDoc validPostGraphDoc() {
+        SemanticProcessingResult centroid = validCentroidSpr(
+                "body",
+                "document_centroid",
+                "minilm",
+                "sha256b64url-abc123",
+                GranularityLevel.GRANULARITY_LEVEL_DOCUMENT,
+                4,
+                4);
+
+        SemanticProcessingResult boundary = validBoundarySpr(
+                "body",
+                "minilm",
+                "sha256b64url-abc123",
+                "semantic_v1",
+                3,
+                4);
+
+        SemanticProcessingResult stage2Spr = validStage2Spr(
+                "stage2:docHash123:body:sentence_v1:minilm",
+                "body",
+                "sentence_v1",
+                "minilm",
+                "sha256b64url-abc123",
+                4);
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(centroid)
+                .addSemanticResults(boundary)
+                .addSemanticResults(stage2Spr)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .setVectorSetDirectives(directivesAdvertising("body", "minilm"))
+                .build();
+
+        return PipeDoc.newBuilder()
+                .setDocId("doc-stage3-001")
+                .setSearchMetadata(sm)
                 .build();
     }
 
@@ -521,6 +631,229 @@ class SemanticPipelineInvariantsTest {
 
         assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostEmbedder(doc))
                 .as("a PipeDoc with no search_metadata set must fail the post-embedder assertion")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("search_metadata must be set");
+    }
+
+    // ---------------------------------------------------------------------------
+    // assertPostSemanticGraph tests
+    // ---------------------------------------------------------------------------
+
+    @Test
+    void validPostGraphDocPasses() {
+        PipeDoc doc = validPostGraphDoc();
+
+        assertThatCode(() -> SemanticPipelineInvariants.assertPostSemanticGraph(doc))
+                .as("a PipeDoc that satisfies all post-semantic-graph invariants should not throw any exception")
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void invalidPostGraphDocFails_centroidMissingCentroidMetadata() {
+        // Build a centroid SPR (chunk_config_id="document_centroid") but do NOT
+        // set centroid_metadata. Must fail the post-graph centroid-specific check.
+        SemanticProcessingResult badCentroid = SemanticProcessingResult.newBuilder()
+                .setResultId("stage3:docHash123:body:document_centroid:minilm")
+                .setSourceFieldName("body")
+                .setChunkConfigId("document_centroid")
+                .setEmbeddingConfigId("minilm")
+                .addChunks(validStage2Chunk("centroid-0", "Centroid without metadata", 0, 25, 4))
+                .putMetadata("directive_key", Value.newBuilder().setStringValue("sha256b64url-abc123").build())
+                // deliberately NOT calling setCentroidMetadata
+                .build();
+
+        SemanticProcessingResult stage2Spr = validStage2Spr(
+                "stage2:docHash123:body:sentence_v1:minilm",
+                "body",
+                "sentence_v1",
+                "minilm",
+                "sha256b64url-abc123",
+                4);
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(badCentroid)
+                .addSemanticResults(stage2Spr)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .setVectorSetDirectives(directivesAdvertising("body", "minilm"))
+                .build();
+
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-stage3-002")
+                .setSearchMetadata(sm)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostSemanticGraph(doc))
+                .as("a centroid SPR without centroid_metadata must fail the post-graph assertion")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("centroid_metadata");
+    }
+
+    @Test
+    void invalidPostGraphDocFails_centroidZeroSourceVectorCount() {
+        // Centroid SPR with centroid_metadata set but source_vector_count=0.
+        SemanticProcessingResult badCentroid = validCentroidSpr(
+                "body",
+                "document_centroid",
+                "minilm",
+                "sha256b64url-abc123",
+                GranularityLevel.GRANULARITY_LEVEL_DOCUMENT,
+                0, // must be strictly positive
+                4);
+
+        SemanticProcessingResult stage2Spr = validStage2Spr(
+                "stage2:docHash123:body:sentence_v1:minilm",
+                "body",
+                "sentence_v1",
+                "minilm",
+                "sha256b64url-abc123",
+                4);
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(badCentroid)
+                .addSemanticResults(stage2Spr)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .setVectorSetDirectives(directivesAdvertising("body", "minilm"))
+                .build();
+
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-stage3-003")
+                .setSearchMetadata(sm)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostSemanticGraph(doc))
+                .as("a centroid SPR with source_vector_count=0 must fail the post-graph assertion")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("source_vector_count");
+    }
+
+    @Test
+    void invalidPostGraphDocFails_boundaryMissingSemanticConfigId() {
+        // Boundary SPR (chunk_config_id="semantic") with no semantic_config_id.
+        SemanticProcessingResult badBoundary = SemanticProcessingResult.newBuilder()
+                .setResultId("stage3:docHash123:body:semantic:minilm")
+                .setSourceFieldName("body")
+                .setChunkConfigId("semantic")
+                .setEmbeddingConfigId("minilm")
+                .setGranularity(GranularityLevel.GRANULARITY_LEVEL_SEMANTIC_CHUNK)
+                // deliberately NOT setting semantic_config_id
+                .addChunks(validStage2Chunk("semantic-0", "Boundary chunk", 0, 14, 4))
+                .putMetadata("directive_key", Value.newBuilder().setStringValue("sha256b64url-abc123").build())
+                .build();
+
+        SemanticProcessingResult stage2Spr = validStage2Spr(
+                "stage2:docHash123:body:sentence_v1:minilm",
+                "body",
+                "sentence_v1",
+                "minilm",
+                "sha256b64url-abc123",
+                4);
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(badBoundary)
+                .addSemanticResults(stage2Spr)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .setVectorSetDirectives(directivesAdvertising("body", "minilm"))
+                .build();
+
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-stage3-004")
+                .setSearchMetadata(sm)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostSemanticGraph(doc))
+                .as("a semantic-boundary SPR with empty semantic_config_id must fail the post-graph assertion")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("semantic_config_id");
+    }
+
+    @Test
+    void invalidPostGraphDocFails_boundaryWrongGranularity() {
+        // Boundary SPR (chunk_config_id="semantic") with granularity=PARAGRAPH
+        // instead of the required SEMANTIC_CHUNK.
+        SemanticProcessingResult badBoundary = SemanticProcessingResult.newBuilder()
+                .setResultId("stage3:docHash123:body:semantic:minilm")
+                .setSourceFieldName("body")
+                .setChunkConfigId("semantic")
+                .setEmbeddingConfigId("minilm")
+                .setGranularity(GranularityLevel.GRANULARITY_LEVEL_PARAGRAPH) // wrong
+                .setSemanticConfigId("semantic_v1")
+                .addChunks(validStage2Chunk("semantic-0", "Boundary chunk", 0, 14, 4))
+                .putMetadata("directive_key", Value.newBuilder().setStringValue("sha256b64url-abc123").build())
+                .build();
+
+        SemanticProcessingResult stage2Spr = validStage2Spr(
+                "stage2:docHash123:body:sentence_v1:minilm",
+                "body",
+                "sentence_v1",
+                "minilm",
+                "sha256b64url-abc123",
+                4);
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(badBoundary)
+                .addSemanticResults(stage2Spr)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .setVectorSetDirectives(directivesAdvertising("body", "minilm"))
+                .build();
+
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-stage3-005")
+                .setSearchMetadata(sm)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostSemanticGraph(doc))
+                .as("a semantic-boundary SPR with granularity != SEMANTIC_CHUNK must fail the post-graph assertion")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("GRANULARITY_LEVEL_SEMANTIC_CHUNK");
+    }
+
+    @Test
+    void invalidPostGraphDocFails_boundaryExceedsMaxChunkCap() {
+        // Boundary SPR with chunkCount > MAX_SEMANTIC_CHUNKS_PER_DOC_DEFAULT (50).
+        int overCap = SemanticPipelineInvariants.MAX_SEMANTIC_CHUNKS_PER_DOC_DEFAULT + 1;
+        SemanticProcessingResult badBoundary = validBoundarySpr(
+                "body",
+                "minilm",
+                "sha256b64url-abc123",
+                "semantic_v1",
+                overCap,
+                4);
+
+        SemanticProcessingResult stage2Spr = validStage2Spr(
+                "stage2:docHash123:body:sentence_v1:minilm",
+                "body",
+                "sentence_v1",
+                "minilm",
+                "sha256b64url-abc123",
+                4);
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(badBoundary)
+                .addSemanticResults(stage2Spr)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .setVectorSetDirectives(directivesAdvertising("body", "minilm"))
+                .build();
+
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-stage3-006")
+                .setSearchMetadata(sm)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostSemanticGraph(doc))
+                .as("a semantic-boundary SPR whose chunk count exceeds the default cap (%d) must fail the post-graph assertion",
+                        SemanticPipelineInvariants.MAX_SEMANTIC_CHUNKS_PER_DOC_DEFAULT)
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("chunk count must be <=");
+    }
+
+    @Test
+    void invalidPostGraphDocFails_missingSearchMetadata() {
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-stage3-007")
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostSemanticGraph(doc))
+                .as("a PipeDoc with no search_metadata set must fail the post-graph assertion")
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("search_metadata must be set");
     }

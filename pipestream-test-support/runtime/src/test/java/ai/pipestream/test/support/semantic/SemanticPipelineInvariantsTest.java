@@ -223,12 +223,29 @@ class SemanticPipelineInvariantsTest {
                 .setSearchMetadata(sm)
                 .build();
 
-        assertThat(doc.getSearchMetadata().getSemanticResultsList()).hasSize(2);
+        assertThat(doc.getSearchMetadata().getSemanticResultsList())
+                .as("test fixture sanity: outOfOrderResults doc should contain exactly 2 SPRs (body before abstract)")
+                .hasSize(2);
 
         assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostChunker(doc))
                 .as("a PipeDoc whose semantic_results are not lex-sorted must fail the post-chunker assertion")
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("lex-sorted");
+    }
+
+    @Test
+    void invalidPostChunkerDocFails_missingSearchMetadata() {
+        // A bare PipeDoc with no search_metadata set at all must fail
+        // the very first guard in assertPostChunker.
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-007")
+                // deliberately NOT calling .setSearchMetadata(...)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostChunker(doc))
+                .as("a PipeDoc with no search_metadata set must fail the post-chunker assertion")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("search_metadata must be set");
     }
 
     @Test

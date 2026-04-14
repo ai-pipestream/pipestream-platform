@@ -64,6 +64,11 @@ public final class SemanticPipelineInvariants {
      *       {@code (source_field_name, chunk_config_id, embedding_config_id, result_id)}.</li>
      * </ol>
      *
+     * <p>Note: an empty {@code semantic_results[]} is valid per DESIGN.md §5.1 when the
+     * doc contained no source text matching any active directive. This method does not
+     * enforce non-empty {@code semantic_results[]}; that check is the caller's
+     * responsibility when it matters.
+     *
      * @param doc the PipeDoc to validate
      * @throws AssertionError if any invariant is violated
      */

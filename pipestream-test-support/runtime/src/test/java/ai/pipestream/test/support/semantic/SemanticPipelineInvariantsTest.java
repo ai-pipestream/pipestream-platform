@@ -1,12 +1,15 @@
 package ai.pipestream.test.support.semantic;
 
 import ai.pipestream.data.v1.ChunkEmbedding;
+import ai.pipestream.data.v1.NamedEmbedderConfig;
 import ai.pipestream.data.v1.NlpDocumentAnalysis;
 import ai.pipestream.data.v1.PipeDoc;
 import ai.pipestream.data.v1.SearchMetadata;
 import ai.pipestream.data.v1.SemanticChunk;
 import ai.pipestream.data.v1.SemanticProcessingResult;
 import ai.pipestream.data.v1.SourceFieldAnalytics;
+import ai.pipestream.data.v1.VectorDirective;
+import ai.pipestream.data.v1.VectorSetDirectives;
 import com.google.protobuf.Value;
 import org.junit.jupiter.api.Test;
 
@@ -82,6 +85,92 @@ class SemanticPipelineInvariantsTest {
         return SourceFieldAnalytics.newBuilder()
                 .setSourceField(sourceField)
                 .setChunkConfigId(chunkConfigId)
+                .build();
+    }
+
+    /**
+     * Builds a {@link SemanticChunk} with a populated float vector of the given
+     * dimension. The vector values are deterministic (sin-based) so tests are
+     * reproducible and diffable.
+     */
+    private static SemanticChunk validStage2Chunk(String chunkId, String text, int startOffset, int endOffset, int dim) {
+        ChunkEmbedding.Builder embedding = ChunkEmbedding.newBuilder()
+                .setTextContent(text)
+                .setOriginalCharStartOffset(startOffset)
+                .setOriginalCharEndOffset(endOffset);
+        for (int i = 0; i < dim; i++) {
+            embedding.addVector((float) Math.sin((double) i + text.hashCode()));
+        }
+        return SemanticChunk.newBuilder()
+                .setChunkId(chunkId)
+                .setChunkNumber(0)
+                .setEmbeddingInfo(embedding.build())
+                .build();
+    }
+
+    /**
+     * Builds a stage-2 {@link SemanticProcessingResult}: non-empty embedding_config_id,
+     * populated vector on every chunk, nlp_analysis preserved, directive_key preserved.
+     */
+    private static SemanticProcessingResult validStage2Spr(
+            String resultId,
+            String sourceFieldName,
+            String chunkConfigId,
+            String embeddingConfigId,
+            String directiveKey,
+            int vectorDimension) {
+        return SemanticProcessingResult.newBuilder()
+                .setResultId(resultId)
+                .setSourceFieldName(sourceFieldName)
+                .setChunkConfigId(chunkConfigId)
+                .setEmbeddingConfigId(embeddingConfigId)
+                .addChunks(validStage2Chunk("chunk-0", "Hello world, this is a test chunk.", 0, 34, vectorDimension))
+                .putMetadata("directive_key", Value.newBuilder().setStringValue(directiveKey).build())
+                .setNlpAnalysis(NlpDocumentAnalysis.getDefaultInstance())
+                .build();
+    }
+
+    /**
+     * Builds a {@link VectorSetDirectives} advertising the given embedder config ids
+     * on a single directive keyed on the given source label. Used so stage-2 SPRs
+     * can pass the directive-lookup invariant in post-embedder checks.
+     */
+    private static VectorSetDirectives directivesAdvertising(String sourceLabel, String... embedderConfigIds) {
+        VectorDirective.Builder directive = VectorDirective.newBuilder()
+                .setSourceLabel(sourceLabel)
+                .setCelSelector("document." + sourceLabel);
+        for (String id : embedderConfigIds) {
+            directive.addEmbedderConfigs(NamedEmbedderConfig.newBuilder().setConfigId(id).build());
+        }
+        return VectorSetDirectives.newBuilder()
+                .addDirectives(directive.build())
+                .build();
+    }
+
+    /**
+     * Builds a minimal valid stage-2 {@link PipeDoc} with a single SPR, a matching
+     * source_field_analytics entry, and a vector_set_directives block that advertises
+     * the SPR's embedding_config_id. Passes
+     * {@link SemanticPipelineInvariants#assertPostEmbedder(PipeDoc)}.
+     */
+    private static PipeDoc validPostEmbedderDoc() {
+        SemanticProcessingResult spr = validStage2Spr(
+                "stage2:docHash123:body:sentence_v1:minilm",
+                "body",
+                "sentence_v1",
+                "minilm",
+                "sha256b64url-abc123",
+                4);
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(spr)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .setVectorSetDirectives(directivesAdvertising("body", "minilm"))
+                .build();
+
+        return PipeDoc.newBuilder()
+                .setDocId("doc-stage2-001")
+                .setSearchMetadata(sm)
                 .build();
     }
 
@@ -302,5 +391,137 @@ class SemanticPipelineInvariantsTest {
                         + "pair must fail the post-chunker assertion")
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("source_field_analytics");
+    }
+
+    // ---------------------------------------------------------------------------
+    // assertPostEmbedder tests
+    // ---------------------------------------------------------------------------
+
+    @Test
+    void validPostEmbedderDocPasses() {
+        PipeDoc doc = validPostEmbedderDoc();
+
+        assertThatCode(() -> SemanticPipelineInvariants.assertPostEmbedder(doc))
+                .as("a PipeDoc that satisfies all post-embedder invariants should not throw any exception")
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void invalidPostEmbedderDocFails_emptyEmbeddingConfigId() {
+        // Build an SPR that still looks like a stage-1 placeholder — embedding_config_id
+        // is empty. Post-embedder must reject this.
+        SemanticProcessingResult placeholderSpr = SemanticProcessingResult.newBuilder()
+                .setResultId("stage1:docHash123:body:sentence_v1:")
+                .setSourceFieldName("body")
+                .setChunkConfigId("sentence_v1")
+                .setEmbeddingConfigId("") // still a placeholder — wrong at stage 2
+                .addChunks(validStage2Chunk("chunk-0", "Already embedded text", 0, 21, 4))
+                .putMetadata("directive_key", Value.newBuilder().setStringValue("sha256b64url-abc123").build())
+                .setNlpAnalysis(NlpDocumentAnalysis.getDefaultInstance())
+                .build();
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(placeholderSpr)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .setVectorSetDirectives(directivesAdvertising("body", "minilm"))
+                .build();
+
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-stage2-002")
+                .setSearchMetadata(sm)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostEmbedder(doc))
+                .as("a PipeDoc whose SPR still has empty embedding_config_id must fail the post-embedder assertion")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("embedding_config_id must be non-empty");
+    }
+
+    @Test
+    void invalidPostEmbedderDocFails_emptyVector() {
+        // Build an SPR whose chunk has non-empty embedding_config_id but an empty vector.
+        // Post-embedder must reject this because the embed step should have populated it.
+        ChunkEmbedding emptyVectorEmbedding = ChunkEmbedding.newBuilder()
+                .setTextContent("text without vector at stage 2")
+                // vector deliberately empty
+                .setOriginalCharStartOffset(0)
+                .setOriginalCharEndOffset(30)
+                .build();
+
+        SemanticChunk chunkWithoutVector = SemanticChunk.newBuilder()
+                .setChunkId("chunk-0")
+                .setChunkNumber(0)
+                .setEmbeddingInfo(emptyVectorEmbedding)
+                .build();
+
+        SemanticProcessingResult spr = SemanticProcessingResult.newBuilder()
+                .setResultId("stage2:docHash123:body:sentence_v1:minilm")
+                .setSourceFieldName("body")
+                .setChunkConfigId("sentence_v1")
+                .setEmbeddingConfigId("minilm")
+                .addChunks(chunkWithoutVector)
+                .putMetadata("directive_key", Value.newBuilder().setStringValue("sha256b64url-abc123").build())
+                .setNlpAnalysis(NlpDocumentAnalysis.getDefaultInstance())
+                .build();
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(spr)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .setVectorSetDirectives(directivesAdvertising("body", "minilm"))
+                .build();
+
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-stage2-003")
+                .setSearchMetadata(sm)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostEmbedder(doc))
+                .as("a PipeDoc whose stage-2 SPR chunk has an empty vector must fail the post-embedder assertion")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("vector must be populated");
+    }
+
+    @Test
+    void invalidPostEmbedderDocFails_embeddingConfigIdNotAdvertised() {
+        // Build an SPR with embedding_config_id="phantom" but the directives only
+        // advertise "minilm". Post-embedder must reject because the SPR references
+        // an embedder config that no VectorDirective advertises.
+        SemanticProcessingResult spr = validStage2Spr(
+                "stage2:docHash123:body:sentence_v1:phantom",
+                "body",
+                "sentence_v1",
+                "phantom",
+                "sha256b64url-abc123",
+                4);
+
+        SearchMetadata sm = SearchMetadata.newBuilder()
+                .addSemanticResults(spr)
+                .addSourceFieldAnalytics(validSourceFieldAnalytics("body", "sentence_v1"))
+                .setVectorSetDirectives(directivesAdvertising("body", "minilm")) // does NOT include "phantom"
+                .build();
+
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-stage2-004")
+                .setSearchMetadata(sm)
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostEmbedder(doc))
+                .as("a PipeDoc whose SPR embedding_config_id is not advertised in any VectorDirective "
+                        + "must fail the post-embedder assertion")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("must match a NamedEmbedderConfig");
+    }
+
+    @Test
+    void invalidPostEmbedderDocFails_missingSearchMetadata() {
+        // Bare PipeDoc with no search_metadata must fail the first guard.
+        PipeDoc doc = PipeDoc.newBuilder()
+                .setDocId("doc-stage2-005")
+                .build();
+
+        assertThatThrownBy(() -> SemanticPipelineInvariants.assertPostEmbedder(doc))
+                .as("a PipeDoc with no search_metadata set must fail the post-embedder assertion")
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("search_metadata must be set");
     }
 }

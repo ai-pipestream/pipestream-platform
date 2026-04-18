@@ -1,5 +1,12 @@
 version: 2
 
+registries:
+  github-packages:
+    type: maven-repository
+    url: https://maven.pkg.github.com/ai-pipestream/pipestream-platform
+    username: x-access-token
+    password: "${{secrets.DEPENDABOT_TOKEN}}"
+
 updates:
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -12,9 +19,10 @@ updates:
           - "*"
 
   # Single entry for the entire Gradle Monorepo
-  # Dependabot will automatically discover all subprojects linked in settings.gradle
   - package-ecosystem: "gradle"
     directory: "/"
+    registries:
+      - github-packages
     schedule:
       interval: "weekly"
     groups:

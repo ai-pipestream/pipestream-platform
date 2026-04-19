@@ -1,0 +1,403 @@
+version: "0.5"
+
+log_location: ${HOME}/.pipeline/dev/logs/process-compose.log
+log_level: info
+
+processes:
+
+  # Brings up the shared infra compose (Consul, Kafka, Apicurio, Postgres, ...).
+  # `dev-services up` wraps `docker compose up -d` — it returns once the stack
+  # is launched, so we mark is_daemon: true and gate readiness on an actual
+  # Consul-leader probe rather than the command's exit code.
+  dev-services:
+    command: dev-services up
+    is_daemon: true
+    shutdown:
+      command: dev-services down
+      timeout_seconds: 30
+    readiness_probe:
+      exec:
+        command: ${HOME}/.pipeline/dev/check-infra-healthy.sh
+      initial_delay_seconds: 5
+      period_seconds: 3
+      timeout_seconds: 10
+      success_threshold: 1
+      failure_threshold: 120
+    availability:
+      restart: "no"
+
+  platform-registration:
+    command: quarkus dev
+    working_dir: ${CORE_SERVICES_DIR}/platform-registration-service
+    depends_on:
+      dev-services:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${PLATFORM_REGISTRATION_HTTP_PORT:-18101}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/platform-registration.log
+
+  account-service:
+    command: quarkus dev
+    working_dir: ${CORE_SERVICES_DIR}/account-service
+    depends_on:
+      dev-services:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${ACCOUNT_SERVICE_HTTP_PORT:-18105}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/account-service.log
+
+  connector-admin:
+    command: quarkus dev
+    working_dir: ${CORE_SERVICES_DIR}/connector-admin
+    depends_on:
+      dev-services:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${CONNECTOR_ADMIN_HTTP_PORT:-18107}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/connector-admin.log
+
+  repository-service:
+    command: quarkus dev
+    working_dir: ${CORE_SERVICES_DIR}/repository-service
+    depends_on:
+      dev-services:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${REPOSITORY_SERVICE_HTTP_PORT:-18102}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/repository-service.log
+
+  opensearch-manager:
+    command: quarkus dev
+    working_dir: ${CORE_SERVICES_DIR}/pipestream-opensearch/opensearch-manager
+    depends_on:
+      dev-services:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${OPENSEARCH_MANAGER_HTTP_PORT:-18103}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/opensearch-manager.log
+
+  connector-intake-service:
+    command: quarkus dev
+    working_dir: ${CORE_SERVICES_DIR}/connector-intake-service
+    depends_on:
+      dev-services:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${CONNECTOR_INTAKE_HTTP_PORT:-18108}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/connector-intake-service.log
+
+  # ---- Engine tier: starts once the core business services are healthy ----
+
+  pipestream-engine:
+    command: quarkus dev
+    working_dir: ${CORE_SERVICES_DIR}/pipestream-engine
+    depends_on:
+      platform-registration:
+        condition: process_healthy
+      account-service:
+        condition: process_healthy
+      connector-admin:
+        condition: process_healthy
+      repository-service:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${PIPESTREAM_ENGINE_HTTP_PORT:-18100}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/pipestream-engine.log
+
+  pipestream-engine-kafka-sidecar:
+    command: quarkus dev
+    working_dir: ${CORE_SERVICES_DIR}/pipestream-engine-kafka-sidecar
+    depends_on:
+      pipestream-engine:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${PIPESTREAM_ENGINE_KAFKA_SIDECAR_HTTP_PORT:-18104}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/pipestream-engine-kafka-sidecar.log
+
+  # ---- Modules: each boots once platform-registration is healthy ----
+
+  module-echo:
+    command: quarkus dev
+    working_dir: ${MODULES_DIR}/module-echo
+    depends_on:
+      platform-registration:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${MODULE_ECHO_HTTP_PORT:-19100}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/module-echo.log
+
+  # NOTE: module-parser defines `%dev.quarkus.http.port=19101`, which overrides
+  # the base port 19001 in dev mode. The default here matches the dev port.
+  module-parser:
+    command: quarkus dev
+    working_dir: ${MODULES_DIR}/module-parser
+    depends_on:
+      platform-registration:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${MODULE_PARSER_HTTP_PORT:-19101}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/module-parser.log
+
+  module-chunker:
+    command: quarkus dev
+    working_dir: ${MODULES_DIR}/module-chunker
+    depends_on:
+      platform-registration:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${MODULE_CHUNKER_HTTP_PORT:-19102}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/module-chunker.log
+
+  # module-embedder uses a nested working_dir because the outer directory is a
+  # multi-project gradle build containing quarkus-djl-embeddings subprojects.
+  module-embedder:
+    command: quarkus dev
+    working_dir: ${MODULES_DIR}/module-embedder/module-embedder
+    depends_on:
+      platform-registration:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${MODULE_EMBEDDER_HTTP_PORT:-19103}
+        path: /q/health/ready
+      initial_delay_seconds: 20
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/module-embedder.log
+
+  module-semantic-graph:
+    command: quarkus dev
+    working_dir: ${MODULES_DIR}/module-semantic-graph
+    depends_on:
+      platform-registration:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${MODULE_SEMANTIC_GRAPH_HTTP_PORT:-19110}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/module-semantic-graph.log
+
+  module-opensearch-sink:
+    command: quarkus dev
+    working_dir: ${MODULES_DIR}/module-opensearch-sink
+    depends_on:
+      platform-registration:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${MODULE_OPENSEARCH_SINK_HTTP_PORT:-19104}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/module-opensearch-sink.log
+
+  # NOTE: module-testing-sidecar defines `%dev.quarkus.http.port=19140`, which
+  # overrides the base port 19040 in dev mode. The default here matches dev.
+  module-testing-sidecar:
+    command: quarkus dev
+    working_dir: ${MODULES_DIR}/module-testing-sidecar
+    depends_on:
+      platform-registration:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${MODULE_TESTING_SIDECAR_HTTP_PORT:-19140}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/module-testing-sidecar.log

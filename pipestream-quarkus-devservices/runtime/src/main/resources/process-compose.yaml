@@ -28,15 +28,14 @@ processes:
 
   # Starts a local djl-serving container sized for the detected host
   # (Linux+NVIDIA → GPU, Linux-CPU or other → CPU, macOS stubbed).
+  # No dependency on dev-services: djl-serving only needs Docker, and image
+  # pulls / model registration run in parallel with infra bring-up.
   dev-djl-serving:
     command: ${HOME}/.pipeline/dev/start-dev-djl.sh
     is_daemon: true
     shutdown:
       command: docker rm -f ${DJL_SERVING_CONTAINER_NAME:-pipeline-djl-serving}
       timeout_seconds: 30
-    depends_on:
-      dev-services:
-        condition: process_healthy
     readiness_probe:
       exec:
         command: ${HOME}/.pipeline/dev/check-djl-healthy.sh

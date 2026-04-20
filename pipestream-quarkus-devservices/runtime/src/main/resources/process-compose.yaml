@@ -28,7 +28,6 @@ processes:
 
   # Starts a local djl-serving container sized for the detected host
   # (Linux+NVIDIA → GPU, Linux-CPU or other → CPU, macOS stubbed).
-  # module-embedder depends on this being healthy before it launches.
   dev-djl-serving:
     command: ${HOME}/.pipeline/dev/start-dev-djl.sh
     is_daemon: true
@@ -50,6 +49,19 @@ processes:
       failure_threshold: 120
     availability:
       restart: "no"
+    log_location: ${HOME}/.pipeline/dev/logs/dev-djl-serving.log
+
+  # One-shot: register the embedder e2e test models against the running
+  # djl-serving. Exits 0 once all configured models are loaded.
+  # module-embedder waits for this via process_completed_successfully.
+  dev-djl-models:
+    command: ${HOME}/.pipeline/dev/register-dev-djl-models.sh
+    depends_on:
+      dev-djl-serving:
+        condition: process_healthy
+    availability:
+      restart: "no"
+    log_location: ${HOME}/.pipeline/dev/logs/dev-djl-models.log
 
   platform-registration:
     command: quarkus dev
@@ -329,15 +341,16 @@ processes:
 
   # module-embedder uses a nested working_dir because the outer directory is a
   # multi-project gradle build containing quarkus-djl-embeddings subprojects.
-  # Depends on dev-djl-serving so it has a backend to register models against.
+  # Waits for dev-djl-models to finish so the embedder has a backend AND the
+  # expected e2e models already loaded.
   module-embedder:
     command: quarkus dev
     working_dir: ${MODULES_DIR}/module-embedder/module-embedder
     depends_on:
       platform-registration:
         condition: process_healthy
-      dev-djl-serving:
-        condition: process_healthy
+      dev-djl-models:
+        condition: process_completed_successfully
     readiness_probe:
       http_get:
         host: localhost

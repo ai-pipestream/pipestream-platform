@@ -39,9 +39,7 @@ processes:
         condition: process_healthy
     readiness_probe:
       exec:
-        command: >
-          test "$(docker inspect --format '{{.State.Health.Status}}'
-          ${DJL_SERVING_CONTAINER_NAME:-pipeline-djl-serving} 2>/dev/null)" = "healthy"
+        command: ${HOME}/.pipeline/dev/check-djl-healthy.sh
       initial_delay_seconds: 10
       period_seconds: 5
       timeout_seconds: 10

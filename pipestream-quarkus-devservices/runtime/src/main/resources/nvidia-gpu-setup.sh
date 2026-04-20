@@ -1,86 +1,121 @@
 #!/usr/bin/env bash
-# nvidia-gpu-setup.sh — one-time host setup so Docker can pass NVIDIA GPUs
-# into containers via `--gpus all`.
+# nvidia-gpu-setup.sh — ensure Docker can pass NVIDIA GPUs into containers.
 #
-# Installs the NVIDIA Container Toolkit, generates the CDI spec, and restarts
-# the Docker daemon. Idempotent: re-running on a properly-configured host is
-# a no-op after the package check.
+# Runs diagnostics first. If the host already passes the GPU smoke test,
+# exits 0 without touching anything (and without needing root). Only when
+# there's actual work to do — installing nvidia-container-toolkit,
+# generating the CDI spec, restarting docker — does it escalate and
+# require root.
 #
-# Scope: Ubuntu / Debian (apt-based). Fedora / Arch / macOS are out of scope
-# here — add alternate branches or a separate script if you need them.
+# Scope: Ubuntu / Debian (apt-based). Fedora / Arch / macOS not supported
+# here; see NVIDIA's docs for those distros.
 #
 # Usage:
-#   sudo ./nvidia-gpu-setup.sh
+#   ./nvidia-gpu-setup.sh          # diagnose only
+#   sudo ./nvidia-gpu-setup.sh     # diagnose + install if needed
 
 set -eu
 
-# ---- 0. Root check ----------------------------------------------------------
-if [ "${EUID:-$(id -u)}" -ne 0 ]; then
-  echo "nvidia-gpu-setup: must run as root (use sudo)" >&2
-  exit 1
-fi
+log()  { echo "nvidia-gpu-setup: $*"; }
+err()  { echo "nvidia-gpu-setup: $*" >&2; }
+need_root() { [ "${EUID:-$(id -u)}" -eq 0 ]; }
 
-# ---- 1. Sanity: is this even an NVIDIA host? --------------------------------
+# ---- 1. Sanity: is this an NVIDIA host at all? ------------------------------
 if ! command -v nvidia-smi >/dev/null 2>&1; then
-  echo "nvidia-gpu-setup: nvidia-smi not found on host." >&2
-  echo "nvidia-gpu-setup: install NVIDIA drivers first — this script only configures the container toolkit." >&2
+  err "nvidia-smi not found on host."
+  err "Install NVIDIA drivers first — this script only configures the container toolkit."
   exit 1
 fi
 
 if ! nvidia-smi >/dev/null 2>&1; then
-  echo "nvidia-gpu-setup: nvidia-smi is present but failed to run. Check driver install." >&2
+  err "nvidia-smi present but failed to run. Check driver install."
   exit 1
 fi
 
-# ---- 2. Distro check --------------------------------------------------------
+# ---- 2. Fast path: does docker already pass the GPU through? ----------------
+SMOKE_IMAGE="nvidia/cuda:12.6.0-base-ubuntu22.04"
+
+smoke_test() {
+  # Quiet pass/fail. Pulls the tiny base image on first run (~80MB).
+  docker run --rm --gpus all "$SMOKE_IMAGE" nvidia-smi -L >/dev/null 2>&1
+}
+
+log "checking whether the toolkit is already working ..."
+if smoke_test; then
+  log "GPU is already reachable from containers — nothing to do."
+  exit 0
+fi
+log "smoke test failed — investigating what needs fixing."
+
+# ---- 3. Figure out what's missing and whether we can fix it -----------------
+missing=()
+command -v nvidia-ctk >/dev/null 2>&1 || missing+=("nvidia-container-toolkit")
+[ -f /etc/cdi/nvidia.yaml ]          || missing+=("/etc/cdi/nvidia.yaml")
+
+if [ ${#missing[@]} -eq 0 ]; then
+  err "toolkit + CDI spec look present, but the GPU smoke test failed."
+  err "Try manually:  docker run --rm --gpus all $SMOKE_IMAGE nvidia-smi"
+  err "If that also fails, the docker daemon may need a restart:  sudo systemctl restart docker"
+  exit 1
+fi
+
+log "missing: ${missing[*]}"
+
+if ! need_root; then
+  err "fix requires root (installing packages / writing /etc/cdi / restarting docker)."
+  err "Re-run with sudo:"
+  err "  sudo $0"
+  exit 1
+fi
+
+# ---- 4. Distro check (only reached as root) ---------------------------------
 if ! command -v apt-get >/dev/null 2>&1; then
-  echo "nvidia-gpu-setup: only apt-based distros (Ubuntu / Debian) are supported here." >&2
-  echo "nvidia-gpu-setup: see https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html for RHEL/Fedora/Arch." >&2
+  err "only apt-based distros (Ubuntu / Debian) are supported here."
+  err "See https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html"
   exit 1
 fi
 
-# ---- 3. Add NVIDIA container-toolkit repo -----------------------------------
+# ---- 5. Add NVIDIA container-toolkit repo -----------------------------------
 KEYRING=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
 LIST=/etc/apt/sources.list.d/nvidia-container-toolkit.list
 
 if [ ! -f "$KEYRING" ]; then
-  echo "nvidia-gpu-setup: installing NVIDIA repo keyring ..."
+  log "installing NVIDIA repo keyring ..."
   curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
     | gpg --dearmor -o "$KEYRING"
 fi
 
 if [ ! -f "$LIST" ]; then
-  echo "nvidia-gpu-setup: writing APT source list ..."
-  # libnvidia-container publishes a generic 'stable' list file that works
-  # across supported Ubuntu/Debian releases.
+  log "writing APT source list ..."
   curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
     | sed "s#deb https://#deb [signed-by=${KEYRING}] https://#g" \
     > "$LIST"
 fi
 
-# ---- 4. Install the toolkit -------------------------------------------------
-echo "nvidia-gpu-setup: apt-get update + install nvidia-container-toolkit ..."
-apt-get update -qq
-apt-get install -y nvidia-container-toolkit
+# ---- 6. Install the toolkit (if missing) ------------------------------------
+if ! command -v nvidia-ctk >/dev/null 2>&1; then
+  log "apt-get update + install nvidia-container-toolkit ..."
+  apt-get update -qq
+  apt-get install -y nvidia-container-toolkit
+fi
 
-# ---- 5. Generate CDI spec ---------------------------------------------------
-# Docker 25+ looks up GPU devices via the Container Device Interface (CDI);
-# the toolkit generates a spec that enumerates each GPU + its device files.
-CDI_OUT=/etc/cdi/nvidia.yaml
-mkdir -p /etc/cdi
-echo "nvidia-gpu-setup: generating CDI spec at $CDI_OUT ..."
-nvidia-ctk cdi generate --output="$CDI_OUT"
+# ---- 7. Generate CDI spec (if missing) --------------------------------------
+if [ ! -f /etc/cdi/nvidia.yaml ]; then
+  log "generating CDI spec at /etc/cdi/nvidia.yaml ..."
+  mkdir -p /etc/cdi
+  nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+fi
 
-# ---- 6. Restart Docker ------------------------------------------------------
-echo "nvidia-gpu-setup: restarting docker ..."
+# ---- 8. Restart Docker so it reloads runtimes + CDI -------------------------
+log "restarting docker ..."
 systemctl restart docker
 
-# ---- 7. Smoke test ----------------------------------------------------------
-echo "nvidia-gpu-setup: verifying GPU access from a throwaway container ..."
-if docker run --rm --gpus all nvidia/cuda:12.6.0-base-ubuntu22.04 nvidia-smi -L >/dev/null 2>&1; then
-  echo "nvidia-gpu-setup: OK — containers can now see the GPU."
+# ---- 9. Smoke test again ----------------------------------------------------
+log "verifying GPU access ..."
+if smoke_test; then
+  log "OK — containers can now see the GPU."
 else
-  echo "nvidia-gpu-setup: smoke test FAILED. Investigate:" >&2
-  echo "  docker run --rm --gpus all nvidia/cuda:12.6.0-base-ubuntu22.04 nvidia-smi" >&2
+  err "smoke test STILL failing. Investigate:"
+  err "  docker run --rm --gpus all $SMOKE_IMAGE nvidia-smi"
   exit 1
 fi

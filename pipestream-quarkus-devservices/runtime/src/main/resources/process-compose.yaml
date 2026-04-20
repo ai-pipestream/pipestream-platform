@@ -414,6 +414,60 @@ processes:
       timeout_seconds: 30
     log_location: ${HOME}/.pipeline/dev/logs/module-opensearch-sink.log
 
+  # ---- Connectors: pull metadata from platform-registration on startup ----
+
+  # NOTE: jdbc-connector defines `%dev.quarkus.http.port=18121` (base port is
+  # 8081 driven by ${QUARKUS_HTTP_PORT}). The default here matches dev.
+  jdbc-connector:
+    command: quarkus dev
+    working_dir: ${CORE_SERVICES_DIR}/jdbc-connector
+    depends_on:
+      platform-registration:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${JDBC_CONNECTOR_HTTP_PORT:-18121}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/jdbc-connector.log
+
+  # NOTE: s3-connector defines `%dev.quarkus.http.port=18220`, which overrides
+  # the base port 18120 in dev mode. The default here matches dev.
+  s3-connector:
+    command: quarkus dev
+    working_dir: ${CORE_SERVICES_DIR}/s3-connector
+    depends_on:
+      platform-registration:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${S3_CONNECTOR_HTTP_PORT:-18220}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/s3-connector.log
+
   # NOTE: module-testing-sidecar defines `%dev.quarkus.http.port=19140`, which
   # overrides the base port 19040 in dev mode. The default here matches dev.
   module-testing-sidecar:

@@ -26,6 +26,31 @@ processes:
     availability:
       restart: "no"
 
+  # Starts a local djl-serving container sized for the detected host
+  # (Linux+NVIDIA → GPU, Linux-CPU or other → CPU, macOS stubbed).
+  # module-embedder depends on this being healthy before it launches.
+  dev-djl-serving:
+    command: ${HOME}/.pipeline/dev/start-dev-djl.sh
+    is_daemon: true
+    shutdown:
+      command: docker rm -f ${DJL_SERVING_CONTAINER_NAME:-pipeline-djl-serving}
+      timeout_seconds: 30
+    depends_on:
+      dev-services:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: >
+          test "$(docker inspect --format '{{.State.Health.Status}}'
+          ${DJL_SERVING_CONTAINER_NAME:-pipeline-djl-serving} 2>/dev/null)" = "healthy"
+      initial_delay_seconds: 10
+      period_seconds: 5
+      timeout_seconds: 10
+      success_threshold: 1
+      failure_threshold: 120
+    availability:
+      restart: "no"
+
   platform-registration:
     command: quarkus dev
     working_dir: ${CORE_SERVICES_DIR}/platform-registration-service
@@ -304,11 +329,14 @@ processes:
 
   # module-embedder uses a nested working_dir because the outer directory is a
   # multi-project gradle build containing quarkus-djl-embeddings subprojects.
+  # Depends on dev-djl-serving so it has a backend to register models against.
   module-embedder:
     command: quarkus dev
     working_dir: ${MODULES_DIR}/module-embedder/module-embedder
     depends_on:
       platform-registration:
+        condition: process_healthy
+      dev-djl-serving:
         condition: process_healthy
     readiness_probe:
       http_get:

@@ -6,11 +6,16 @@
 # Joins the shared pipeline bridge so other containers can reach djl-serving
 # by hostname; host-side apps reach it via localhost:${DJL_SERVING_HOST_PORT}.
 
-set -u
+set -eu
 
 CONTAINER_NAME="${DJL_SERVING_CONTAINER_NAME:-pipeline-djl-serving}"
 HOST_PORT="${DJL_SERVING_HOST_PORT:-8090}"
 NETWORK="${PIPELINE_NETWORK:-pipeline-shared-devservices_pipeline-test-network}"
+
+# DJL Serving does not publish a rolling `pytorch-gpu` tag — only versioned
+# ones (e.g. 0.36.0-pytorch-gpu). Pin a known-good release and let the user
+# override for upgrades.
+DJL_VERSION="${DJL_SERVING_VERSION:-0.36.0}"
 
 already_healthy() {
   [ "$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null)" = "healthy" ]
@@ -35,13 +40,13 @@ EXTRA_ARGS=()
 case "$OS" in
   Linux)
     if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
-      IMAGE="deepjavalibrary/djl-serving:latest-pytorch-gpu"
+      IMAGE="deepjavalibrary/djl-serving:${DJL_VERSION}-pytorch-gpu"
       EXTRA_ARGS+=(--gpus all)
       echo "djl-serving: detected Linux + NVIDIA GPU → $IMAGE"
     else
       # Intel integrated graphics → OpenVINO (deferred; see roadmap).
       # For now, fall through to CPU.
-      IMAGE="deepjavalibrary/djl-serving:latest"
+      IMAGE="deepjavalibrary/djl-serving:${DJL_VERSION}-cpu"
       echo "djl-serving: detected Linux, no NVIDIA GPU → CPU $IMAGE"
       echo "djl-serving: TODO: OpenVINO variant for Intel integrated graphics is not implemented yet"
     fi
@@ -60,7 +65,12 @@ case "$OS" in
 esac
 
 echo "djl-serving: pulling $IMAGE (first run may take a few minutes) ..."
-docker pull "$IMAGE" >/dev/null
+if ! docker pull "$IMAGE"; then
+  echo "djl-serving: docker pull failed for $IMAGE — aborting" >&2
+  echo "djl-serving: check the tag exists at https://hub.docker.com/r/deepjavalibrary/djl-serving/tags" >&2
+  echo "djl-serving: override the version with DJL_SERVING_VERSION=<version>" >&2
+  exit 1
+fi
 
 echo "djl-serving: starting $CONTAINER_NAME on localhost:$HOST_PORT"
 docker run -d \

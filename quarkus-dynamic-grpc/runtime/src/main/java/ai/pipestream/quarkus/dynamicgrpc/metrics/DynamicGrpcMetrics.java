@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -42,6 +43,14 @@ public class DynamicGrpcMetrics {
 
     private final AtomicInteger activeChannels = new AtomicInteger(0);
 
+    // Per-service Counter caches for hot-path methods. Avoids re-calling
+    // Counter.builder(...).register(registry) on every gRPC dispatch —
+    // Micrometer's internal registry lookup is lock-protected and can pin
+    // carrier threads under virtual-thread load.
+    private final ConcurrentHashMap<String, Counter> clientCreatedSuccessCounters = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Counter> cacheHitCounters = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Counter> cacheMissCounters = new ConcurrentHashMap<>();
+
     /**
      * Returns the MeterRegistry if available, or null if metrics are disabled.
      */
@@ -58,13 +67,14 @@ public class DynamicGrpcMetrics {
         MeterRegistry registry = getRegistry();
         if (registry == null) return;
 
-        Counter.builder(METRIC_PREFIX + ".client.created")
-                .tag("service", serviceName)
-                .tag("result", "success")
-                .tag("exception", "none")
-                .description("Number of gRPC clients successfully created")
-                .register(registry)
-                .increment();
+        clientCreatedSuccessCounters.computeIfAbsent(serviceName, name ->
+                Counter.builder(METRIC_PREFIX + ".client.created")
+                        .tag("service", name)
+                        .tag("result", "success")
+                        .tag("exception", "none")
+                        .description("Number of gRPC clients successfully created")
+                        .register(registry)
+        ).increment();
     }
 
     /**
@@ -133,11 +143,12 @@ public class DynamicGrpcMetrics {
         MeterRegistry registry = getRegistry();
         if (registry == null) return;
 
-        Counter.builder(METRIC_PREFIX + ".cache.hit")
-                .tag("service", serviceName)
-                .description("Number of channel cache hits")
-                .register(registry)
-                .increment();
+        cacheHitCounters.computeIfAbsent(serviceName, name ->
+                Counter.builder(METRIC_PREFIX + ".cache.hit")
+                        .tag("service", name)
+                        .description("Number of channel cache hits")
+                        .register(registry)
+        ).increment();
     }
 
     /**
@@ -149,11 +160,12 @@ public class DynamicGrpcMetrics {
         MeterRegistry registry = getRegistry();
         if (registry == null) return;
 
-        Counter.builder(METRIC_PREFIX + ".cache.miss")
-                .tag("service", serviceName)
-                .description("Number of channel cache misses")
-                .register(registry)
-                .increment();
+        cacheMissCounters.computeIfAbsent(serviceName, name ->
+                Counter.builder(METRIC_PREFIX + ".cache.miss")
+                        .tag("service", name)
+                        .description("Number of channel cache misses")
+                        .register(registry)
+        ).increment();
     }
 
     /**

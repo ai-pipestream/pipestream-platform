@@ -84,6 +84,33 @@ public class DynamicGrpcClientFactory implements GrpcClientFactory {
      * {@inheritDoc}
      */
     @Override
+    public <T> T getBlockingClient(String serviceName, Function<Channel, T> stubCreator) {
+        if (stubCreator == null) {
+            throw new DynamicGrpcException("Stub creator function must not be null");
+        }
+        // Resolve the channel synchronously. Virtual-thread callers tolerate
+        // the block; it pins only a carrier briefly during Stork resolution
+        // on first access (subsequent calls hit the Caffeine cache).
+        try {
+            Channel channel = getChannel(serviceName).await().indefinitely();
+            T stub = stubCreator.apply(channel);
+            metrics.recordClientCreationSuccess(serviceName);
+            return stub;
+        } catch (DynamicGrpcException e) {
+            metrics.recordClientCreationFailure(serviceName, e.getClass().getSimpleName());
+            throw e;
+        } catch (RuntimeException e) {
+            LOG.errorf(e, "Failed to create blocking stub for service: %s", serviceName);
+            metrics.recordException(e.getClass().getSimpleName(), serviceName, "stub_creation");
+            metrics.recordClientCreationFailure(serviceName, e.getClass().getSimpleName());
+            throw new DynamicGrpcException("Failed to create blocking gRPC stub for service: " + serviceName, e);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public Uni<Channel> getChannel(String serviceName) {
         // Validate service name
         if (serviceName == null) {

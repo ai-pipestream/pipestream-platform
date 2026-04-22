@@ -111,6 +111,34 @@ public class DynamicGrpcClientFactory implements GrpcClientFactory {
      * {@inheritDoc}
      */
     @Override
+    public <T> T getAsyncClient(String serviceName, Function<Channel, T> stubCreator) {
+        if (stubCreator == null) {
+            throw new DynamicGrpcException("Stub creator function must not be null");
+        }
+        // Same resolution path as getBlockingClient — the caller's stub type
+        // (blocking vs async vs future) is purely a function of the
+        // stubCreator reference. Channel acquisition is identical. Keeping
+        // a distinct method makes caller intent explicit at the call site.
+        try {
+            Channel channel = getChannel(serviceName).await().indefinitely();
+            T stub = stubCreator.apply(channel);
+            metrics.recordClientCreationSuccess(serviceName);
+            return stub;
+        } catch (DynamicGrpcException e) {
+            metrics.recordClientCreationFailure(serviceName, e.getClass().getSimpleName());
+            throw e;
+        } catch (RuntimeException e) {
+            LOG.errorf(e, "Failed to create async stub for service: %s", serviceName);
+            metrics.recordException(e.getClass().getSimpleName(), serviceName, "stub_creation");
+            metrics.recordClientCreationFailure(serviceName, e.getClass().getSimpleName());
+            throw new DynamicGrpcException("Failed to create async gRPC stub for service: " + serviceName, e);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public Uni<Channel> getChannel(String serviceName) {
         // Validate service name
         if (serviceName == null) {

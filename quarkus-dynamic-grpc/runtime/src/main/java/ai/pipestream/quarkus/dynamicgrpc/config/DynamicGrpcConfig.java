@@ -169,6 +169,35 @@ public interface DynamicGrpcConfig {
          */
         @WithDefault("15000")
         long deadlineMs();
+
+        /**
+         * Total attempts {@code StorkGrpcChannel} will make for a gRPC call before
+         * surfacing the error to the caller. Stork passes this to Mutiny's
+         * {@code .retry().atMost(n)}, which requires {@code n &ge; 1}.
+         * <p>
+         * Semantics: <b>1 = one call, no retries</b> (fail-fast). <b>2 = one retry
+         * allowed</b>. Using 0 is invalid — Mutiny throws
+         * {@code maxAttempts must be greater than zero}.
+         * <p>
+         * Default is <b>1</b>. Channel-level retries are hazardous in a round-robin
+         * pool: with {@link #channelsPerService()} &ge; 2, each delegate has its
+         * own retry budget, and a retry that collides with the {@link #deadlineMs()}
+         * window can cause silent duplicate delivery (retry lands as a fresh RPC
+         * while the original completes) or silent drops (retry succeeds but the
+         * original's response was already cancelled). Both failure modes bypass
+         * the caller's {@code catch} because Stork handles them internally.
+         * <p>
+         * Retries belong at the application layer where they can be paired with
+         * proper idempotency, DLQ, and metrics — not buried inside the channel
+         * pool. Observed 2026-04-22: setting this to 3 (the prior hardcoded
+         * default) caused a 1000-doc ECHO→ECHO→SIDECAR transport test to drop
+         * 10-12 docs/1000 with <b>zero</b> exceptions reaching the caller.
+         * Default 1 restores fail-fast semantics.
+         *
+         * @return total attempts per call (1 = no retry, minimum value)
+         */
+        @WithDefault("1")
+        int storkRetries();
     }
 
     /**

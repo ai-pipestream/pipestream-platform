@@ -426,7 +426,12 @@ public class ChannelManager {
 
             @Override
             public int retries() {
-                return 3;
+                // Configurable — default 0. Channel-layer retries inside a
+                // round-robin pool (N delegates × R retries) cause silent
+                // duplicate delivery or silent drops when Stork's deadline
+                // expires mid-flight. Retries belong in the application
+                // layer. See DynamicGrpcConfig.ChannelConfig#storkRetries.
+                return config.channel().storkRetries();
             }
 
             @Override

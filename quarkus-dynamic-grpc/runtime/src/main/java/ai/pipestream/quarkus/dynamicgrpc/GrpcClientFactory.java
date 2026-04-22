@@ -26,6 +26,23 @@ public interface GrpcClientFactory {
     <T extends MutinyStub> Uni<T> getClient(String serviceName, Function<Channel, T> stubCreator);
 
     /**
+     * Get a typed blocking stub using a method reference (zero reflection).
+     * <p>
+     * Intended for synchronous virtual-thread call sites that want blocking
+     * semantics without Mutiny types bleeding into their code. Stork service
+     * discovery + channel acquisition run internally; the caller thread
+     * blocks until the stub is ready. After this returns every RPC on the
+     * stub is a plain synchronous call — no {@link Uni} in the hot path.
+     *
+     * @param <T>         Generated gRPC blocking stub type
+     *                    (typically {@code io.grpc.stub.AbstractBlockingStub})
+     * @param serviceName The logical service name for discovery
+     * @param stubCreator Method reference like {@code MyServiceGrpc::newBlockingStub}
+     * @return The resolved blocking stub
+     */
+    <T> T getBlockingClient(String serviceName, Function<Channel, T> stubCreator);
+
+    /**
      * Get a raw Channel for advanced use cases.
      *
      * @param serviceName The logical service name for discovery

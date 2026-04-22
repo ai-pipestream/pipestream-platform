@@ -181,6 +181,36 @@ class RoundRobinChannelTest {
         }
     }
 
+    /**
+     * Two close() calls must produce exactly one close per delegate and per
+     * client. Vert.x clients log-or-throw on double-close, and there's no
+     * single owner of {@code RoundRobinChannel.close()} long-term: Caffeine's
+     * eviction listener fires once today, but any future explicit shutdown
+     * hook would race with eviction. Idempotency stops that race from
+     * surfacing as confusing errors at shutdown.
+     */
+    @Test
+    void close_isIdempotent() {
+        AtomicInteger[] closeCounts = new AtomicInteger[3];
+        Channel[] delegates = closeableChannels(3, closeCounts);
+        AtomicInteger[] clientCloses = new AtomicInteger[3];
+        GrpcClient[] clients = fakeGrpcClients(3, clientCloses);
+
+        RoundRobinChannel rr = new RoundRobinChannel(delegates, clients);
+        rr.close();
+        rr.close();
+        rr.close();
+
+        for (int i = 0; i < 3; i++) {
+            assertThat(closeCounts[i].get())
+                    .as("delegate %d closed exactly once across 3 close() calls", i)
+                    .isEqualTo(1);
+            assertThat(clientCloses[i].get())
+                    .as("grpcClient %d closed exactly once across 3 close() calls", i)
+                    .isEqualTo(1);
+        }
+    }
+
     @Test
     void authority_returnsFirstDelegateAuthority() {
         Channel[] delegates = new Channel[]{

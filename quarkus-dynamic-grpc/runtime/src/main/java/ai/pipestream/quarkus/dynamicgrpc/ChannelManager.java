@@ -31,7 +31,9 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -256,49 +258,94 @@ public class ChannelManager {
      * observed as intake's {@code uploadPipeDoc} 30s timeouts on the first crawl
      * after restart.
      */
+    /**
+     * One slot of a {@link RoundRobinChannel} pool: a {@link Channel} bound
+     * to the {@link GrpcClient} that backs its HTTP/2 connection pool. Both
+     * are closed together via {@link #closeSlot(Slot)} on cleanup or eviction.
+     */
+    private record Slot(Channel channel, GrpcClient grpcClient) {}
+
+    private static void closeSlot(Slot s) {
+        try {
+            if (s.channel() instanceof StorkGrpcChannel sgc) {
+                sgc.close();
+            }
+        } catch (Exception ignore) { /* best-effort cleanup */ }
+        try {
+            s.grpcClient().close();
+        } catch (Exception ignore) { /* best-effort cleanup */ }
+    }
+
     private Channel createChannelSync(String serviceName) {
-        // Per-service override via MP Config lookup. Prefer this over the
-        // @ConfigMapping Map<String,Integer> because service names with
-        // dashes (e.g. "opensearch-sink", "semantic-manager", "connector-admin")
-        // don't round-trip through @ConfigMapping Map keys cleanly under
-        // Quarkus 3.34 — direct property lookup always works.
+        // Per-service override resolution order:
+        //  1. @ConfigMapping Map<String,Integer> perService() — typed and
+        //     structured. Works for Stork keys without dashes (e.g. "embedder",
+        //     "engine", "repository").
+        //  2. Direct MP-Config property lookup at the same prefix — covers
+        //     service names containing dashes (e.g. "opensearch-sink",
+        //     "semantic-manager") that Quarkus 3.34's @ConfigMapping Map keys
+        //     mangle. Same property as #1, so the two cannot disagree.
         //
-        // The prefix MUST match DynamicGrpcConfig's @ConfigMapping prefix
-        // ("quarkus.dynamic-grpc"), otherwise the override is silently
-        // ignored and every service falls back to channelsPerService().
+        // Both paths share the canonical prefix "quarkus.dynamic-grpc" — the
+        // direct lookup must mirror DynamicGrpcConfig's @ConfigMapping prefix
+        // (locked by PerServiceOverridePrefixTest).
         int defaultSize = config.channel().channelsPerService();
+        Integer mapOverride = config.channel().perService().get(serviceName);
         int poolSize = Math.max(1,
-                ConfigProvider.getConfig()
-                        .getOptionalValue(PER_SERVICE_OVERRIDE_PREFIX + serviceName, Integer.class)
-                        .orElse(defaultSize));
-        @SuppressWarnings("unchecked")
-        java.util.concurrent.CompletableFuture<Object[]>[] slotFutures =
-                new java.util.concurrent.CompletableFuture[poolSize];
+                mapOverride != null
+                        ? mapOverride
+                        : ConfigProvider.getConfig()
+                                .getOptionalValue(PER_SERVICE_OVERRIDE_PREFIX + serviceName, Integer.class)
+                                .orElse(defaultSize));
+
+        // Pool-build cleanup contract:
+        //  - poolFailed flag is set BEFORE the cleanup loop runs, so any
+        //    slot that completes asynchronously after we've given up still
+        //    hits the whenComplete handler and gets closed.
+        //  - The inner try/catch around getChannel() closes the GrpcClient
+        //    if the Channel build throws — otherwise that orphan client
+        //    would never reach the Slot envelope and never get closed.
+        AtomicBoolean poolFailed = new AtomicBoolean(false);
+        List<CompletableFuture<Slot>> slotFutures = new ArrayList<>(poolSize);
         for (int i = 0; i < poolSize; i++) {
-            slotFutures[i] = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            CompletableFuture<Slot> f = CompletableFuture.supplyAsync(() -> {
                 GrpcClient gc = buildGrpcClient(serviceName);
-                Channel ch = getChannel(serviceName, gc);
-                return new Object[]{ch, gc};
-            }, executor);
+                try {
+                    Channel ch = getChannel(serviceName, gc);
+                    return new Slot(ch, gc);
+                } catch (Throwable t) {
+                    try { gc.close(); } catch (Exception ignore) { /* shutting down */ }
+                    throw t;
+                }
+            }, executor).whenComplete((slot, err) -> {
+                if (slot != null && poolFailed.get()) {
+                    closeSlot(slot);
+                }
+            });
+            slotFutures.add(f);
         }
+
         Channel[] delegates = new Channel[poolSize];
         GrpcClient[] grpcClients = new GrpcClient[poolSize];
         try {
+            // Single 30s budget across the whole pool — the parallel point of
+            // CompletableFuture.supplyAsync is wasted if we then serialise
+            // .get(30s, ...) per slot (10s + 30s + ... == late failure).
+            CompletableFuture.allOf(slotFutures.toArray(new CompletableFuture[0]))
+                    .get(30, TimeUnit.SECONDS);
             for (int i = 0; i < poolSize; i++) {
-                Object[] slot = slotFutures[i].get(30, TimeUnit.SECONDS);
-                delegates[i] = (Channel) slot[0];
-                grpcClients[i] = (GrpcClient) slot[1];
+                Slot s = slotFutures.get(i).getNow(null);
+                delegates[i] = s.channel();
+                grpcClients[i] = s.grpcClient();
             }
         } catch (Exception e) {
-            // Clean up anything that did build — we don't want to leak half-built pools
-            for (int i = 0; i < poolSize; i++) {
-                try {
-                    Object[] slot = slotFutures[i].getNow(null);
-                    if (slot != null) {
-                        if (slot[0] instanceof StorkGrpcChannel sgc) sgc.close();
-                        if (slot[1] instanceof GrpcClient gc) gc.close();
-                    }
-                } catch (Exception ignore) {}
+            poolFailed.set(true);
+            for (CompletableFuture<Slot> f : slotFutures) {
+                f.cancel(true);
+                Slot done = f.getNow(null);
+                if (done != null) {
+                    closeSlot(done);
+                }
             }
             throw new RuntimeException(
                     "Failed to build channel pool for service '" + serviceName

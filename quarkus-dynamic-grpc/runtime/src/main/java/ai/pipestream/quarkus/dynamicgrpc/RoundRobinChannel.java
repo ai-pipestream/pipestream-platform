@@ -8,6 +8,7 @@ import io.quarkus.grpc.runtime.stork.StorkGrpcChannel;
 import io.vertx.grpc.client.GrpcClient;
 import org.jboss.logging.Logger;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -38,6 +39,7 @@ final class RoundRobinChannel extends Channel implements AutoCloseable {
     private final Channel[] delegates;
     private final GrpcClient[] grpcClients;
     private final AtomicInteger counter = new AtomicInteger();
+    private final AtomicBoolean closed = new AtomicBoolean(false);
 
     RoundRobinChannel(Channel[] delegates, GrpcClient[] grpcClients) {
         if (delegates == null || delegates.length == 0) {
@@ -66,8 +68,18 @@ final class RoundRobinChannel extends Channel implements AutoCloseable {
         return delegates[0].authority();
     }
 
+    /**
+     * Closes every delegate channel and {@link GrpcClient}. Idempotent — the
+     * second and subsequent invocations are no-ops, because some underlying
+     * Vert.x clients log or throw on double-close, and the eviction listener
+     * is not the only path that can call {@code close()} (e.g. a future
+     * explicit shutdown hook).
+     */
     @Override
     public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
         for (Channel c : delegates) {
             try {
                 if (c instanceof StorkGrpcChannel sgc) {

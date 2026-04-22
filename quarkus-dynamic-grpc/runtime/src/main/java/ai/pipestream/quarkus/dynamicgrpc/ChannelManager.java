@@ -27,6 +27,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
 
 import java.time.Duration;
@@ -125,17 +126,15 @@ public class ChannelManager {
         };
         metrics.recordChannelEvicted(serviceName, evictionReason);
 
+        // Channel may be wrapped by ClientInterceptors (auth) — unwrap is not
+        // exposed on the Channel API, but the auth wrapper doesn't own any
+        // I/O resources; it just forwards newCall. The underlying pool /
+        // managed channel is what actually needs closing. For the auth-wrapped
+        // case we lost the pool reference, which is fine: the GC will clean up
+        // once this bean is unreachable. All other cases we close explicitly.
         if (shuttingDown.get()) {
             LOG.debugf("Application shutting down, initiating non-blocking channel shutdown for service '%s'", serviceName);
-            try {
-                if (channel instanceof ManagedChannel) {
-                    ((ManagedChannel) channel).shutdownNow();
-                } else if (channel instanceof StorkGrpcChannel) {
-                    ((StorkGrpcChannel) channel).close();
-                }
-            } catch (Exception e) {
-                LOG.tracef("Error during shutdown of channel for service %s: %s", serviceName, e.getMessage());
-            }
+            closeChannelQuietly(channel, serviceName);
             return;
         }
 
@@ -148,27 +147,33 @@ public class ChannelManager {
                     LOG.warnf("Channel for service %s did not terminate gracefully, forcing shutdown", serviceName);
                     mc.shutdownNow();
                 }
-            } else if (channel instanceof StorkGrpcChannel) {
-                ((StorkGrpcChannel) channel).close();
+            } else if (channel instanceof RoundRobinChannel rrc) {
+                rrc.close();
+            } else if (channel instanceof StorkGrpcChannel sgc) {
+                sgc.close();
             }
             LOG.debugf("Successfully shut down channel for service: %s", serviceName);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             LOG.errorf("Interrupted while shutting down channel for service %s", serviceName);
-            try {
-                ((ManagedChannel) channel).shutdownNow();
-            } catch (Exception ex) {
-                LOG.errorf(ex, "Error forcing shutdown of channel for service %s", serviceName);
-            }
+            closeChannelQuietly(channel, serviceName);
         } catch (Exception e) {
             LOG.errorf(e, "Error shutting down channel for service %s", serviceName);
-            try {
-                if (channel instanceof ManagedChannel) {
-                    ((ManagedChannel) channel).shutdownNow();
-                }
-            } catch (Exception ex) {
-                LOG.errorf(ex, "Error forcing shutdown of channel for service %s", serviceName);
+            closeChannelQuietly(channel, serviceName);
+        }
+    }
+
+    private void closeChannelQuietly(Channel channel, String serviceName) {
+        try {
+            if (channel instanceof ManagedChannel mc) {
+                mc.shutdownNow();
+            } else if (channel instanceof RoundRobinChannel rrc) {
+                rrc.close();
+            } else if (channel instanceof StorkGrpcChannel sgc) {
+                sgc.close();
             }
+        } catch (Exception e) {
+            LOG.tracef("Error during quiet shutdown of channel for service %s: %s", serviceName, e.getMessage());
         }
     }
 
@@ -226,15 +231,103 @@ public class ChannelManager {
     }
 
     /**
-     * Synchronously creates a gRPC channel for the given service.
+     * Synchronously creates a gRPC channel <i>pool</i> for the given service.
      * Called inside Caffeine's atomic loader — guaranteed single-threaded per key.
+     * <p>
+     * Returns a {@link RoundRobinChannel} that holds N delegate {@link StorkGrpcChannel}s
+     * (N = {@code config.channel().channelsPerService()}), each built on its own
+     * {@link GrpcClient}. Round-robined per {@code newCall} so concurrent gRPC
+     * calls spread over N independent connections on the receiving service
+     * rather than multiplexing on one.
+     * <p>
+     * Delegate construction runs in parallel across the injected {@code executor}
+     * so a pool of 8 costs ~1 Stork resolution wall-clock, not 8. Without this,
+     * the first caller who triggers channel creation for an N=8 pool pays 8× the
+     * serial Stork lookup cost while their gRPC request sits timing out —
+     * observed as intake's {@code uploadPipeDoc} 30s timeouts on the first crawl
+     * after restart.
      */
     private Channel createChannelSync(String serviceName) {
-        // Create HTTP client options for TLS configuration (Quarkus pattern)
+        // Per-service override via MP Config lookup. Prefer this over the
+        // @ConfigMapping Map<String,Integer> because service names with
+        // dashes (e.g. "opensearch-sink", "semantic-manager", "connector-admin")
+        // don't round-trip through @ConfigMapping Map keys cleanly under
+        // Quarkus 3.34 — direct property lookup always works.
+        int defaultSize = config.channel().channelsPerService();
+        int poolSize = Math.max(1,
+                ConfigProvider.getConfig()
+                        .getOptionalValue("pipestream.dynamic-grpc.channel.per-service." + serviceName, Integer.class)
+                        .orElse(defaultSize));
+        @SuppressWarnings("unchecked")
+        java.util.concurrent.CompletableFuture<Object[]>[] slotFutures =
+                new java.util.concurrent.CompletableFuture[poolSize];
+        for (int i = 0; i < poolSize; i++) {
+            slotFutures[i] = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                GrpcClient gc = buildGrpcClient(serviceName);
+                Channel ch = getChannel(serviceName, gc);
+                return new Object[]{ch, gc};
+            }, executor);
+        }
+        Channel[] delegates = new Channel[poolSize];
+        GrpcClient[] grpcClients = new GrpcClient[poolSize];
+        try {
+            for (int i = 0; i < poolSize; i++) {
+                Object[] slot = slotFutures[i].get(30, TimeUnit.SECONDS);
+                delegates[i] = (Channel) slot[0];
+                grpcClients[i] = (GrpcClient) slot[1];
+            }
+        } catch (Exception e) {
+            // Clean up anything that did build — we don't want to leak half-built pools
+            for (int i = 0; i < poolSize; i++) {
+                try {
+                    Object[] slot = slotFutures[i].getNow(null);
+                    if (slot != null) {
+                        if (slot[0] instanceof StorkGrpcChannel sgc) sgc.close();
+                        if (slot[1] instanceof GrpcClient gc) gc.close();
+                    }
+                } catch (Exception ignore) {}
+            }
+            throw new RuntimeException(
+                    "Failed to build channel pool for service '" + serviceName
+                            + "' (poolSize=" + poolSize + ")", e);
+        }
+        Channel pool = new RoundRobinChannel(delegates, grpcClients);
+
+        // Wrap channel with auth interceptor if auth is enabled — wrap the pool,
+        // not the delegates, so the interceptor runs once per call and then the
+        // round-robin fans the intercepted call across a delegate.
+        Channel created = config.auth().enabled()
+                ? ClientInterceptors.intercept(pool, authInterceptor)
+                : pool;
+
+        LOG.infof("Created RoundRobinChannel for %s (pool=%d, http2MaxPoolSize=%d, multiplexingLimit=%d)",
+                serviceName, poolSize,
+                config.channel().http2MaxPoolSize(),
+                config.channel().http2MultiplexingLimit());
+        metrics.recordChannelCreated(serviceName);
+
+        return created;
+    }
+
+    /** Builds a single {@link GrpcClient} for one slot of the round-robin pool. */
+    private GrpcClient buildGrpcClient(String serviceName) {
         HttpClientOptions httpOptions = new HttpClientOptions();
         httpOptions.setHttp2ClearTextUpgrade(false); // Recommended by Quarkus
 
-        // Configure TLS if enabled (using Quarkus's SSLConfigHelper - 1:1 with Quarkus code)
+        // Vert.x HTTP/2 defaults to a single connection per host; every stream
+        // multiplexes on it and the server side ends up with one event loop
+        // doing all the inbound framing. http2MaxPoolSize raises the ceiling
+        // on how many TCP connections the pool will open, and
+        // http2MultiplexingLimit forces Vert.x to actually open a new one
+        // once the current connection has that many concurrent streams.
+        // Without the multiplexing limit Vert.x keeps multiplexing onto
+        // connection #1 up to the server's max-concurrent-streams (2000) and
+        // the pool sits unused. Together with the outer N-channel round-robin
+        // this fans concurrent gRPC calls out across N event loops on the
+        // receiving service.
+        httpOptions.setHttp2MaxPoolSize(config.channel().http2MaxPoolSize());
+        httpOptions.setHttp2MultiplexingLimit(config.channel().http2MultiplexingLimit());
+
         if (tlsConfig.enabled()) {
             LOG.debugf("Configuring TLS for service: %s", serviceName);
             httpOptions.setSsl(true);
@@ -250,35 +343,13 @@ public class ChannelManager {
             SSLConfigHelper.configurePfxKeyCertOptions(httpOptions, tlsConfig.keyCertificateP12());
 
             httpOptions.setVerifyHost(tlsConfig.verifyHostname());
-
-            LOG.infof("TLS configured for service %s: trustAll=%s, verifyHostname=%s",
-                    serviceName, tlsConfig.trustAll(), tlsConfig.verifyHostname());
         }
 
-        // Create gRPC client options with HTTP options and message size limits
         GrpcClientOptions clientOptions = new GrpcClientOptions()
                 .setTransportOptions(httpOptions)
                 .setMaxMessageSize(config.channel().maxInboundMessageSize());
 
-        LOG.debugf("Creating gRPC client for %s with maxInbound=%d, maxOutbound=%d",
-                serviceName,
-                config.channel().maxInboundMessageSize(),
-                config.channel().maxOutboundMessageSize());
-
-        GrpcClient grpcClient = GrpcClient.client(vertx, clientOptions);
-
-        Channel created = getChannel(serviceName, grpcClient);
-
-        // Wrap channel with auth interceptor if auth is enabled
-        if (config.auth().enabled()) {
-            created = ClientInterceptors.intercept(created, authInterceptor);
-            LOG.debugf("Auth interceptor applied to channel for service: %s", serviceName);
-        }
-
-        LOG.debugf("Created StorkGrpcChannel for %s", serviceName);
-        metrics.recordChannelCreated(serviceName);
-
-        return created;
+        return GrpcClient.client(vertx, clientOptions);
     }
 
     private Channel getChannel(String serviceName, GrpcClient grpcClient) {

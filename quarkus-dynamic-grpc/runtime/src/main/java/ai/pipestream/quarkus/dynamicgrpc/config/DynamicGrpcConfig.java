@@ -6,6 +6,7 @@ import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -88,6 +89,77 @@ public interface DynamicGrpcConfig {
          */
         @WithDefault("2147483647")
         int maxOutboundMessageSize();
+
+        /**
+         * HTTP/2 connections per remote host in the underlying Vert.x client.
+         * <p>
+         * Vert.x defaults to <b>one</b> HTTP/2 connection per host, so every gRPC
+         * stream multiplexes on a single TCP connection. That connection's
+         * event loop on the server side serialises all inbound framing work —
+         * under load we observed two server-side event loops pegged (one per
+         * caller connection) while the other 30+ loops sat idle.
+         * <p>
+         * Setting this &gt; 1 opens that many parallel HTTP/2 connections.
+         * Each connection is pinned to its own event loop on the receiver, so
+         * N connections fan out across N event loops. Concurrent gRPC calls
+         * get round-robined across the connections by Vert.x.
+         *
+         * @return number of HTTP/2 connections to open per destination host
+         */
+        @WithDefault("8")
+        int http2MaxPoolSize();
+
+        /**
+         * Multiplexing limit — the max concurrent streams Vert.x will multiplex
+         * onto a single HTTP/2 connection before it opens a new connection
+         * from the pool.
+         * <p>
+         * Must be strictly less than the server's advertised max-concurrent-streams
+         * (we set 2000), otherwise Vert.x treats one connection as infinite
+         * capacity and <b>never</b> opens connection #2 in the pool. Pair with
+         * {@link #http2MaxPoolSize()}: with pool=8 and limit=4, the client opens
+         * connection #2 as soon as #1 has 4 concurrent streams, up to 8
+         * connections total.
+         * <p>
+         * The low limit is deliberate: each new connection lands on a fresh
+         * event loop on the receiving service, so a low multiplexing limit
+         * fans inbound work out fast. Was 64 — under real pipeline load we
+         * never got close, so the pool sat idle.
+         *
+         * @return max concurrent streams per HTTP/2 connection before pool grows
+         */
+        @WithDefault("4")
+        int http2MultiplexingLimit();
+
+        /**
+         * Default number of independent gRPC {@code Channel}s the manager
+         * holds per service. Requests are round-robined across these channels.
+         * Each channel has its own {@code GrpcClient} / HTTP client /
+         * connection pool — so effectively fans inbound work out across that
+         * many event loops on the receiving service.
+         * <p>
+         * Override per target service via
+         * {@code pipestream.dynamic-grpc.channel.per-service.<serviceName>=N}.
+         * For example, a hot-path embedder might be sized at 3, while a
+         * less-used account-manager stays at the default.
+         *
+         * @return number of parallel channels per service cache entry
+         */
+        @WithDefault("4")
+        int channelsPerService();
+
+        /**
+         * Per-service overrides for {@link #channelsPerService()}. Key is the
+         * Stork/Consul service name (e.g. {@code embedder}, {@code engine}),
+         * value is the desired channel count for that specific service.
+         * <p>
+         * Example configuration:
+         * <pre>
+         * pipestream.dynamic-grpc.channel.per-service.embedder=3
+         * pipestream.dynamic-grpc.channel.per-service.engine=8
+         * </pre>
+         */
+        Map<String, Integer> perService();
 
         /**
          * gRPC call deadline in milliseconds.

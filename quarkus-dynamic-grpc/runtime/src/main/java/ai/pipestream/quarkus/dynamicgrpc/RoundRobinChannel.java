@@ -8,7 +8,6 @@ import io.quarkus.grpc.runtime.stork.StorkGrpcChannel;
 import io.vertx.grpc.client.GrpcClient;
 import org.jboss.logging.Logger;
 
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**

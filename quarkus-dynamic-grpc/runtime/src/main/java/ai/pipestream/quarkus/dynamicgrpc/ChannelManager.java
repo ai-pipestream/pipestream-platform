@@ -57,6 +57,15 @@ public class ChannelManager {
 
     private static final Logger LOG = Logger.getLogger(ChannelManager.class);
 
+    /**
+     * MP-Config property prefix for per-service round-robin pool size overrides.
+     * Must mirror {@link DynamicGrpcConfig}'s {@code @ConfigMapping(prefix=...)}
+     * so direct lookups (needed for service names containing dashes that
+     * Quarkus 3.34's @ConfigMapping Map keys mangle) resolve from the same
+     * namespace as the structured config. Touch one, touch the other.
+     */
+    static final String PER_SERVICE_OVERRIDE_PREFIX = "quarkus.dynamic-grpc.channel.per-service.";
+
     @Inject
     Vertx vertx;
 
@@ -253,10 +262,14 @@ public class ChannelManager {
         // dashes (e.g. "opensearch-sink", "semantic-manager", "connector-admin")
         // don't round-trip through @ConfigMapping Map keys cleanly under
         // Quarkus 3.34 — direct property lookup always works.
+        //
+        // The prefix MUST match DynamicGrpcConfig's @ConfigMapping prefix
+        // ("quarkus.dynamic-grpc"), otherwise the override is silently
+        // ignored and every service falls back to channelsPerService().
         int defaultSize = config.channel().channelsPerService();
         int poolSize = Math.max(1,
                 ConfigProvider.getConfig()
-                        .getOptionalValue("pipestream.dynamic-grpc.channel.per-service." + serviceName, Integer.class)
+                        .getOptionalValue(PER_SERVICE_OVERRIDE_PREFIX + serviceName, Integer.class)
                         .orElse(defaultSize));
         @SuppressWarnings("unchecked")
         java.util.concurrent.CompletableFuture<Object[]>[] slotFutures =

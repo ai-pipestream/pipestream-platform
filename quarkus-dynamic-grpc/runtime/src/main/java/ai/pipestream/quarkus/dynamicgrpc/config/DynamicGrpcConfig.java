@@ -139,7 +139,7 @@ public interface DynamicGrpcConfig {
          * many event loops on the receiving service.
          * <p>
          * Override per target service via
-         * {@code pipestream.dynamic-grpc.channel.per-service.<serviceName>=N}.
+         * {@code quarkus.dynamic-grpc.channel.per-service.<serviceName>=N}.
          * For example, a hot-path embedder might be sized at 3, while a
          * less-used account-manager stays at the default.
          *
@@ -155,8 +155,8 @@ public interface DynamicGrpcConfig {
          * <p>
          * Example configuration:
          * <pre>
-         * pipestream.dynamic-grpc.channel.per-service.embedder=3
-         * pipestream.dynamic-grpc.channel.per-service.engine=8
+         * quarkus.dynamic-grpc.channel.per-service.embedder=3
+         * quarkus.dynamic-grpc.channel.per-service.engine=8
          * </pre>
          */
         Map<String, Integer> perService();

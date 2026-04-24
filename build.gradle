@@ -29,7 +29,7 @@ scmVersion {
 
 allprojects {
     group = 'ai.pipestream'
-    version = rootProject.scmVersion.version
+    version = project.findProperty('publishVersion') ?: rootProject.scmVersion.version
 }
 
 // Repositories for root project (needed for nmcp plugin's internal dependencies)

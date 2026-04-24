@@ -2,6 +2,7 @@ package ai.pipestream.server.http;
 
 import ai.pipestream.server.config.PipestreamServerConfig;
 import io.quarkus.vertx.http.HttpServerOptionsCustomizer;
+import io.vertx.core.http.Http2Settings;
 import io.vertx.core.http.HttpServerOptions;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -33,7 +34,18 @@ public class PipestreamHttpServerOptionsCustomizer implements HttpServerOptionsC
         }
 
         options.setHttp2ConnectionWindowSize(windowSize);
-        LOG.infof("Applied HTTP/2 connection window size (%d) to %s server (class=%s, capabilities=%s)",
+        // Advertise the same window to clients as the per-stream
+        // SETTINGS_INITIAL_WINDOW_SIZE. Without this, Vert.x defaults to
+        // 65535 bytes per stream — so client uploads (e.g. uploadPipeDoc
+        // with large PipeDocs) stall waiting for server WINDOW_UPDATEs
+        // even when the connection window is large. Pairs with the
+        // client-side setting in quarkus-dynamic-grpc's ChannelManager.
+        Http2Settings initialSettings = options.getInitialSettings() != null
+                ? options.getInitialSettings()
+                : new Http2Settings();
+        initialSettings.setInitialWindowSize(windowSize);
+        options.setInitialSettings(initialSettings);
+        LOG.infof("Applied HTTP/2 connection + stream window size (%d) to %s server (class=%s, capabilities=%s)",
                 windowSize, serverKind, normalizeClass(config.serverClass()), normalizeCapabilities(config.capabilities().orElse("")));
     }
 

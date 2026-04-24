@@ -163,6 +163,27 @@ public interface DynamicGrpcConfig {
          */
         @WithDefault("4")
         int http2MultiplexingLimit();
+
+        /**
+         * HTTP/2 flow-control window size, in bytes, applied to both the
+         * connection-level window and each stream's
+         * {@code SETTINGS_INITIAL_WINDOW_SIZE} advertised by the client.
+         * <p>
+         * HTTP/2's spec default is 65535 (64 KB). Under pipeline load with
+         * large PipeDoc payloads, 64 KB exhausts within milliseconds and the
+         * stream parks waiting for {@code WINDOW_UPDATE} frames from the
+         * peer. Pair this with the server-side
+         * {@code quarkus.grpc.server.flow-control-window} on the receiving
+         * service — mismatched windows are a common source of mysterious
+         * tail-latency hangs.
+         * <p>
+         * Default <b>100 MB</b> ({@code 104857600}) to match the typical
+         * server-side setting in this platform.
+         *
+         * @return HTTP/2 flow-control window in bytes
+         */
+        @WithDefault("104857600")
+        int flowControlWindow();
     }
 
     /**

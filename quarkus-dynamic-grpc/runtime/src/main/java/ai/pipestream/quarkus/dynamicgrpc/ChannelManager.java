@@ -231,6 +231,14 @@ public class ChannelManager {
         HttpClientOptions httpOptions = new HttpClientOptions();
         httpOptions.setHttp2ClearTextUpgrade(false);
 
+        // Without these, Vert.x keeps 1 HTTP/2 connection per host and
+        // multiplexes every gRPC stream onto it. Under pipeline load that
+        // one connection's flow-control window becomes the bottleneck
+        // (observed 2026-04-24: 1/100 uploadPipeDoc timed out at 30s,
+        // aborting the crawl). See DynamicGrpcConfig.http2MaxPoolSize.
+        httpOptions.setHttp2MaxPoolSize(config.channel().http2MaxPoolSize());
+        httpOptions.setHttp2MultiplexingLimit(config.channel().http2MultiplexingLimit());
+
         if (tlsConfig.enabled()) {
             LOG.debugf("Configuring TLS for service: %s", serviceName);
             httpOptions.setSsl(true);

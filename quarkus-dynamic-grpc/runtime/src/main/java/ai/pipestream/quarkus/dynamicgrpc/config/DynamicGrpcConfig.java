@@ -117,6 +117,52 @@ public interface DynamicGrpcConfig {
          */
         @WithDefault("1")
         int storkRetries();
+
+        /**
+         * Number of HTTP/2 connections the underlying Vert.x client keeps in
+         * its pool <i>per destination host</i>.
+         * <p>
+         * Vert.x defaults to <b>one</b> HTTP/2 connection per host. Under
+         * pipeline load — 100+ concurrent {@code uploadPipeDoc} streams into
+         * connector-intake or module dispatches from the engine — that one
+         * connection's flow-control window becomes a serialisation point:
+         * all streams share one event loop on the server side, and the 64 KB
+         * default stream window is quickly exhausted by large PipeDocs,
+         * leaving individual streams parked until {@code WINDOW_UPDATE} frames
+         * catch up. Observed 2026-04-24: single-connection default caused
+         * 1/100 intake uploads to time out at 30s, tripping the JDBC
+         * crawl's no-loss circuit breaker and aborting the whole run.
+         * <p>
+         * Default <b>8</b> — enough parallelism that each destination is
+         * backed by a real pool, small enough that a service talking to a
+         * dozen downstreams doesn't open hundreds of connections.
+         *
+         * @return HTTP/2 connections per host
+         */
+        @WithDefault("8")
+        int http2MaxPoolSize();
+
+        /**
+         * Max concurrent streams Vert.x will multiplex on a single HTTP/2
+         * connection before it opens another from the pool (up to
+         * {@link #http2MaxPoolSize()}).
+         * <p>
+         * Must be strictly less than the server's advertised
+         * {@code max-concurrent-streams}. Otherwise Vert.x treats one
+         * connection as having infinite capacity and never opens #2, #3, &hellip;
+         * Paired with {@link #http2MaxPoolSize()}: with pool=8 and limit=4,
+         * the second connection opens as soon as the first has 4 streams
+         * in flight, up to 8 connections total.
+         * <p>
+         * Default <b>4</b> — intentionally low. Each new TCP connection
+         * lands on a fresh event loop on the receiver, so a low multiplex
+         * limit fans inbound work out across multiple server loops quickly
+         * instead of piling everything onto one.
+         *
+         * @return stream multiplexing threshold per connection
+         */
+        @WithDefault("4")
+        int http2MultiplexingLimit();
     }
 
     /**

@@ -100,6 +100,15 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         applyIfMissing(context, values, "quarkus.grpc.server.max-outbound-message-size", "2147483647");
         applyIfMissing(context, values, "quarkus.grpc.server.flow-control-window", "104857600");
 
+        // HTTP/2 initial window size for the Vert.x HTTP server (REST
+        // endpoints). Distinct from quarkus.grpc.server.flow-control-window
+        // (which targets the separate Netty gRPC server). intake exposes
+        // multi-GB HTTP uploads that flow into repository; without bumping
+        // the HTTP/2 window from the 64KB spec default, those uploads
+        // stop-and-wait on every WINDOW_UPDATE round-trip. 100MB matches
+        // the gRPC-side window for symmetry.
+        applyIfMissing(context, values, "quarkus.http.initial-window-size", "104857600");
+
         // Per-service gRPC port = HTTP port + 10000.
         //
         // With the unified Vert.x gRPC server (the prior platform default,

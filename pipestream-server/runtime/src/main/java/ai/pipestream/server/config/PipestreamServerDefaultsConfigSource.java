@@ -100,6 +100,28 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         applyIfMissing(context, values, "quarkus.grpc.server.max-outbound-message-size", "2147483647");
         applyIfMissing(context, values, "quarkus.grpc.server.flow-control-window", "104857600");
 
+        // Per-service gRPC port = HTTP port + 10000.
+        //
+        // With the unified Vert.x gRPC server (the prior platform default,
+        // use-separate-server=false), gRPC piggy-backed on the HTTP port —
+        // every service was already unique because each service has a unique
+        // HTTP port. Flipping to use-separate-server=true (the migration to
+        // grpc-netty) means the gRPC server needs its own port, and Quarkus's
+        // built-in default (9000) collides whenever more than one service
+        // runs on the same host (process-compose, dev mode, test rigs,
+        // CI runners).
+        //
+        // Convention: gRPC = HTTP + 10000. Easy to reason about (HTTP=18105
+        // → gRPC=28105), preserves the per-service uniqueness the unified
+        // mode gave us for free, and leaves the 10000-port jump big enough
+        // that there's no overlap with the HTTP range. Services that need
+        // a different port can still set quarkus.grpc.server.port directly.
+        int httpPortForGrpcDerivation = resolveHttpPort(context);
+        if (httpPortForGrpcDerivation > 0 && httpPortForGrpcDerivation <= 55535) {
+            String derivedGrpcPort = String.valueOf(httpPortForGrpcDerivation + 10000);
+            applyIfMissing(context, values, "quarkus.grpc.server.port", derivedGrpcPort);
+        }
+
         // OpenAPI defaults
         applyIfMissing(context, values, "quarkus.swagger-ui.always-include", "true");
         applyIfMissing(context, values, "quarkus.smallrye-openapi.info-title", resolveOpenApiTitle(context));
@@ -321,10 +343,22 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         if (!separateServer) {
             return resolveHttpPort(context);
         }
-        return firstInt(
+        Optional<Integer> explicit = firstInt(
                 getOptional(context, "quarkus.grpc.server.test-port"),
-                getOptional(context, "quarkus.grpc.server.port"))
-                .orElse(9000);
+                getOptional(context, "quarkus.grpc.server.port"));
+        if (explicit.isPresent()) {
+            return explicit.get();
+        }
+        // Mirror the HTTP+10000 default applied in buildDefaults so that
+        // service registration computes the same gRPC port the server will
+        // actually bind to. Falls back to Quarkus's 9000 default only when
+        // we can't resolve an HTTP port either (e.g. running with a fully
+        // dynamic port assignment).
+        int httpPort = resolveHttpPort(context);
+        if (httpPort > 0 && httpPort <= 55535) {
+            return httpPort + 10000;
+        }
+        return 9000;
     }
 
     /**

@@ -44,6 +44,11 @@ services only configure ports and optional overrides.
     with 100MB `flow-control-window` and ~2GB max in/out message size to keep
     large-payload traffic off the broken unified-Vx path
     (see quarkusio/quarkus#51129)
+  - **gRPC port = HTTP port + 10000** by default. Every service has a unique
+    HTTP port, so derived gRPC ports are unique by construction (HTTP=18105 →
+    gRPC=28105). Avoids the multi-service collision on Quarkus's built-in
+    `quarkus.grpc.server.port=9000` default. Override via
+    `quarkus.grpc.server.port` if you need a different port.
   - health and reflection services enabled
 - Advertised and internal host selection:
   - environment variables win (`SERVICE_REGISTRATION_ADVERTISED_HOST`,

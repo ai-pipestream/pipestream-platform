@@ -241,23 +241,6 @@ public class ChannelManager {
                 .keepAliveTime(30, TimeUnit.SECONDS)
                 .keepAliveTimeout(10, TimeUnit.SECONDS);
 
-        // HTTP/2 connection pooling. Vert.x defaults to 1 connection per host
-        // with unlimited stream multiplexing — a serialisation point under
-        // pipeline load (observed 2026-04-24: 1/100 uploadPipeDoc timed out
-        // at 30s on a single overloaded connection).
-        httpOptions.setHttp2MaxPoolSize(config.channel().http2MaxPoolSize());
-        httpOptions.setHttp2MultiplexingLimit(config.channel().http2MultiplexingLimit());
-
-        // HTTP/2 flow control. The spec default of 65535 bytes is orders of
-        // magnitude below typical pipeline payload sizes; streams carrying
-        // PipeDocs exhaust it in one frame and park waiting for WINDOW_UPDATE.
-        // Set both the connection window and the client's advertised stream
-        // SETTINGS_INITIAL_WINDOW_SIZE to match the server-side setting
-        // (quarkus.grpc.server.flow-control-window, typically 100 MB).
-        int flowWindow = config.channel().flowControlWindow();
-        httpOptions.setHttp2ConnectionWindowSize(flowWindow);
-        httpOptions.setInitialSettings(new Http2Settings().setInitialWindowSize(flowWindow));
-
         if (tlsConfig.enabled()) {
             applyTls(builder, serviceName);
         } else {

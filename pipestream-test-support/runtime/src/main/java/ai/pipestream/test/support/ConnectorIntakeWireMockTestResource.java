@@ -86,6 +86,10 @@ public class ConnectorIntakeWireMockTestResource extends BaseWireMockTestResourc
         // Expose standard port in case needed for HTTP/Admin API
         config.put("wiremock.host", host);
         config.put("wiremock.port", standardPort);
+        // Expose the Direct gRPC port too — needed by tests that point
+        // Stork at the streaming-capable services on the Direct server
+        // (e.g. ConnectorIntakeService.uploadPipeDocStream).
+        config.put("wiremock.direct.port", directPort);
         // Ensure REST client always targets WireMock intake endpoint in tests using this resource.
         config.put("quarkus.rest-client.connector-intake.url", "http://" + host + ":" + standardPort);
 

@@ -12,25 +12,22 @@ import com.github.benmanes.caffeine.cache.RemovalCause;
 import io.grpc.Channel;
 import io.grpc.ClientInterceptors;
 import io.grpc.ManagedChannel;
-import io.quarkus.grpc.runtime.config.GrpcClientConfiguration;
-import io.quarkus.grpc.runtime.stork.StorkGrpcChannel;
-import io.quarkus.grpc.runtime.supports.SSLConfigHelper;
+import io.grpc.netty.NegotiationType;
+import io.grpc.netty.NettyChannelBuilder;
+import io.grpc.netty.GrpcSslContexts;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.stork.api.ServiceInstance;
-import io.vertx.core.Vertx;
-import io.vertx.core.http.HttpClientOptions;
-import io.vertx.grpc.client.GrpcClient;
-import io.vertx.grpc.client.GrpcClientOptions;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
+import javax.net.ssl.SSLException;
+import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -74,12 +71,6 @@ public class ChannelManager {
     private static final Logger LOG = Logger.getLogger(ChannelManager.class);
 
     @Inject
-    Vertx vertx;
-
-    @Inject
-    Executor executor;
-
-    @Inject
     DynamicGrpcMetrics metrics;
 
     @Inject
@@ -91,8 +82,13 @@ public class ChannelManager {
     @Inject
     AuthMetadataInterceptor authInterceptor;
 
-    /** Cached per-service channel + its backing {@link GrpcClient}. Closed together on eviction. */
-    private record Entry(Channel channel, GrpcClient grpcClient) {}
+    /**
+     * Cached per-service channel. The {@link ManagedChannel} owns its
+     * underlying Netty connection pool, so on eviction we just call
+     * {@link ManagedChannel#shutdownNow()} — no separate transport
+     * resource to close.
+     */
+    private record Entry(Channel channel, ManagedChannel managedChannel) {}
 
     private Cache<String, Entry> channelCache;
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
@@ -144,19 +140,20 @@ public class ChannelManager {
     }
 
     private void closeEntryQuietly(Entry entry, String serviceName) {
-        try {
-            if (entry.channel() instanceof ManagedChannel mc) {
-                mc.shutdownNow();
-            } else if (entry.channel() instanceof StorkGrpcChannel sgc) {
-                sgc.close();
-            }
-        } catch (Exception e) {
-            LOG.tracef("Error closing channel for service %s: %s", serviceName, e.getMessage());
+        ManagedChannel mc = entry.managedChannel();
+        if (mc == null) {
+            return;
         }
         try {
-            entry.grpcClient().close();
+            mc.shutdown();
+            if (!mc.awaitTermination(5, TimeUnit.SECONDS)) {
+                mc.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            mc.shutdownNow();
         } catch (Exception e) {
-            LOG.tracef("Error closing GrpcClient for service %s: %s", serviceName, e.getMessage());
+            LOG.tracef("Error closing channel for service %s: %s", serviceName, e.getMessage());
         }
     }
 
@@ -207,87 +204,109 @@ public class ChannelManager {
     }
 
     /**
-     * Builds one {@link StorkGrpcChannel} for {@code serviceName} plus its
-     * backing Vert.x {@link GrpcClient}. Returned as an {@link Entry} so the
-     * two close together on eviction. Called inside Caffeine's atomic loader.
+     * Builds one Netty-backed {@link ManagedChannel} for
+     * {@code serviceName} that uses {@link StorkNameResolverProvider} for
+     * service discovery. Returned wrapped in an {@link Entry} so the
+     * channel is shut down together with its cache eviction.
+     *
+     * <p>This intentionally bypasses the Vert.x gRPC client. The
+     * Vert.x-backed path (the previous {@code StorkGrpcChannel +
+     * GrpcClient}) silently dropped streams under direct-buffer pressure,
+     * masking the underlying {@link OutOfMemoryError} as
+     * {@code Status.INTERNAL "Half-closed without a request"}. The
+     * standard grpc-java/Netty client surfaces the same condition cleanly
+     * (RESOURCE_EXHAUSTED or a thrown OOM) and gives roughly 3× the
+     * throughput on PipeDoc-class concurrent payloads. See
+     * {@code LargePayloadConcurrencyTest} in the integration-tests
+     * module for the regression guard.
      */
     private Entry createEntry(String serviceName) {
-        GrpcClient grpcClient = buildGrpcClient(serviceName);
-        try {
-            Channel raw = new StorkGrpcChannel(grpcClient, serviceName, buildStorkConfig(), executor);
-            Channel finalChannel = config.auth().enabled()
-                    ? ClientInterceptors.intercept(raw, authInterceptor)
-                    : raw;
-            metrics.recordChannelCreated(serviceName);
-            LOG.infof("Created StorkGrpcChannel for %s", serviceName);
-            return new Entry(finalChannel, grpcClient);
-        } catch (RuntimeException e) {
-            try { grpcClient.close(); } catch (Exception ignore) { /* shutting down */ }
-            throw e;
-        }
-    }
-
-    private GrpcClient buildGrpcClient(String serviceName) {
-        HttpClientOptions httpOptions = new HttpClientOptions();
-        httpOptions.setHttp2ClearTextUpgrade(false);
+        NettyChannelBuilder builder = NettyChannelBuilder
+                .forTarget(StorkNameResolverProvider.SCHEME + ":///" + serviceName)
+                // STORK_RESOLVER_FACTORY is also registered globally via
+                // META-INF/services, but wiring it explicitly avoids any
+                // ServiceLoader visibility surprises in shaded/native builds.
+                .nameResolverFactory(STORK_RESOLVER_FACTORY)
+                // round_robin matches the rotation behavior the previous
+                // StorkGrpcChannel provided. Stork's own LB policies stay
+                // upstream of the resolver and can still filter instances.
+                .defaultLoadBalancingPolicy("round_robin")
+                .flowControlWindow(config.channel().flowControlWindow())
+                .maxInboundMessageSize(config.channel().maxInboundMessageSize())
+                // keep-alive only when there are pending calls; pinging an
+                // idle channel would race with HTTP/2 connection setup on
+                // freshly-resolved addresses (observed: FailureRecoveryTest
+                // testServiceCrashAndRestart hit "Connection refused" when
+                // keepAliveWithoutCalls=true raced first-RPC connect).
+                .keepAliveTime(30, TimeUnit.SECONDS)
+                .keepAliveTimeout(10, TimeUnit.SECONDS);
 
         if (tlsConfig.enabled()) {
-            LOG.debugf("Configuring TLS for service: %s", serviceName);
-            httpOptions.setSsl(true);
-            httpOptions.setUseAlpn(true);
-            httpOptions.setTrustAll(tlsConfig.trustAll());
-
-            SSLConfigHelper.configurePemTrustOptions(httpOptions, tlsConfig.trustCertificatePem());
-            SSLConfigHelper.configureJksTrustOptions(httpOptions, tlsConfig.trustCertificateJks());
-            SSLConfigHelper.configurePfxTrustOptions(httpOptions, tlsConfig.trustCertificateP12());
-
-            SSLConfigHelper.configurePemKeyCertOptions(httpOptions, tlsConfig.keyCertificatePem());
-            SSLConfigHelper.configureJksKeyCertOptions(httpOptions, tlsConfig.keyCertificateJks());
-            SSLConfigHelper.configurePfxKeyCertOptions(httpOptions, tlsConfig.keyCertificateP12());
-
-            httpOptions.setVerifyHost(tlsConfig.verifyHostname());
+            applyTls(builder, serviceName);
+        } else {
+            builder.negotiationType(NegotiationType.PLAINTEXT);
         }
 
-        GrpcClientOptions clientOptions = new GrpcClientOptions()
-                .setTransportOptions(httpOptions)
-                .setMaxMessageSize(config.channel().maxInboundMessageSize());
-
-        return GrpcClient.client(vertx, clientOptions);
+        ManagedChannel managed = builder.build();
+        Channel finalChannel = config.auth().enabled()
+                ? ClientInterceptors.intercept(managed, authInterceptor)
+                : managed;
+        metrics.recordChannelCreated(serviceName);
+        LOG.infof("Created Netty ManagedChannel for %s (target=%s:///%s, flowWindow=%d)",
+                serviceName, StorkNameResolverProvider.SCHEME, serviceName,
+                config.channel().flowControlWindow());
+        return new Entry(finalChannel, managed);
     }
 
-    private GrpcClientConfiguration.StorkConfig buildStorkConfig() {
-        return new GrpcClientConfiguration.StorkConfig() {
-            @Override
-            public int threads() {
-                return 10;
+    /**
+     * Configures TLS on a NettyChannelBuilder from the platform's
+     * {@link DynamicGrpcTlsAdapter}. Maps to the standard grpc-java
+     * {@link GrpcSslContexts} client builder:
+     * <ul>
+     *   <li>{@code trustAll} → {@code InsecureTrustManagerFactory}</li>
+     *   <li>{@code trustCertificatePem.certs} → first entry as the trust manager file</li>
+     *   <li>{@code keyCertificatePem.certs/keys} → first entry pair as client cert/key</li>
+     * </ul>
+     * JKS/PFX paths from the existing adapter are intentionally not
+     * wired — pipestream prod uses PEM for both trust and client certs;
+     * if that ever changes the Quarkus SSLConfigHelper-equivalent path
+     * is the place to add JKS/PFX support.
+     */
+    private void applyTls(NettyChannelBuilder builder, String serviceName) {
+        LOG.debugf("Configuring TLS for service: %s", serviceName);
+        try {
+            io.netty.handler.ssl.SslContextBuilder ssl = GrpcSslContexts.forClient();
+
+            if (tlsConfig.trustAll()) {
+                ssl.trustManager(io.netty.handler.ssl.util.InsecureTrustManagerFactory.INSTANCE);
+            } else {
+                tlsConfig.trustCertificatePem().certs()
+                        .filter(certs -> !certs.isEmpty())
+                        .ifPresent(certs -> ssl.trustManager(new File(certs.get(0))));
             }
 
-            @Override
-            public long deadline() {
-                return config.channel().deadlineMs();
+            var keyPem = tlsConfig.keyCertificatePem();
+            var keyCerts = keyPem.certs().orElse(List.of());
+            var keyKeys = keyPem.keys().orElse(List.of());
+            if (!keyCerts.isEmpty() && !keyKeys.isEmpty()) {
+                ssl.keyManager(new File(keyCerts.get(0)), new File(keyKeys.get(0)));
             }
 
-            @Override
-            public int retries() {
-                // Channel-level retries caused silent duplicate delivery and
-                // drops when the retry window raced the caller's deadline
-                // (observed 2026-04-22: retries=3 dropped 10-12/1000 with
-                // zero exceptions reaching the caller). Retries belong at
-                // the call site. Default 1 = fail-fast.
-                return config.channel().storkRetries();
-            }
+            builder.sslContext(ssl.build())
+                    .negotiationType(NegotiationType.TLS);
 
-            @Override
-            public long delay() {
-                return 60;
+            if (!tlsConfig.verifyHostname()) {
+                // Caller has explicitly opted out of hostname verification.
+                builder.overrideAuthority(serviceName);
             }
-
-            @Override
-            public long period() {
-                return 120;
-            }
-        };
+        } catch (SSLException e) {
+            throw new IllegalStateException(
+                    "Failed to build TLS context for dynamic-grpc service " + serviceName, e);
+        }
     }
+
+    private static final StorkNameResolverProvider STORK_RESOLVER_FACTORY =
+            new StorkNameResolverProvider();
 
     /**
      * Manually evicts a channel for a service from the cache.

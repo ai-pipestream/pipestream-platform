@@ -118,12 +118,21 @@ public class FailureRecoveryTest {
             .start();
         consulRegistration.registerService(serviceName, serviceName + "-1", "127.0.0.1", port);
 
-        // Verify recovery. awaitility is genuinely useful here: after the server
-        // restart, Stork needs to re-discover and the gRPC connection needs to
-        // re-establish — transient Mutiny TimeoutExceptions during polling are
-        // expected, so we tell awaitility to ignore that specific type.
+        // Verify recovery. awaitility is genuinely useful here: after the
+        // server restart, Stork needs to re-discover and grpc-java's channel
+        // state machine needs to move TRANSIENT_FAILURE → CONNECTING → READY
+        // against the new server. Both paths can throw transiently:
+        //   - Mutiny TimeoutException if the await window expires before
+        //     grpc-java reconnects.
+        //   - StatusRuntimeException(UNAVAILABLE) with cause "Connection
+        //     refused" while the channel is still in TRANSIENT_FAILURE — the
+        //     standard grpc-java surface for connect failures. The pre-Netty
+        //     migration Vx-backed client surfaced these as Mutiny timeouts;
+        //     the more-correct grpc-netty path surfaces them as gRPC status
+        //     exceptions, so we ignore both during the retry window.
         await().atMost(Duration.ofSeconds(10))
             .ignoreException(TimeoutException.class)
+            .ignoreException(io.grpc.StatusRuntimeException.class)
             .untilAsserted(() -> {
                 var recoveredClient = clientFactory.getClient(serviceName, MutinyGreeterGrpc::newMutinyStub)
                     .await().atMost(Duration.ofSeconds(1));

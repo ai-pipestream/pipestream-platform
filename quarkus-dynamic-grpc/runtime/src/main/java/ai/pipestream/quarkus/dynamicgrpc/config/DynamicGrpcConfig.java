@@ -90,6 +90,23 @@ public interface DynamicGrpcConfig {
         int maxOutboundMessageSize();
 
         /**
+         * HTTP/2 flow-control window size in bytes for each
+         * {@link io.grpc.netty.NettyChannelBuilder NettyChannelBuilder}-built
+         * channel. The HTTP/2 spec default of 65535 is orders of magnitude
+         * below typical pipeline payload sizes; streams carrying PipeDocs
+         * exhaust it in a single frame and stop-and-wait for WINDOW_UPDATE.
+         *
+         * <p>Default: 100&nbsp;MB. Matches the production-proven
+         * {@code quarkus.grpc.server.flow-control-window} setting on the
+         * separate Netty gRPC server side, so a single 5–50&nbsp;MB
+         * payload streams in one shot in both directions.
+         *
+         * @return the per-stream initial window size in bytes
+         */
+        @WithDefault("104857600")
+        int flowControlWindow();
+
+        /**
          * gRPC call deadline in milliseconds.
          * Default is 15 seconds. Override per-service via application.properties.
          *

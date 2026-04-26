@@ -73,13 +73,32 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         // Bind to all interfaces so Consul (in Docker) can reach the host service via 172.17.0.1
         applyIfMissing(context, values, "quarkus.http.host", "0.0.0.0");
 
-        // Prefer the shared HTTP server for gRPC unless explicitly overridden
-        applyIfMissing(context, values, "quarkus.grpc.server.use-separate-server", "false");
+        // Default to the SEPARATE Netty gRPC server, not the unified Vert.x one.
+        //
+        // The unified Vert.x gRPC server on Quarkus 3.34 has known throughput
+        // pathologies for large-payload + concurrent traffic (quarkusio/quarkus#51129):
+        // quarkus.http.initial-window-size does not propagate to per-stream
+        // HTTP/2 windows on the unified path, so any payload >64KB stop-and-waits.
+        // We measured ~10–15× slower than separate Netty for 5–50MB payloads, with
+        // concurrent throughput WORSE than sequential. See LargePayloadConcurrencyTest
+        // in quarkus-dynamic-grpc/integration-tests for the reproducer.
+        //
+        // Services that explicitly want unified mode (no use case in the platform
+        // today, but kept overridable) can still set use-separate-server=false in
+        // their own application.properties.
+        applyIfMissing(context, values, "quarkus.grpc.server.use-separate-server", "true");
         // gRPC defaults: health + reflection + large messages
         applyIfMissing(context, values, "quarkus.grpc.server.health.enabled", "true");
         applyIfMissing(context, values, "quarkus.grpc.server.grpc-health.enabled", "true");
         applyIfMissing(context, values, "quarkus.grpc.server.enable-reflection-service", "true");
         applyIfMissing(context, values, "quarkus.grpc.server.max-inbound-message-size", "2147483647");
+        // Match the production-proven connector-intake-service config: outbound
+        // limit lifted in lockstep with inbound, and HTTP/2 flow-control window
+        // bumped to 100MB so a 5–50MB PipeDoc streams in one shot rather than
+        // stop-and-waiting every 64KB. Without this default a typical PipeDoc
+        // upload is bandwidth-bottlenecked at ~7.5MB/s on localhost.
+        applyIfMissing(context, values, "quarkus.grpc.server.max-outbound-message-size", "2147483647");
+        applyIfMissing(context, values, "quarkus.grpc.server.flow-control-window", "104857600");
 
         // OpenAPI defaults
         applyIfMissing(context, values, "quarkus.swagger-ui.always-include", "true");
@@ -279,10 +298,18 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         return "linux";
     }
 
+    /**
+     * IMPORTANT: this is called from {@code buildDefaults()} BEFORE the
+     * {@code values} map (which holds {@code use-separate-server=true}) has
+     * been published as a config source. Reading via {@code getOptional}
+     * here only sees OTHER sources, not our pending defaults. Defaulting
+     * to the same value we just wrote ({@code true}) keeps the registration
+     * port consistent with the gRPC server we'll actually start. If a
+     * caller has explicitly set {@code use-separate-server=false} in their
+     * own properties, that wins and we register on the HTTP port.
+     */
     private Integer resolveRegistrationPort(ConfigSourceContext context) {
-        boolean separateServer = getOptional(context, "quarkus.grpc.server.use-separate-server")
-                .map(Boolean::parseBoolean)
-                .orElse(false);
+        boolean separateServer = resolveSeparateServerDefault(context);
         if (separateServer) {
             return resolveGrpcPort(context);
         }
@@ -290,9 +317,7 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
     }
 
     private int resolveGrpcPort(ConfigSourceContext context) {
-        boolean separateServer = getOptional(context, "quarkus.grpc.server.use-separate-server")
-                .map(Boolean::parseBoolean)
-                .orElse(false);
+        boolean separateServer = resolveSeparateServerDefault(context);
         if (!separateServer) {
             return resolveHttpPort(context);
         }
@@ -300,6 +325,19 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
                 getOptional(context, "quarkus.grpc.server.test-port"),
                 getOptional(context, "quarkus.grpc.server.port"))
                 .orElse(9000);
+    }
+
+    /**
+     * Reads {@code quarkus.grpc.server.use-separate-server} from upstream
+     * sources, falling back to the platform default ({@code true}) so build-
+     * time consumers in this same source see the value we publish below.
+     * Keep the fallback here in lockstep with the {@code applyIfMissing}
+     * call in {@link #buildDefaults}.
+     */
+    private boolean resolveSeparateServerDefault(ConfigSourceContext context) {
+        return getOptional(context, "quarkus.grpc.server.use-separate-server")
+                .map(Boolean::parseBoolean)
+                .orElse(true);
     }
 
     private int resolveHttpPort(ConfigSourceContext context) {

@@ -40,7 +40,10 @@ services only configure ports and optional overrides.
   - base path: `quarkus.http.root-path`
   - health path: `/q/health/live` when registration is required, using `quarkus.http.non-application-root-path`
 - gRPC registration:
-  - shared server by default (`quarkus.grpc.server.use-separate-server=false`)
+  - separate Netty server by default (`quarkus.grpc.server.use-separate-server=true`),
+    with 100MB `flow-control-window` and ~2GB max in/out message size to keep
+    large-payload traffic off the broken unified-Vx path
+    (see quarkusio/quarkus#51129)
   - health and reflection services enabled
 - Advertised and internal host selection:
   - environment variables win (`SERVICE_REGISTRATION_ADVERTISED_HOST`,

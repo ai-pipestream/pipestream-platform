@@ -54,12 +54,27 @@ public class RunOnVertxContextInterceptor {
 
     private Uni<?> wrapUni(Uni<?> original) {
         Context safeContext = newSafeContext();
-        return original.runSubscriptionOn(runnable -> safeContext.runOnContext(v -> runnable.run()));
+        // Two things have to happen across this hop:
+        //   1. The runnable runs on a Vert.x event-loop thread so
+        //      Hibernate Reactive sees a current Vert.x context.
+        //   2. The runnable runs under io.grpc.Context.ROOT so any
+        //      outbound gRPC client call inside the chain captures ROOT
+        //      instead of the inbound call's Context (which may already
+        //      be cancelled by the time the Vert.x thread picks up).
+        // Without #2, SmallRye Context Propagation can restore the
+        // inbound Context onto the Vert.x thread, and a subsequent
+        // outbound stub call fails with
+        // 'CANCELLED: io.grpc.Context was cancelled without error' —
+        // the same bug pattern the engine had to address by dropping
+        // Mutiny on its outbound call sites.
+        return original.runSubscriptionOn(runnable -> safeContext.runOnContext(v ->
+                io.grpc.Context.ROOT.run(runnable)));
     }
 
     private Multi<?> wrapMulti(Multi<?> original) {
         Context safeContext = newSafeContext();
-        return original.runSubscriptionOn(runnable -> safeContext.runOnContext(v -> runnable.run()));
+        return original.runSubscriptionOn(runnable -> safeContext.runOnContext(v ->
+                io.grpc.Context.ROOT.run(runnable)));
     }
 
     private Context newSafeContext() {

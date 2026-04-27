@@ -29,6 +29,13 @@ dependencies {
     testImplementation libs.assertj.core
     testImplementation 'io.smallrye.reactive:mutiny'
     testImplementation 'io.quarkus:quarkus-vertx'
+    // Reproduces production: SmallRye Context Propagation captures the
+    // inbound io.grpc.Context across Mutiny operator boundaries, which
+    // is what makes the cancelled-Context bug surface on Vert.x event
+    // loop threads. Without this on the test classpath the bug is
+    // invisible.
+    testImplementation 'io.quarkus:quarkus-smallrye-context-propagation'
+    testImplementation 'io.quarkus:quarkus-grpc'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

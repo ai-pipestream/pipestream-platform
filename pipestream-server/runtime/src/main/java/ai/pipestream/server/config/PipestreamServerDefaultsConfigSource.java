@@ -384,7 +384,13 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
     }
 
     private int resolveHttpPort(ConfigSourceContext context) {
-        return firstInt(
+        // Skip values <= 0 when looking for a usable HTTP port.
+        // quarkus.http.test-port=0 is Quarkus's idiom for "pick a random
+        // ephemeral port at test time" — when it's set unconditionally
+        // (not under %test) it would otherwise short-circuit gRPC port
+        // derivation in dev/prod and fall back to Quarkus's default 9000.
+        // Same treatment for any property that resolves to 0 or negative.
+        return firstPositiveInt(
                 getOptional(context, "quarkus.http.test-port"),
                 getOptional(context, "quarkus.http.port"))
                 .orElse(0); // Use 0 to indicate unset/dynamic rather than 8080
@@ -399,6 +405,22 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         if (second.isPresent()) {
             try {
                 return Optional.of(Integer.parseInt(second.get()));
+            } catch (NumberFormatException ignored) {}
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Integer> firstPositiveInt(Optional<String> first, Optional<String> second) {
+        if (first.isPresent()) {
+            try {
+                int parsed = Integer.parseInt(first.get());
+                if (parsed > 0) return Optional.of(parsed);
+            } catch (NumberFormatException ignored) {}
+        }
+        if (second.isPresent()) {
+            try {
+                int parsed = Integer.parseInt(second.get());
+                if (parsed > 0) return Optional.of(parsed);
             } catch (NumberFormatException ignored) {}
         }
         return Optional.empty();

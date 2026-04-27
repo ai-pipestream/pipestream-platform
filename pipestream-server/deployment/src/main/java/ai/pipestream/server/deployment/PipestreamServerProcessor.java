@@ -9,6 +9,8 @@ import ai.pipestream.server.meta.BuildInfoProvider;
 import ai.pipestream.server.meta.BuildInfoResource;
 import ai.pipestream.server.security.AdminSecurityFilter;
 import ai.pipestream.server.util.ChunkSizeCalculator;
+import ai.pipestream.server.vertx.RunOnVertxContext;
+import ai.pipestream.server.vertx.RunOnVertxContextInterceptor;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -33,6 +35,13 @@ public class PipestreamServerProcessor {
                 .addBeanClasses(BuildInfoProvider.class)
                 .addBeanClasses(BuildInfoResource.class)
                 .addBeanClasses(AdminSecurityFilter.class)
+                // The CDI interceptor and its annotation binding need to
+                // be discoverable in consumer apps. Without this they are
+                // silently absent — services using @RunOnVertxContext on
+                // their gRPC impls would just hang on Hibernate Reactive
+                // because the interceptor never ran.
+                .addBeanClasses(RunOnVertxContext.class)
+                .addBeanClasses(RunOnVertxContextInterceptor.class)
                 .setUnremovable()
                 .build();
     }

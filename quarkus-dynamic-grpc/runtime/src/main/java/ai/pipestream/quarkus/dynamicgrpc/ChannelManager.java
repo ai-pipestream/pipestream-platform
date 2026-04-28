@@ -25,7 +25,6 @@ import org.jboss.logging.Logger;
 
 import javax.net.ssl.SSLException;
 import java.io.File;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -96,15 +95,23 @@ public class ChannelManager {
     /** Initializes the cache and registers the active-channel gauge. */
     @PostConstruct
     void init() {
+        // No expireAfterAccess: TTL eviction races in-flight RPCs. When a
+        // channel was scheduled for eviction and a new request landed on the
+        // same key, Caffeine could fire shutdown() on the live channel, and
+        // any streaming call mid-flight would surface as
+        // "CANCELLED: io.grpc.Context was cancelled without error" after the
+        // first message had already gone out (observed: JDBC IntakeUploader
+        // failing after exactly 100 rows, channel evicted 1 ms after creation).
+        // One ManagedChannel per service for the JVM lifetime is the right
+        // resource shape: gRPC's own connection pool inside ManagedChannel
+        // handles idle subchannels, and there are ~13 logical services here.
         this.channelCache = Caffeine.newBuilder()
-                .expireAfterAccess(Duration.ofMinutes(config.channel().idleTtlMinutes()))
                 .maximumSize(config.channel().maxSize())
                 .removalListener(this::onChannelRemoved)
                 .recordStats()
                 .build();
 
-        LOG.infof("Initialized ChannelManager with TTL=%d minutes, max cache size=%d, maxInboundMessageSize=%d, maxOutboundMessageSize=%d",
-                config.channel().idleTtlMinutes(),
+        LOG.infof("Initialized ChannelManager with no TTL (one channel per service for JVM lifetime), max cache size=%d, maxInboundMessageSize=%d, maxOutboundMessageSize=%d",
                 config.channel().maxSize(),
                 config.channel().maxInboundMessageSize(),
                 config.channel().maxOutboundMessageSize());

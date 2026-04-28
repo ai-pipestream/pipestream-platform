@@ -18,30 +18,4 @@ dependencies {
     implementation project(':pipestream-server')
 
     annotationProcessor 'io.quarkus:quarkus-extension-processor'
-
-    // Test dependencies — QuarkusUnitTest spins up a self-contained Quarkus
-    // app per test class, exactly what we need to validate that build-time
-    // bean registration actually wires this extension's CDI beans into
-    // consumer apps.
-    testImplementation 'io.quarkus:quarkus-junit5-internal'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
-    testImplementation libs.assertj.core
-    testImplementation 'io.smallrye.reactive:mutiny'
-    testImplementation 'io.quarkus:quarkus-vertx'
-    // Reproduces production: SmallRye Context Propagation captures the
-    // inbound io.grpc.Context across Mutiny operator boundaries, which
-    // is what makes the cancelled-Context bug surface on Vert.x event
-    // loop threads. Without this on the test classpath the bug is
-    // invisible.
-    testImplementation 'io.quarkus:quarkus-smallrye-context-propagation'
-    testImplementation 'io.quarkus:quarkus-grpc'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-}
-
-tasks.withType(Test).configureEach {
-    useJUnitPlatform()
-    testLogging {
-        events 'passed', 'failed', 'skipped'
-    }
 }

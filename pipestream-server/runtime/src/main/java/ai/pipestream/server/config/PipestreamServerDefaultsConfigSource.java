@@ -100,6 +100,18 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         applyIfMissing(context, values, "quarkus.grpc.server.max-outbound-message-size", "2147483647");
         applyIfMissing(context, values, "quarkus.grpc.server.flow-control-window", "104857600");
 
+        // HTTP/2 keep-alive ping permit window. Without this, every gRPC server
+        // in the platform inherits gRPC's default permit-keep-alive-time of
+        // 5 MINUTES, while our gRPC clients (both stock @GrpcClient and the
+        // dynamic-grpc ChannelManager) ping every 30 seconds. Mismatch causes
+        // the server to send GOAWAY with HTTP/2 ENHANCE_YOUR_CALM after the
+        // 2nd ping (~60 s in), tearing down the connection and any in-flight
+        // RPC. We saw this as exactly-one-doc loss in 1000-doc transport
+        // tests: the doc whose dispatch landed on the GOAWAY connection died
+        // with RESOURCE_EXHAUSTED ("too_many_pings"). 20s gives a safety
+        // margin under the 30s client interval.
+        applyIfMissing(context, values, "quarkus.grpc.server.netty.permit-keep-alive-time", "20s");
+
         // HTTP/2 initial window size for the Vert.x HTTP server (REST
         // endpoints). Distinct from quarkus.grpc.server.flow-control-window
         // (which targets the separate Netty gRPC server). intake exposes

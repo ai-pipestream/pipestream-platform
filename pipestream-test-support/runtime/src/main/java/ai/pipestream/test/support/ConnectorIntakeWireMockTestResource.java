@@ -7,6 +7,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -56,28 +57,42 @@ public class ConnectorIntakeWireMockTestResource extends BaseWireMockTestResourc
         // This overrides the Consul-based discovery in ServiceDiscoveryManager
         config.put("stork.repository.service-discovery.type", "static");
         config.put("stork.repository.service-discovery.address-list", repoServiceAddress);
+        config.put("quarkus.stork.repository.service-discovery.type", "static");
+        config.put("quarkus.stork.repository.service-discovery.address-list", repoServiceAddress);
 
         // Configure Stork for connector-admin (unary gRPC via standard port)
         config.put("stork.connector-admin.service-discovery.type", "static");
         config.put("stork.connector-admin.service-discovery.address-list", standardServiceAddress);
+        config.put("quarkus.stork.\"connector-admin\".service-discovery.type", "static");
+        config.put("quarkus.stork.\"connector-admin\".service-discovery.address-list", standardServiceAddress);
 
         // Configure Stork for engine (unary gRPC via standard port)
         config.put("stork.engine.service-discovery.type", "static");
         config.put("stork.engine.service-discovery.address-list", standardServiceAddress);
+        config.put("quarkus.stork.engine.service-discovery.type", "static");
+        config.put("quarkus.stork.engine.service-discovery.address-list", standardServiceAddress);
 
         // Configure Stork for account-manager (unary gRPC via standard port)
         config.put("stork.account-manager.service-discovery.type", "static");
         config.put("stork.account-manager.service-discovery.address-list", standardServiceAddress);
+        config.put("quarkus.stork.\"account-manager\".service-discovery.type", "static");
+        config.put("quarkus.stork.\"account-manager\".service-discovery.address-list", standardServiceAddress);
 
         // Legacy Quarkus gRPC client config (for any direct client usage)
         config.put("quarkus.grpc.clients.repository.host", host);
         config.put("quarkus.grpc.clients.repository.port", repoServicePort);
+        config.put("quarkus.grpc.clients.repository.test-port", repoServicePort);
         config.put("quarkus.grpc.clients.connector-admin.host", host);
         config.put("quarkus.grpc.clients.connector-admin.port", standardPort);
+        config.put("quarkus.grpc.clients.connector-admin.test-port", standardPort);
+        config.put("quarkus.grpc.clients.\"connector-admin\".test-port", standardPort);
         config.put("quarkus.grpc.clients.engine.host", host);
         config.put("quarkus.grpc.clients.engine.port", standardPort);
+        config.put("quarkus.grpc.clients.engine.test-port", standardPort);
         config.put("quarkus.grpc.clients.account-manager.host", host);
         config.put("quarkus.grpc.clients.account-manager.port", standardPort);
+        config.put("quarkus.grpc.clients.account-manager.test-port", standardPort);
+        config.put("quarkus.grpc.clients.\"account-manager\".test-port", standardPort);
 
         // Point Registration Service to Direct server (it handles streaming)
         config.put("pipestream.registration.registration-service.host", host);
@@ -117,10 +132,13 @@ public class ConnectorIntakeWireMockTestResource extends BaseWireMockTestResourc
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://" + host + ":" + port + "/__admin/mappings"))
                 .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(10))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         try {
-            HttpResponse<String> response = HttpClient.newHttpClient()
+            HttpResponse<String> response = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(5))
+                    .build()
                     .send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 400) {
                 throw new IllegalStateException("Failed to register default /uploads/raw stub: HTTP " + response.statusCode());

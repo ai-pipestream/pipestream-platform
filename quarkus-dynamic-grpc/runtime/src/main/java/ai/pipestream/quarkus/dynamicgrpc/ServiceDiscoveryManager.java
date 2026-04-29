@@ -17,10 +17,12 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Manages dynamic definition of SmallRye Stork services backed by Consul discovery
@@ -63,6 +65,24 @@ public class ServiceDiscoveryManager {
      */
     @ConfigProperty(name = "quarkus.dynamic-grpc.consul.refresh-period", defaultValue = "10s")
     String consulRefreshPeriod;
+
+    /**
+     * Per-call ceiling on {@link Service#getInstances()} waits.
+     * <p>
+     * Stork's underlying Vert.x Consul client has no HTTP request timeout; a
+     * momentarily unresponsive Consul agent yields a {@code Uni} that emits
+     * neither success nor failure, and every subscriber within Stork's
+     * memoize window blocks indefinitely on the same in-flight Uni. We bound
+     * the wait at this layer so a hang surfaces as a real Mutiny failure
+     * within the configured ceiling, lets the caller's retry classifier
+     * (UNAVAILABLE → retryable) kick in, and keeps the channel from sitting
+     * dead until a deadline several layers up fires.
+     * <p>
+     * Must be substantially less than any caller's gRPC deadline so the
+     * caller has time to retry on a fresh stream.
+     */
+    @ConfigProperty(name = "pipestream.stork.fetch-timeout-ms", defaultValue = "5000")
+    long storkFetchTimeoutMs;
 
     /**
      * Whether Consul health checks should be taken into account by discovery.
@@ -255,6 +275,17 @@ public class ServiceDiscoveryManager {
                 );
             }
             return service.getInstances()
+                    // Bound the wait. Stork's underlying Consul client has no
+                    // HTTP timeout; if Consul is momentarily unresponsive the
+                    // Uni never emits either success or failure, and any
+                    // caller (or grpc NameResolver subscribed in parallel)
+                    // would otherwise wait forever. ifNoItem().after(...)
+                    // converts the hang into a real Mutiny failure that
+                    // onFailure can normalise into a ServiceDiscoveryException.
+                    .ifNoItem().after(Duration.ofMillis(storkFetchTimeoutMs))
+                    .failWith(() -> new TimeoutException(
+                            "Stork resolution for '" + serviceName
+                                    + "' exceeded " + storkFetchTimeoutMs + "ms"))
                     .onItem().transform(instances -> {
                         if (instances.isEmpty()) {
                             LOG.warnf("No instances found for service: %s", serviceName);

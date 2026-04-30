@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# Default path to the compose file
+COMPOSE_FILE="${HOME}/.pipeline/compose-devservices.yml"
+
+# Uncomment the line below to override the compose file path
+# COMPOSE_FILE="./compose-devservices.yml"
+
+COMMAND=$1
+
+if [[ -z "$COMMAND" ]]; then
+    echo "Usage: $0 [up|down]"
+    exit 1
+fi
+
+# Determine if we should also use an override file
+# Docker Compose looks for compose-devservices.override.yml by default if we are in that dir,
+# but we are being explicit here.
+FILES="-f $COMPOSE_FILE"
+OVERRIDE_FILE="${COMPOSE_FILE%.yml}.override.yml"
+
+if [[ -f "$OVERRIDE_FILE" ]]; then
+    FILES="$FILES -f $OVERRIDE_FILE"
+fi
+
+case "$COMMAND" in
+    up)
+        echo "Starting dev services from $COMPOSE_FILE..."
+        docker compose $FILES up -d
+        ;;
+    down)
+        echo "Stopping dev services from $COMPOSE_FILE..."
+        docker compose $FILES down
+        ;;
+    *)
+        echo "Invalid command: $COMMAND. Use 'up' or 'down'."
+        exit 1
+        ;;
+esac

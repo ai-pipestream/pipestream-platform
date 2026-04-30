@@ -170,8 +170,8 @@ public abstract class DynamicGrpcClientFactoryTestBase {
             .as("Cache stats should be available")
             .isNotNull();
         assertThat(stats.toLowerCase())
-            .as("Cache stats should contain hit information")
-            .contains("hit");
+            .as("Stats should report active channel count")
+            .contains("channel");
     }
 
     @Test

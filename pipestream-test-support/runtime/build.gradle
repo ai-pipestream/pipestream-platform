@@ -29,6 +29,13 @@ dependencies {
     implementation 'io.quarkiverse.amazonservices:quarkus-amazon-s3'
     implementation 'software.amazon.awssdk:s3'
 
+    // Stork static-list provider — required because the WireMock test resources
+    // here inject `stork.*.service-discovery.type=static` config (account-manager,
+    // engine, connector-admin, repository, etc). Without this artifact on the
+    // classpath, Stork fails at boot with "No ServiceDiscoveryProvider for type
+    // 'static'" in any test that pulls in pipestream-test-support.
+    api libs.smallrye.stork.service.discovery.static.list
+
     annotationProcessor 'io.quarkus:quarkus-extension-processor'
 
     testImplementation 'io.quarkus:quarkus-junit5'

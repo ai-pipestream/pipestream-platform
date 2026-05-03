@@ -23,7 +23,7 @@ pipestreamProtos {
     // git-proto-workspace clones the repo directly (no buf export / no BSR auth needed)
     sourceMode = 'git-proto-workspace'
     gitRepo = "https://github.com/ai-pipestream/pipestream-protos.git"
-    gitRef = "main"
+    gitRef = "bom/engine-refactor-pr0"
 
     modules {
         register("registration")

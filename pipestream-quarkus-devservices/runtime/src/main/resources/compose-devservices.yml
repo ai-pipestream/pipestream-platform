@@ -29,7 +29,7 @@ services:
   # Host apps use localhost:8500 (port mapping). Containers use consul:8500 (bridge network).
   consul:
     container_name: pipeline-consul
-    image: hashicorp/consul:latest
+    image: hashicorp/consul:1.22.7
     hostname: consul
     networks:
       - pipeline-test-network
@@ -59,7 +59,7 @@ services:
   # PostgreSQL instance for services (primary database)
   postgres:
     container_name: pipeline-postgres
-    image: postgres:18-alpine
+    image: postgres:18.3-alpine
     networks:
       - pipeline-test-network
     command: ["postgres", "-c", "max_connections=2000"]
@@ -89,7 +89,7 @@ services:
   # Kafka in KRaft mode (proven configuration)
   kafka:
     container_name: pipeline-kafka
-    image: apache/kafka:latest
+    image: apache/kafka:4.2.0
     hostname: kafka
     networks:
       - pipeline-test-network
@@ -124,7 +124,7 @@ services:
   # Apicurio Registry v3
   apicurio-registry:
     container_name: pipeline-apicurio-registry
-    image: apicurio/apicurio-registry:3.1.7
+    image: apicurio/apicurio-registry:3.2.2
     networks:
       - pipeline-test-network
     ports:
@@ -153,7 +153,7 @@ services:
   # Apicurio Registry UI
   apicurio-registry-ui:
     container_name: pipeline-apicurio-registry-ui
-    image: apicurio/apicurio-registry-ui:3.1.7
+    image: apicurio/apicurio-registry-ui:3.2.2
     networks:
       - pipeline-test-network
     ports:
@@ -170,7 +170,7 @@ services:
   opensearch:
     container_name: pipeline-opensearch
     hostname: opensearch
-    image: opensearchproject/opensearch:3.5.0
+    image: opensearchproject/opensearch:3.6.0
     networks:
       - pipeline-test-network
     environment:
@@ -210,7 +210,7 @@ services:
 #  djl-serving:
 #    container_name: pipeline-djl-serving
 #    hostname: djl-serving
-#    image: deepjavalibrary/djl-serving:latest
+#    image: deepjavalibrary/djl-serving:0.36.0
 #    networks:
 #      - pipeline-test-network
 #    ports:
@@ -234,7 +234,7 @@ services:
 #
   opensearch-dashboards:
     container_name: pipeline-opensearch-dashboards
-    image: opensearchproject/opensearch-dashboards:3.5.0
+    image: opensearchproject/opensearch-dashboards:3.6.0
     networks:
       - pipeline-test-network
     ports:
@@ -252,7 +252,7 @@ services:
   # SeaweedFS for S3-compatible storage & high-performance Filer
   seaweedfs:
     container_name: pipeline-seaweedfs
-    image: chrislusf/seaweedfs:latest
+    image: chrislusf/seaweedfs:4.21.0
     networks:
       - pipeline-test-network
     ports:
@@ -293,7 +293,7 @@ services:
   # Redis for hot cache layer (repository-service document buffer)
   redis:
     container_name: pipeline-redis
-    image: redis:7-alpine
+    image: redis:8.6-alpine
     hostname: redis
     networks:
       - pipeline-test-network
@@ -313,7 +313,7 @@ services:
   # Kafka UI for monitoring and management
   kafka-ui:
     container_name: pipeline-kafka-ui
-    image: provectuslabs/kafka-ui:latest
+    image: provectuslabs/kafka-ui:0.7.2
     networks:
       - pipeline-test-network
     ports:
@@ -336,7 +336,7 @@ services:
   # Grafana LGTM (Grafana + OTel Collector + Prometheus + Tempo + Loki)
   lgtm:
     container_name: pipeline-lgtm
-    image: grafana/otel-lgtm:latest
+    image: grafana/otel-lgtm:v0.26.0
     networks:
       - pipeline-test-network
     ports:

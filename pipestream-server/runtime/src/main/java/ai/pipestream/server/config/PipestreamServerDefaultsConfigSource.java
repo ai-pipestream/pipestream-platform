@@ -114,14 +114,33 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         // margin under the 30s client interval.
         applyIfMissing(context, values, "quarkus.grpc.server.netty.permit-keep-alive-time", "20s");
 
-        // HTTP/2 initial window size for the Vert.x HTTP server (REST
-        // endpoints). Distinct from quarkus.grpc.server.flow-control-window
-        // (which targets the separate Netty gRPC server). intake exposes
-        // multi-GB HTTP uploads that flow into repository; without bumping
-        // the HTTP/2 window from the 64KB spec default, those uploads
-        // stop-and-wait on every WINDOW_UPDATE round-trip. 100MB matches
-        // the gRPC-side window for symmetry.
+        // HTTP/2 windows for the Vert.x HTTP server. There are TWO knobs and
+        // both matter under load — getting only one of them right is the
+        // surface that masquerades as "Vert.x grpc race / Half-closed":
+        //
+        // 1. initial-window-size  — PER-STREAM window. 64KB spec default;
+        //    bumped to 100MB so a single 5–50MB PipeDoc streams in one shot
+        //    rather than stop-and-waiting every 64KB.
+        //
+        // 2. http2-connection-window-size — CONNECTION-level window, shared
+        //    across every stream on the connection. Quarkus default is -1
+        //    which inherits the per-stream value (which the grpc-reference
+        //    docs note as "typically 64KB" before our bump above), so under
+        //    any real concurrency every stream is starved by a 64KB total
+        //    connection budget. THIS is what the Quarkus grpc-reference
+        //    explicitly calls out for unified-mode (use-separate-server=false):
+        //    https://quarkus.io/guides/grpc-reference#unified-server-mode
+        //    Symptom of leaving it at default: bursty gRPC traffic on a
+        //    shared channel triggers "INTERNAL: Half-closed without a
+        //    request" because the server-side message body never gets a
+        //    chance to land before the client moves on or the half-close
+        //    marker arrives — the connection-level WINDOW_UPDATE round-trips
+        //    serialize what should have been concurrent.
+        //
+        // Both apply uniformly to gRPC + REST in unified mode, where gRPC
+        // is just a special-cased HTTP/2 stream on the same Vert.x server.
         applyIfMissing(context, values, "quarkus.http.initial-window-size", "104857600");
+        applyIfMissing(context, values, "quarkus.http.http2-connection-window-size", "104857600");
 
         // No gRPC port derivation under unified server mode — gRPC piggy-backs
         // on the HTTP port, so every service is already unique because each

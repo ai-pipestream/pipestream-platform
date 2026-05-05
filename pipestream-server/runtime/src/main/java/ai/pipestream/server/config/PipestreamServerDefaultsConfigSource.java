@@ -73,20 +73,22 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         // Bind to all interfaces so Consul (in Docker) can reach the host service via 172.17.0.1
         applyIfMissing(context, values, "quarkus.http.host", "0.0.0.0");
 
-        // Default to the SEPARATE Netty gRPC server, not the unified Vert.x one.
+        // Default to the UNIFIED Vert.x server (gRPC piggy-backs on the HTTP port).
         //
-        // The unified Vert.x gRPC server on Quarkus 3.34 has known throughput
-        // pathologies for large-payload + concurrent traffic (quarkusio/quarkus#51129):
-        // quarkus.http.initial-window-size does not propagate to per-stream
-        // HTTP/2 windows on the unified path, so any payload >64KB stop-and-waits.
-        // We measured ~10–15× slower than separate Netty for 5–50MB payloads, with
-        // concurrent throughput WORSE than sequential. See LargePayloadConcurrencyTest
-        // in quarkus-dynamic-grpc/integration-tests for the reproducer.
+        // Reverted from use-separate-server=true (separate Netty) on 2026-05-04
+        // after a long debugging session for "INTERNAL: Half-closed without a
+        // request" failures showed the dispatch path is the SAME Vert.x bridge
+        // (GrpcServiceBridgeImpl + ReadStreamAdapter) in either mode — flipping
+        // the flag changed nothing about the symptom. Meanwhile the operational
+        // simplicity of one port per service is real and Quarkus 4.x will drop
+        // the separate path entirely.
         //
-        // Services that explicitly want unified mode (no use case in the platform
-        // today, but kept overridable) can still set use-separate-server=false in
-        // their own application.properties.
-        applyIfMissing(context, values, "quarkus.grpc.server.use-separate-server", "true");
+        // The earlier "10-15× slower" claim referenced quarkusio/quarkus#51129;
+        // that's been addressed and unified mode honors quarkus.http.initial-window-size
+        // (we set it to 100MB below) — the throughput regression that drove
+        // the original migration to separate mode does not apply with the
+        // window-size config in place.
+        applyIfMissing(context, values, "quarkus.grpc.server.use-separate-server", "false");
         // gRPC defaults: health + reflection + large messages
         applyIfMissing(context, values, "quarkus.grpc.server.health.enabled", "true");
         applyIfMissing(context, values, "quarkus.grpc.server.grpc-health.enabled", "true");
@@ -121,27 +123,15 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         // the gRPC-side window for symmetry.
         applyIfMissing(context, values, "quarkus.http.initial-window-size", "104857600");
 
-        // Per-service gRPC port = HTTP port + 10000.
-        //
-        // With the unified Vert.x gRPC server (the prior platform default,
-        // use-separate-server=false), gRPC piggy-backed on the HTTP port —
-        // every service was already unique because each service has a unique
-        // HTTP port. Flipping to use-separate-server=true (the migration to
-        // grpc-netty) means the gRPC server needs its own port, and Quarkus's
-        // built-in default (9000) collides whenever more than one service
-        // runs on the same host (process-compose, dev mode, test rigs,
-        // CI runners).
-        //
-        // Convention: gRPC = HTTP + 10000. Easy to reason about (HTTP=18105
-        // → gRPC=28105), preserves the per-service uniqueness the unified
-        // mode gave us for free, and leaves the 10000-port jump big enough
-        // that there's no overlap with the HTTP range. Services that need
-        // a different port can still set quarkus.grpc.server.port directly.
-        int httpPortForGrpcDerivation = resolveHttpPort(context);
-        if (httpPortForGrpcDerivation > 0 && httpPortForGrpcDerivation <= 55535) {
-            String derivedGrpcPort = String.valueOf(httpPortForGrpcDerivation + 10000);
-            applyIfMissing(context, values, "quarkus.grpc.server.port", derivedGrpcPort);
-        }
+        // No gRPC port derivation under unified server mode — gRPC piggy-backs
+        // on the HTTP port, so every service is already unique because each
+        // service has a unique HTTP port. The +10000 auto-derivation that
+        // existed when we ran on use-separate-server=true is unnecessary
+        // here and would be ignored anyway: in unified mode Quarkus uses
+        // quarkus.http.port for both HTTP and gRPC, and quarkus.grpc.server.port
+        // is silently ignored. Services that need to override (e.g. to expose
+        // gRPC on a separate port for legacy clients) can still set their own
+        // quarkus.grpc.server.port + use-separate-server=true locally.
 
         // OpenAPI defaults
         applyIfMissing(context, values, "quarkus.swagger-ui.always-include", "true");
@@ -384,15 +374,16 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
 
     /**
      * Reads {@code quarkus.grpc.server.use-separate-server} from upstream
-     * sources, falling back to the platform default ({@code true}) so build-
-     * time consumers in this same source see the value we publish below.
-     * Keep the fallback here in lockstep with the {@code applyIfMissing}
+     * sources, falling back to the platform default ({@code false} since
+     * 2026-05-04 — unified Vert.x server, gRPC piggy-backs on the HTTP port)
+     * so build-time consumers in this same source see the value we publish
+     * below. Keep the fallback here in lockstep with the {@code applyIfMissing}
      * call in {@link #buildDefaults}.
      */
     private boolean resolveSeparateServerDefault(ConfigSourceContext context) {
         return getOptional(context, "quarkus.grpc.server.use-separate-server")
                 .map(Boolean::parseBoolean)
-                .orElse(true);
+                .orElse(false);
     }
 
     private int resolveHttpPort(ConfigSourceContext context) {

@@ -70,6 +70,35 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         applyIfMissing(context, values, "%dev.pipestream.registration.required", "false");
         applyIfMissing(context, values, "%test.pipestream.registration.required", "false");
 
+        // Async console logging — wraps the default console handler with
+        // org.jboss.logmanager.handlers.AsyncHandler so log writes never block
+        // the calling thread on the underlying write() syscall.
+        //
+        // Without this, every LOG.* call goes through WriterHandler.doPublish,
+        // which holds a per-handler ReentrantLock around a synchronous
+        // FileOutputStream.writeBytes() to stdout. If stdout is a pipe (process-
+        // compose capture, container log driver, kubelet) and the reader falls
+        // behind, the kernel reports `wchan=anon_pipe_write` on whatever thread
+        // called LOG.* — including Vert.x event loops. That thread holds the
+        // WriterHandler lock indefinitely; every other log call in the JVM
+        // queues behind it; gRPC handlers that emit any log line on the
+        // response path stop responding; upstream callers retry, time out,
+        // and the service appears hung. Diagnosed 2026-05-10 in the
+        // repository-service: jstack showed event-loop-thread-15 parked in
+        // WriterHandler.safeFlush → FileOutputStream.writeBytes for 27s of
+        // CPU time, and three other event-loop threads parked on its lock.
+        //
+        // Async decouples LOG.* (cheap, returns immediately after enqueue)
+        // from the actual stdout write (done by a single drain thread). If
+        // the pipe blocks the drain thread, only the drain thread blocks —
+        // event loops keep moving. queue-length=4096 absorbs reasonable
+        // bursts; overflow=block keeps logs intact (drops nothing) at the
+        // cost of back-pressuring producers when the queue is genuinely
+        // full, which is the right trade-off for incident forensics.
+        applyIfMissing(context, values, "quarkus.log.console.async", "true");
+        applyIfMissing(context, values, "quarkus.log.console.async.queue-length", "4096");
+        applyIfMissing(context, values, "quarkus.log.console.async.overflow", "block");
+
         // Bind to all interfaces so Consul (in Docker) can reach the host service via 172.17.0.1
         applyIfMissing(context, values, "quarkus.http.host", "0.0.0.0");
 

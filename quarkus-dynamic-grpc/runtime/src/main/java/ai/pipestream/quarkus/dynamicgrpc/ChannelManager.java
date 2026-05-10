@@ -128,7 +128,18 @@ public class ChannelManager {
                 .flowControlWindow(config.channel().flowControlWindow())
                 .maxInboundMessageSize(config.channel().maxInboundMessageSize())
                 .keepAliveTime(30, TimeUnit.SECONDS)
-                .keepAliveTimeout(10, TimeUnit.SECONDS);
+                .keepAliveTimeout(10, TimeUnit.SECONDS)
+                // Send keepalive pings even when the channel has no active
+                // calls. Without this, gRPC only pings during in-flight RPCs,
+                // so a channel that goes idle between bursts of work (e.g.
+                // between test iterations, or while a downstream service is
+                // being restarted) will keep dead subchannels around. The
+                // first call after the idle window then races request-send
+                // against connection-teardown and surfaces as
+                // "INTERNAL: Half-closed without a request" on the client.
+                // Pinging while idle is cheap and lets dead subchannels be
+                // evicted before the next call lands on them.
+                .keepAliveWithoutCalls(true);
 
         if (tlsConfig.enabled()) {
             applyTls(builder, serviceName);

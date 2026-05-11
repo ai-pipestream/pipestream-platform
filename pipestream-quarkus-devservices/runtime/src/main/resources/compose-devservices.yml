@@ -290,7 +290,16 @@ services:
       retries: 5
       start_period: 5s    # Start checking almost immediately
 
-  # Redis for hot cache layer (repository-service document buffer)
+  # Redis: hot cache layer AND durable-queue substrate for pipestream:edge:*,
+  # pipestream:intake:ingress, pipestream:indexing:* streams.
+  #
+  # Queue use requires noeviction — allkeys-lru evicts entire stream keys
+  # under memory pressure, which manifested as silent doc loss (561 docs of
+  # a 600-doc burst vanished during a sink XADD storm at the previous 512MB
+  # cap). With noeviction, XADD fails loud when full instead of dropping
+  # data; that surfaces sizing problems as visible errors rather than
+  # missing docs. 8GB is sized for an order-of-magnitude burst headroom
+  # over observed peak load (~600MB during a 1000-doc crawl).
   redis:
     container_name: pipeline-redis
     image: redis:8.6-alpine
@@ -299,7 +308,7 @@ services:
       - pipeline-test-network
     ports:
       - "6379:6379"
-    command: ["redis-server", "--appendonly", "no", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    command: ["redis-server", "--appendonly", "no", "--maxmemory", "8gb", "--maxmemory-policy", "noeviction"]
     labels:
       quarkus-dev-service-redis: shared
       io.quarkus.devservices.compose.wait_for.logs: ".*Ready to accept connections.*"

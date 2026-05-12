@@ -66,7 +66,7 @@ processes:
     log_location: ${HOME}/.pipeline/dev/logs/dev-djl-models.log
 
   platform-registration:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/platform-registration.log" 2>&1'
+    command: quarkus dev
     working_dir: ${PLATFORM_REGISTRATION_DIR:-${CORE_SERVICES_DIR}/platform-registration-service}
     depends_on:
       dev-services:
@@ -87,10 +87,10 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/platform-registration.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/platform-registration.log
 
   account-service:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/account-service.log" 2>&1'
+    command: quarkus dev
     working_dir: ${ACCOUNT_SERVICE_DIR:-${CORE_SERVICES_DIR}/account-service}
     depends_on:
       dev-services:
@@ -111,10 +111,10 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/account-service.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/account-service.log
 
   connector-admin:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/connector-admin.log" 2>&1'
+    command: quarkus dev
     working_dir: ${CONNECTOR_ADMIN_DIR:-${CORE_SERVICES_DIR}/connector-admin}
     depends_on:
       dev-services:
@@ -135,10 +135,10 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/connector-admin.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/connector-admin.log
 
   repository-service:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/repository-service.log" 2>&1'
+    command: quarkus dev
     working_dir: ${REPOSITORY_SERVICE_DIR:-${CORE_SERVICES_DIR}/repository-service}
     depends_on:
       dev-services:
@@ -159,10 +159,10 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/repository-service.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/repository-service.log
 
   opensearch-manager:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/opensearch-manager.log" 2>&1'
+    command: quarkus dev
     working_dir: ${OPENSEARCH_MANAGER_DIR:-${CORE_SERVICES_DIR}/pipestream-opensearch/opensearch-manager}
     depends_on:
       dev-services:
@@ -183,10 +183,10 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/opensearch-manager.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/opensearch-manager.log
 
   connector-intake-service:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/connector-intake-service.log" 2>&1'
+    command: quarkus dev
     working_dir: ${CONNECTOR_INTAKE_DIR:-${CORE_SERVICES_DIR}/connector-intake-service}
     depends_on:
       dev-services:
@@ -207,12 +207,12 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/connector-intake-service.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/connector-intake-service.log
 
   # ---- Engine tier: starts once the core business services are healthy ----
 
   pipestream-engine:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/pipestream-engine.log" 2>&1'
+    command: quarkus dev
     working_dir: ${PIPESTREAM_ENGINE_DIR:-${CORE_SERVICES_DIR}/pipestream-engine}
     depends_on:
       platform-registration:
@@ -239,10 +239,10 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/pipestream-engine.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/pipestream-engine.log
 
   pipestream-engine-kafka-sidecar:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/pipestream-engine-kafka-sidecar.log" 2>&1'
+    command: quarkus dev
     working_dir: ${PIPESTREAM_ENGINE_KAFKA_SIDECAR_DIR:-${CORE_SERVICES_DIR}/pipestream-engine-kafka-sidecar}
     depends_on:
       pipestream-engine:
@@ -263,12 +263,12 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/pipestream-engine-kafka-sidecar.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/pipestream-engine-kafka-sidecar.log
 
   # ---- Modules: each boots once platform-registration is healthy ----
 
   module-echo:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/module-echo.log" 2>&1'
+    command: quarkus dev
     working_dir: ${MODULE_ECHO_DIR:-${MODULES_DIR}/module-echo}
     depends_on:
       platform-registration:
@@ -289,12 +289,12 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/module-echo.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/module-echo.log
 
   # NOTE: module-parser defines `%dev.quarkus.http.port=19101`, which overrides
   # the base port 19001 in dev mode. The default here matches the dev port.
   module-parser:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/module-parser.log" 2>&1'
+    command: quarkus dev
     working_dir: ${MODULE_PARSER_DIR:-${MODULES_DIR}/module-parser}
     depends_on:
       platform-registration:
@@ -315,10 +315,10 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/module-parser.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/module-parser.log
 
   module-chunker:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/module-chunker.log" 2>&1'
+    command: quarkus dev
     working_dir: ${MODULE_CHUNKER_DIR:-${MODULES_DIR}/module-chunker}
     depends_on:
       platform-registration:
@@ -339,14 +339,14 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/module-chunker.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/module-chunker.log
 
   # module-embedder uses a nested working_dir because the outer directory is a
   # multi-project gradle build containing quarkus-djl-embeddings subprojects.
   # Waits for dev-djl-models to finish so the embedder has a backend AND the
   # expected e2e models already loaded.
   module-embedder:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/module-embedder.log" 2>&1'
+    command: quarkus dev
     working_dir: ${MODULE_EMBEDDER_DIR:-${MODULES_DIR}/module-embedder/module-embedder}
     depends_on:
       platform-registration:
@@ -369,10 +369,10 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/module-embedder.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/module-embedder.log
 
   module-semantic-graph:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/module-semantic-graph.log" 2>&1'
+    command: quarkus dev
     working_dir: ${MODULE_SEMANTIC_GRAPH_DIR:-${MODULES_DIR}/module-semantic-graph}
     depends_on:
       platform-registration:
@@ -393,10 +393,10 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/module-semantic-graph.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/module-semantic-graph.log
 
   module-opensearch-sink:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/module-opensearch-sink.log" 2>&1'
+    command: quarkus dev
     working_dir: ${MODULE_OPENSEARCH_SINK_DIR:-${MODULES_DIR}/module-opensearch-sink}
     depends_on:
       platform-registration:
@@ -417,14 +417,14 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/module-opensearch-sink.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/module-opensearch-sink.log
 
   # ---- Connectors: pull metadata from platform-registration on startup ----
 
   # NOTE: jdbc-connector defines `%dev.quarkus.http.port=18121` (base port is
   # 8081 driven by QUARKUS_HTTP_PORT in jdbc-connector dev profile. Default here matches dev.
   jdbc-connector:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/jdbc-connector.log" 2>&1'
+    command: quarkus dev
     working_dir: ${JDBC_CONNECTOR_DIR:-${CORE_SERVICES_DIR}/jdbc-connector}
     depends_on:
       platform-registration:
@@ -445,12 +445,12 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/jdbc-connector.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/jdbc-connector.log
 
   # NOTE: s3-connector defines `%dev.quarkus.http.port=18220`, which overrides
   # the base port 18120 in dev mode. The default here matches dev.
   s3-connector:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/s3-connector.log" 2>&1'
+    command: quarkus dev
     working_dir: ${S3_CONNECTOR_DIR:-${CORE_SERVICES_DIR}/s3-connector}
     depends_on:
       platform-registration:
@@ -471,12 +471,12 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/s3-connector.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/s3-connector.log
 
   # NOTE: module-testing-sidecar defines `%dev.quarkus.http.port=19140`, which
   # overrides the base port 19040 in dev mode. The default here matches dev.
   module-testing-sidecar:
-    command: bash -c 'exec quarkus dev >> "${HOME}/.pipeline/dev/logs/module-testing-sidecar.log" 2>&1'
+    command: quarkus dev
     working_dir: ${MODULE_TESTING_SIDECAR_DIR:-${MODULES_DIR}/module-testing-sidecar}
     depends_on:
       platform-registration:
@@ -497,4 +497,4 @@ processes:
     shutdown:
       signal: 15
       timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/module-testing-sidecar.pc.log
+    log_location: ${HOME}/.pipeline/dev/logs/module-testing-sidecar.log

@@ -102,22 +102,25 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         // Bind to all interfaces so Consul (in Docker) can reach the host service via 172.17.0.1
         applyIfMissing(context, values, "quarkus.http.host", "0.0.0.0");
 
-        // Default to the UNIFIED Vert.x server (gRPC piggy-backs on the HTTP port).
+        // Default to the SEPARATE Netty gRPC server (its own port, separate from HTTP).
         //
-        // Reverted from use-separate-server=true (separate Netty) on 2026-05-04
-        // after a long debugging session for "INTERNAL: Half-closed without a
-        // request" failures showed the dispatch path is the SAME Vert.x bridge
-        // (GrpcServiceBridgeImpl + ReadStreamAdapter) in either mode — flipping
-        // the flag changed nothing about the symptom. Meanwhile the operational
-        // simplicity of one port per service is real and Quarkus 4.x will drop
-        // the separate path entirely.
+        // Re-flipped from use-separate-server=false on 2026-05-12 after the
+        // opensearch-manager test suite reproducibly hung under the unified
+        // (vertx-grpc-on-shared-HTTP) mode. Reduced reproducer: full @QuarkusTest
+        // suite with several @GrpcClient-injected stubs per class — random unary
+        // calls park indefinitely on the client side waiting for a response, with
+        // NO server-side handler frame anywhere in the thread dump. Switching to
+        // separate-Netty made the same suite pass in 1m17s (verified 32 classes,
+        // all green). Mutiny-stub rip, @RunOnVirtualThread audit, io-threads bump,
+        // and the BlockingServerInterceptor patch (Quarkus #54084) all reduce
+        // noise but DO NOT fix the underlying hang on the unified path.
         //
-        // The earlier "10-15× slower" claim referenced quarkusio/quarkus#51129;
-        // that's been addressed and unified mode honors quarkus.http.initial-window-size
-        // (we set it to 100MB below) — the throughput regression that drove
-        // the original migration to separate mode does not apply with the
-        // window-size config in place.
-        applyIfMissing(context, values, "quarkus.grpc.server.use-separate-server", "false");
+        // The earlier note about quarkusio/quarkus#51129 + initial-window-size
+        // covering the throughput regression still applies — that is a real fix.
+        // But there is at least one additional shared-server dispatch bug that
+        // hasn't been characterised upstream yet. Until that's resolved, run on
+        // the battle-tested separate Netty grpc-java path.
+        applyIfMissing(context, values, "quarkus.grpc.server.use-separate-server", "true");
         // gRPC defaults: health + reflection + large messages
         applyIfMissing(context, values, "quarkus.grpc.server.health.enabled", "true");
         applyIfMissing(context, values, "quarkus.grpc.server.grpc-health.enabled", "true");

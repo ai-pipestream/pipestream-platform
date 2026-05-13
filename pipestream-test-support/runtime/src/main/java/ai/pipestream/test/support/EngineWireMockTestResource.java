@@ -18,7 +18,10 @@ import java.util.Map;
  *       for OOTB Quarkus {@code @GrpcClient}-injected channels under
  *       {@code @QuarkusTest}, because Quarkus's test-mode auto-rebinds gRPC
  *       client channels to the in-process server's test port unless the
- *       resource explicitly overrides {@code .host} and {@code .port}.
+ *       resource explicitly overrides {@code .host}, {@code .port}, and
+ *       {@code .test-port} (see {@link ConnectorIntakeWireMockTestResource},
+ *       which sets {@code .test-port} alongside {@code .port} for the same
+ *       reason).
  *       Without this, every {@code @GrpcClient} call lands on the engine
  *       itself instead of the wiremock container, surfacing as
  *       {@code UNIMPLEMENTED: Method not found: PipeStepProcessorService/ProcessData}
@@ -84,12 +87,14 @@ public class EngineWireMockTestResource extends BaseWireMockTestResource {
             // Direct @GrpcClient host+port override — REQUIRED for OOTB
             // Quarkus @GrpcClient injection under @QuarkusTest, because
             // Quarkus's test-mode auto-rebinds the channel to the in-process
-            // server's test port unless host AND port are both set
-            // explicitly here. Without these three lines, every @GrpcClient
-            // call lands on the engine itself and surfaces as UNIMPLEMENTED
-            // even though the wiremock container is healthy.
+            // server's test port unless host, port, and test-port are set
+            // explicitly here (test-port is what several Quarkus versions use
+            // for outbound clients under @QuarkusTest). Without these lines,
+            // every @GrpcClient call lands on the engine itself and surfaces as
+            // UNIMPLEMENTED even though the wiremock container is healthy.
             config.put("quarkus.grpc.clients." + name + ".host", host);
             config.put("quarkus.grpc.clients." + name + ".port", standardPort);
+            config.put("quarkus.grpc.clients." + name + ".test-port", standardPort);
             config.put("quarkus.grpc.clients." + name + ".use-quarkus-grpc-client", "true");
         }
 

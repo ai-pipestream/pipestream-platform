@@ -67,13 +67,8 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
     testImplementation libs.assertj.core
     testImplementation 'org.mockito:mockito-core'
-    // The WorkStreamSession test wires a real bidi gRPC client to an
-    // in-process server (no Kafka/Redis/engine needed). InProcessChannel
-    // / InProcessServer live in the grpc-inprocess artifact, separate
-    // from grpc-netty. Version pinned to match the project's grpc
-    // version-ref so the in-process server doesn't clash on internal
-    // SPIs with the netty-flavored gRPC core already on the classpath.
-    testImplementation "io.grpc:grpc-inprocess:${libs.versions.grpc.get()}"
+    // In-process gRPC for WorkStreamSession tests — version from Quarkus BOM.
+    testImplementation 'io.grpc:grpc-inprocess'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

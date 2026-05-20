@@ -23,9 +23,6 @@ class PayloadCodecTest {
     @Test
     void roundTripPreservesMessage() throws InvalidProtocolBufferException {
         Hello original = Hello.newBuilder()
-                .setCluster("c")
-                .setGraphId("g")
-                .setNodeId("n")
                 .setModuleId("m")
                 .setInstanceId("i")
                 .build();
@@ -41,7 +38,7 @@ class PayloadCodecTest {
 
     @Test
     void typeUrlReflectsMessageDescriptor() {
-        Hello hello = Hello.newBuilder().setCluster("x").build();
+        Hello hello = Hello.newBuilder().setModuleId("x").build();
         Any packed = new PayloadCodec<>(Hello.class).pack(hello);
         assertThat(packed.getTypeUrl())
                 .as("Any.type_url must include the fully-qualified protobuf type name "
@@ -52,7 +49,7 @@ class PayloadCodecTest {
     @Test
     void unpackWithWrongTypeThrows() {
         // Pack a Hello, try to unpack as a different message type.
-        Any packed = new PayloadCodec<>(Hello.class).pack(Hello.newBuilder().setCluster("x").build());
+        Any packed = new PayloadCodec<>(Hello.class).pack(Hello.newBuilder().setModuleId("x").build());
         PayloadCodec<WorkAck> wrongCodec = new PayloadCodec<>(WorkAck.class);
 
         assertThatThrownBy(() -> wrongCodec.unpack(packed))

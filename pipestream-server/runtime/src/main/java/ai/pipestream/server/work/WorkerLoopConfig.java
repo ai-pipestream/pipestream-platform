@@ -16,10 +16,11 @@ import java.time.Duration;
  * <p>The framework is disabled by default ({@link #enabled()} = false).
  * A module enables itself by setting
  * {@code pipestream.module.worker-loop.enabled=true} in its
- * {@code application.properties}, along with the routing tuple
- * ({@code cluster}, {@code graph-id}, {@code node-id}, {@code module-id}).
- * Modules that don't enable the loop pay zero runtime cost beyond the
- * extension jar's bytes on disk.
+ * {@code application.properties} and giving the worker a
+ * {@link #moduleId() module-id} — the engine looks up the matching
+ * Kafka consumer by that id and serves whatever work is buffered for
+ * the module across every graph. Modules that don't enable the loop
+ * pay zero runtime cost beyond the extension jar's bytes on disk.
  */
 @ConfigMapping(prefix = "pipestream.module.worker-loop")
 public interface WorkerLoopConfig {
@@ -33,47 +34,42 @@ public interface WorkerLoopConfig {
     boolean enabled();
 
     /**
-     * The {@code Hello.cluster} value this worker sends. Engine maps
-     * this to the Kafka topic
-     * {@code pipestream.<cluster>.<graph_id>.<node_id>}.
-     */
-    @WithDefault("default")
-    String cluster();
-
-    /**
-     * The {@code Hello.graph_id} value this worker sends.
-     */
-    String graphId();
-
-    /**
-     * The {@code Hello.node_id} value this worker sends. Identifies
-     * which node in the graph this worker is fulfilling.
-     */
-    String nodeId();
-
-    /**
-     * The {@code Hello.module_id} value, diagnostic only. Convention:
-     * the module's logical name (e.g. {@code chunker},
-     * {@code embedder}).
+     * The {@code Hello.module_id} value this worker sends — the engine's
+     * sole routing key. Convention: the module's logical name (e.g.
+     * {@code chunker}, {@code embedder}, {@code echo}). Must match an
+     * entry in the engine's {@code work-server.enabled-services} list
+     * or Hello is rejected with {@code NOT_FOUND}.
+     *
+     * <p>The legacy {@code cluster} / {@code graph-id} / {@code node-id}
+     * fields were dropped — they named a per-(cluster,graph,node) Kafka
+     * topic scheme that the current engine doesn't use. Per-work-unit
+     * graph / node identifiers travel on the payload's StreamMetadata.
      */
     @WithDefault("module")
     String moduleId();
 
     /**
-     * Number of concurrent open streams to maintain. Each stream
-     * processes one work unit at a time on its own virtual thread,
-     * so this is also the module's concurrency cap (in work-units,
-     * not docs — relevant for the embedder where one doc can be many
-     * embedding tasks; that's bounded by the module's internal
-     * batching, not by this number).
+     * Maximum concurrent open streams when work is available. The
+     * loop starts at {@link #minConcurrency()} and adds workers after
+     * each successful unit until this cap is reached; idle workers
+     * above the minimum exit after {@link #noWorkRetryAfter()}.
      *
-     * <p>Sized per the calibration step in the architecture doc.
-     * Embedder/semantic-graph: 5. Chunker/parser: 20. Echo (intake
-     * blast absorber): 100. Default 5 is conservative; modules that
-     * can handle more set their own value.
+     * <p>Sized per module capacity. Embedder: ~5. Chunker/parser: ~20.
+     * Echo under heavy intake: up to 100.
      */
     @WithDefault("5")
     int concurrency();
+
+    /**
+     * Workers to keep when the engine queue is empty. Typically {@code 1}:
+     * a single poller opens a stream every {@link #noWorkRetryAfter()}
+     * instead of holding {@link #concurrency()} idle bidi streams open.
+     *
+     * <p>Set equal to {@link #concurrency()} for legacy fixed-pool behavior
+     * (all workers start at once).
+     */
+    @WithDefault("1")
+    int minConcurrency();
 
     /**
      * How often the worker emits a {@code Heartbeat} while
@@ -102,11 +98,19 @@ public interface WorkerLoopConfig {
     Duration reconnectMaxDelay();
 
     /**
-     * How long to wait after a {@code NoWorkAvailable} response
-     * before opening a fresh stream. The engine's response carries a
-     * suggested delay; this is the local fallback when the suggestion
-     * is missing or zero.
+     * How long the sole idle poller waits after {@code NoWorkAvailable}
+     * before opening the next stream. The engine's response may carry a
+     * suggested {@code retry_after_ms}; this is the local fallback.
      */
-    @WithDefault("1s")
+    @WithDefault("3s")
     Duration noWorkRetryAfter();
+
+    /**
+     * Max wait for the first {@code WorkResponse} after {@code Hello}.
+     * Must exceed the engine's server-side no-work wait (often ~5s) plus
+     * RTT. Shorter values surface transport problems faster; too short
+     * causes false {@link WorkStreamSession.Outcome#STREAM_ERROR}s.
+     */
+    @WithDefault("15s")
+    Duration firstResponseTimeout();
 }

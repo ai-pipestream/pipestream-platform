@@ -215,15 +215,19 @@ public class ConsulRegistrar {
     }
 
     /**
-     * Re-register a service with Consul using the full /q/health readiness endpoint.
-     * Called after initial registration succeeds (which used /q/health/live to break the
-     * chicken-and-egg deadlock). Re-registration is idempotent in Consul and replaces
-     * the existing check definitions.
+     * Add an HTTP readiness check for an already-registered Consul service, using
+     * {@code /q/health} (Quarkus management endpoints are outside
+     * {@code quarkus.http.root-path}, so the app root path is not prepended).
+     * Called after initial registration succeeds (which used {@code /q/health/live}
+     * to break the chicken-and-egg deadlock).
      *
-     * @param serviceInfo The service info (will be re-collected with full health path)
-     * @param serviceId   The existing Consul service ID
-     * @param fullHealthPath The full health path (e.g. /q/health)
-     * @return Uni&lt;Boolean&gt; true if re-registration succeeded
+     * @param serviceId   existing Consul service ID
+     * @param serviceName display name for the check
+     * @param scheme      {@code http} or {@code https}
+     * @param host        host the check targets
+     * @param port        port the check targets
+     * @param tlsEnabled  when true, Consul skips TLS verification for the check URL
+     * @return {@code true} if the check was registered successfully
      */
     public Uni<Boolean> addReadinessCheck(String serviceId, String serviceName,
                                           String scheme, String host, int port,

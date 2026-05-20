@@ -75,8 +75,8 @@ class WorkStreamSessionTest {
         // carrying a Hello message as the Any payload (any concrete
         // message works for the test; we use Hello to avoid pulling
         // engine types onto the test classpath).
-        Hello inputPayload = Hello.newBuilder().setCluster("payload-in").build();
-        Hello outputPayload = Hello.newBuilder().setCluster("payload-out").build();
+        Hello inputPayload = Hello.newBuilder().setModuleId("payload-in").build();
+        Hello outputPayload = Hello.newBuilder().setModuleId("payload-out").build();
         fakeEngine.respondTo(Hello.class, hello ->
                 WorkResponse.newBuilder()
                         .setWorkUnit(WorkUnit.newBuilder()
@@ -135,7 +135,7 @@ class WorkStreamSessionTest {
 
     @Test
     void permanentFailure_AcksWithPermanentStatus() throws Exception {
-        Hello inputPayload = Hello.newBuilder().setCluster("doomed").build();
+        Hello inputPayload = Hello.newBuilder().setModuleId("doomed").build();
         fakeEngine.respondTo(Hello.class, hello ->
                 WorkResponse.newBuilder()
                         .setWorkUnit(WorkUnit.newBuilder()
@@ -258,15 +258,14 @@ class WorkStreamSessionTest {
     private static WorkerLoopConfig testConfig() {
         return new WorkerLoopConfig() {
             @Override public boolean enabled() { return true; }
-            @Override public String cluster() { return "test-c"; }
-            @Override public String graphId() { return "test-g"; }
-            @Override public String nodeId() { return "test-n"; }
             @Override public String moduleId() { return "test-m"; }
             @Override public int concurrency() { return 1; }
+            @Override public int minConcurrency() { return 1; }
             @Override public Duration heartbeatInterval() { return Duration.ofSeconds(60); } // suppress heartbeats in tests
             @Override public Duration reconnectInitialDelay() { return Duration.ofMillis(50); }
             @Override public Duration reconnectMaxDelay() { return Duration.ofSeconds(1); }
             @Override public Duration noWorkRetryAfter() { return Duration.ofMillis(10); }
+            @Override public Duration firstResponseTimeout() { return Duration.ofSeconds(5); }
         };
     }
 

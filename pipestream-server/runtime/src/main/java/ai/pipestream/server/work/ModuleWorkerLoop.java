@@ -9,43 +9,28 @@ import org.jboss.logging.Logger;
 
 import java.time.Duration;
 import java.util.Objects;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Module-side demand-pull worker. Maintains {@link
- * WorkerLoopConfig#concurrency()} concurrent virtual threads, each
- * running an infinite loop of {@link WorkStreamSession}s against the
- * engine's {@code ModuleWorkService.Work} bidi RPC.
+ * Module-side demand-pull worker. Maintains between
+ * {@link WorkerLoopConfig#minConcurrency()} and
+ * {@link WorkerLoopConfig#concurrency()} concurrent virtual threads.
  *
- * <p>This is the framework's only concrete public consumer-facing
- * class — a module instantiates one per node-type it serves and lets
- * Quarkus CDI manage its lifecycle. The class is final by design:
- * subclassing is not the integration point; constructor injection of
- * a {@link ModuleProcessor} is. That keeps the loop's lifecycle
- * semantics under the framework's control.
+ * <p><b>Idle:</b> only the minimum workers run. Each opens a bidi
+ * stream, receives {@code NoWorkAvailable}, sleeps
+ * {@link WorkerLoopConfig#noWorkRetryAfter()} (typically 2–3s), and
+ * retries — instead of holding the maximum concurrency open on an empty
+ * queue.
  *
- * <p>Concurrency model: N worker virtual threads run independent
- * session loops. Each worker:
- * <ol>
- *   <li>Opens a new {@code Work} bidi stream.</li>
- *   <li>Runs one {@link WorkStreamSession}.</li>
- *   <li>On {@code SUCCESS} or {@code FAILED_BY_MODULE}: resets backoff
- *       and immediately loops.</li>
- *   <li>On {@code NO_WORK_AVAILABLE}: sleeps {@link
- *       WorkerLoopConfig#noWorkRetryAfter()} (resetting backoff),
- *       then loops.</li>
- *   <li>On {@code STREAM_ERROR}: sleeps the current backoff value
- *       (which doubles up to {@link
- *       WorkerLoopConfig#reconnectMaxDelay()}), then loops.</li>
- * </ol>
+ * <p><b>Under load:</b> after each successful unit (or module-reported
+ * failure the engine accepted), the loop tries to spawn one more worker
+ * until the maximum is reached. Workers that see {@code NoWorkAvailable}
+ * while above the minimum exit so the pool ramps down when the backlog
+ * drains.
  *
- * <p>Workers exit cleanly when {@link #onStop(ShutdownEvent)} fires;
- * the in-progress session (if any) completes its current Ack
- * naturally before the worker thread exits.
- *
- * @param <T> the module's concrete payload type
+ * <p>Set {@code min-concurrency == concurrency} for legacy fixed-pool
+ * behavior (all workers start at once).
  */
 public final class ModuleWorkerLoop<T extends Message> {
 
@@ -55,29 +40,14 @@ public final class ModuleWorkerLoop<T extends Message> {
     private final ModuleProcessor<T> processor;
     private final PayloadCodec<T> codec;
     private final WorkerLoopConfig config;
+    private final int minWorkers;
+    private final int maxWorkers;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private final AtomicInteger activeWorkers = new AtomicInteger(0);
     private final AtomicInteger streamErrors = new AtomicInteger();
     private final AtomicInteger sessionsCompleted = new AtomicInteger();
-    private volatile CountDownLatch workersStopped;
-    private Thread[] workers;
 
-    /**
-     * @param messageClass the concrete payload type — passed
-     *                     separately from {@code processor} because
-     *                     Java erases the generic parameter and
-     *                     {@link PayloadCodec} needs the {@code Class}
-     *                     for {@code Any.unpack}
-     * @param processor    the module's pure-function processor
-     * @param asyncStub    a configured async stub for the engine's
-     *                     {@code ModuleWorkService}; the module wires
-     *                     this up via {@code @GrpcClient("engine")}
-     *                     and Quarkus/Stork discovery
-     * @param config       the runtime config; the loop reads
-     *                     {@code enabled}, {@code concurrency},
-     *                     {@code heartbeatInterval}, and the reconnect
-     *                     backoff settings
-     */
     public ModuleWorkerLoop(Class<T> messageClass,
                             ModuleProcessor<T> processor,
                             ModuleWorkServiceGrpc.ModuleWorkServiceStub asyncStub,
@@ -86,59 +56,64 @@ public final class ModuleWorkerLoop<T extends Message> {
         this.codec = new PayloadCodec<>(Objects.requireNonNull(messageClass, "messageClass"));
         this.asyncStub = Objects.requireNonNull(asyncStub, "asyncStub");
         this.config = Objects.requireNonNull(config, "config");
+        int max = Math.max(1, config.concurrency());
+        int min = Math.max(1, Math.min(config.minConcurrency(), max));
+        this.minWorkers = min;
+        this.maxWorkers = max;
     }
 
-    /**
-     * Quarkus lifecycle hook: on application startup, if the loop is
-     * enabled, spawn the worker virtual threads. Each worker is named
-     * for diagnostics ({@code worker-<cluster>-<graph>-<node>-<n>}).
-     */
     public void onStart(@Observes StartupEvent event) {
         if (!config.enabled()) {
             LOG.infof("ModuleWorkerLoop disabled (pipestream.module.worker-loop.enabled=false)");
             return;
         }
-        int n = config.concurrency();
-        if (n < 1) {
-            LOG.warnf("ModuleWorkerLoop disabled — invalid concurrency %d (must be >= 1)", n);
-            return;
-        }
         running.set(true);
-        workersStopped = new CountDownLatch(n);
-        workers = new Thread[n];
-        String namePrefix = "worker-" + config.cluster() + "-" + config.graphId() + "-" + config.nodeId() + "-";
-        for (int i = 0; i < n; i++) {
-            final int workerIndex = i;
-            workers[i] = Thread.ofVirtual()
-                    .name(namePrefix + workerIndex)
-                    .start(this::runWorker);
+        String namePrefix = "worker-" + config.moduleId() + "-";
+        for (int i = 0; i < minWorkers; i++) {
+            startWorker(namePrefix);
         }
-        LOG.infof("ModuleWorkerLoop started: cluster=%s graph=%s node=%s concurrency=%d "
-                        + "heartbeat=%s payloadType=%s",
-                config.cluster(), config.graphId(), config.nodeId(), n,
-                config.heartbeatInterval(), codec.messageClass().getSimpleName());
+        LOG.infof("ModuleWorkerLoop started: module=%s workers=%d..%d "
+                        + "idlePoll=%s heartbeat=%s payloadType=%s",
+                config.moduleId(), minWorkers, maxWorkers,
+                config.noWorkRetryAfter(), config.heartbeatInterval(),
+                codec.messageClass().getSimpleName());
     }
 
-    /**
-     * Quarkus lifecycle hook: signal workers to exit. The actual exit
-     * is cooperative — the worker's session may be in the middle of
-     * processing a unit. We wait briefly for the latch to drain so
-     * shutdown logs reflect what actually finished; if a worker is
-     * genuinely stuck, the JVM exit will tear down the daemon VT.
-     */
     public void onStop(@Observes ShutdownEvent event) {
         if (!running.compareAndSet(true, false)) {
             return;
         }
-        try {
-            if (workersStopped != null) {
-                workersStopped.await(10, java.util.concurrent.TimeUnit.SECONDS);
-            }
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
+        long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+        while (activeWorkers.get() > 0 && System.nanoTime() < deadline) {
+            sleepInterruptibly(Duration.ofMillis(50));
         }
-        LOG.infof("ModuleWorkerLoop stopped: sessions=%d stream-errors=%d",
-                sessionsCompleted.get(), streamErrors.get());
+        LOG.infof("ModuleWorkerLoop stopped: sessions=%d stream-errors=%d activeWorkers=%d",
+                sessionsCompleted.get(), streamErrors.get(), activeWorkers.get());
+    }
+
+    private void startWorker(String namePrefix) {
+        int slot = activeWorkers.incrementAndGet();
+        if (slot > maxWorkers) {
+            activeWorkers.decrementAndGet();
+            return;
+        }
+        Thread.ofVirtual()
+                .name(namePrefix + slot)
+                .start(() -> {
+                    try {
+                        runWorker();
+                    } finally {
+                        activeWorkers.decrementAndGet();
+                    }
+                });
+    }
+
+    private void tryRampUp() {
+        if (activeWorkers.get() >= maxWorkers) {
+            return;
+        }
+        String namePrefix = "worker-" + config.moduleId() + "-";
+        startWorker(namePrefix);
     }
 
     private void runWorker() {
@@ -150,10 +125,20 @@ public final class ModuleWorkerLoop<T extends Message> {
                 WorkStreamSession.Outcome outcome = session.run();
                 sessionsCompleted.incrementAndGet();
                 switch (outcome) {
-                    case SUCCESS, FAILED_BY_MODULE -> backoff.reset();
+                    case SUCCESS, FAILED_BY_MODULE -> {
+                        backoff.reset();
+                        tryRampUp();
+                    }
                     case NO_WORK_AVAILABLE -> {
                         backoff.reset();
-                        sleepInterruptibly(config.noWorkRetryAfter());
+                        if (activeWorkers.get() > minWorkers) {
+                            return;
+                        }
+                        Duration wait = session.suggestedNoWorkRetry();
+                        if (wait.isZero() || wait.isNegative()) {
+                            wait = config.noWorkRetryAfter();
+                        }
+                        sleepInterruptibly(wait);
                     }
                     case STREAM_ERROR -> {
                         streamErrors.incrementAndGet();
@@ -165,9 +150,7 @@ public final class ModuleWorkerLoop<T extends Message> {
                 }
             }
         } finally {
-            if (workersStopped != null) {
-                workersStopped.countDown();
-            }
+            // worker thread exits
         }
     }
 
@@ -182,17 +165,22 @@ public final class ModuleWorkerLoop<T extends Message> {
         }
     }
 
-    // ----- Visible for testing -----
+    /** Live counters for health endpoints and ops dashboards. */
+    public record Snapshot(
+            boolean running,
+            int activeWorkers,
+            int minWorkers,
+            int maxWorkers,
+            int sessionsCompleted,
+            int streamErrors) {}
 
-    int sessionsCompleted() {
-        return sessionsCompleted.get();
-    }
-
-    int streamErrors() {
-        return streamErrors.get();
-    }
-
-    boolean isRunning() {
-        return running.get();
+    public Snapshot snapshot() {
+        return new Snapshot(
+                running.get(),
+                activeWorkers.get(),
+                minWorkers,
+                maxWorkers,
+                sessionsCompleted.get(),
+                streamErrors.get());
     }
 }

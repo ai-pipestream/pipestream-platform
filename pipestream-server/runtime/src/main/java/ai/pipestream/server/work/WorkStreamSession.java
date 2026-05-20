@@ -50,7 +50,9 @@ final class WorkStreamSession<T extends Message> {
     private final ModuleProcessor<T> processor;
     private final PayloadCodec<T> codec;
     private final WorkerLoopConfig config;
+    private final long firstResponseTimeoutMillis;
     private final long ackTimeoutMillis;
+    private Duration suggestedNoWorkRetry = Duration.ZERO;
 
     WorkStreamSession(ModuleWorkServiceGrpc.ModuleWorkServiceStub asyncStub,
                       ModuleProcessor<T> processor,
@@ -60,10 +62,16 @@ final class WorkStreamSession<T extends Message> {
         this.processor = Objects.requireNonNull(processor, "processor");
         this.codec = Objects.requireNonNull(codec, "codec");
         this.config = Objects.requireNonNull(config, "config");
-        // The engine's NoWorkAvailable wait is 5s by default. We poll
-        // for the first response with a generous timeout to absorb
-        // that plus typical RTT.
-        this.ackTimeoutMillis = Duration.ofSeconds(30).toMillis();
+        this.firstResponseTimeoutMillis = config.firstResponseTimeout().toMillis();
+        this.ackTimeoutMillis = Math.max(firstResponseTimeoutMillis, Duration.ofSeconds(30).toMillis());
+    }
+
+    /**
+     * Engine-suggested delay after {@link Outcome#NO_WORK_AVAILABLE}, if
+     * the response carried {@code retry_after_ms}; otherwise empty.
+     */
+    Duration suggestedNoWorkRetry() {
+        return suggestedNoWorkRetry;
     }
 
     /**
@@ -93,11 +101,12 @@ final class WorkStreamSession<T extends Message> {
         }
 
         // --- Send Hello ---
+        // Engine routes by module_id only (topic pipestream.module.<module_id>);
+        // the legacy cluster / graph_id / node_id tuple is gone (proto fields
+        // reserved). Per-work-unit graph / node identifiers travel on the
+        // payload's StreamMetadata.
         WorkRequest hello = WorkRequest.newBuilder()
                 .setHello(Hello.newBuilder()
-                        .setCluster(config.cluster())
-                        .setGraphId(config.graphId())
-                        .setNodeId(config.nodeId())
                         .setModuleId(config.moduleId())
                         .setInstanceId(instanceId())
                         .build())
@@ -112,23 +121,15 @@ final class WorkStreamSession<T extends Message> {
         }
 
         // --- Receive WorkUnit (or NoWorkAvailable) ---
-        WorkResponse first;
-        try {
-            first = responses.poll(ackTimeoutMillis, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            closeQuietly(requestObserver);
-            return Outcome.STREAM_ERROR;
-        }
+        WorkResponse first = awaitFirstResponse(responses, streamError, requestObserver);
         if (first == null) {
-            LOG.warnf("no WorkUnit/NoWorkAvailable received within %dms; treating as stream error",
-                    ackTimeoutMillis);
-            closeQuietly(requestObserver);
             return Outcome.STREAM_ERROR;
         }
         if (first.hasNoWork()) {
-            // Engine had nothing buffered. Close cleanly; the loop
-            // sleeps briefly and reopens.
+            long retryMs = first.getNoWork().getRetryAfterMs();
+            if (retryMs > 0) {
+                suggestedNoWorkRetry = Duration.ofMillis(retryMs);
+            }
             closeQuietly(requestObserver);
             return Outcome.NO_WORK_AVAILABLE;
         }
@@ -274,6 +275,47 @@ final class WorkStreamSession<T extends Message> {
             Thread.currentThread().interrupt();
             closeQuietly(requestObserver);
             return Outcome.STREAM_ERROR;
+        }
+    }
+
+    /**
+     * Wait for the first {@code WorkResponse} after {@code Hello}. The engine
+     * should answer within its {@code no-work-wait} (~5s) with either a
+     * {@code WorkUnit} or {@code NoWorkAvailable}. If the stream fails first
+     * (e.g. engine does not serve this {@code module_id}), return immediately
+     * instead of blocking the full {@link WorkerLoopConfig#firstResponseTimeout()}.
+     */
+    private WorkResponse awaitFirstResponse(BlockingQueue<WorkResponse> responses,
+                                            AtomicReference<Throwable> streamError,
+                                            StreamObserver<WorkRequest> requestObserver) {
+        long deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(firstResponseTimeoutMillis);
+        try {
+            while (System.nanoTime() < deadlineNanos) {
+                Throwable err = streamError.get();
+                if (err != null) {
+                    LOG.debugf(err, "Work stream failed before first response (check engine "
+                            + "work-server.enabled-services includes Hello.module_id)");
+                    closeQuietly(requestObserver);
+                    return null;
+                }
+                long remainingNanos = deadlineNanos - System.nanoTime();
+                if (remainingNanos <= 0) {
+                    break;
+                }
+                long pollMs = Math.min(200L, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
+                WorkResponse r = responses.poll(pollMs, TimeUnit.MILLISECONDS);
+                if (r != null) {
+                    return r;
+                }
+            }
+            LOG.warnf("no WorkUnit/NoWorkAvailable received within %dms; treating as stream error",
+                    firstResponseTimeoutMillis);
+            closeQuietly(requestObserver);
+            return null;
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            closeQuietly(requestObserver);
+            return null;
         }
     }
 

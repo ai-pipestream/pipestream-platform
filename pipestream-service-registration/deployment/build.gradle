@@ -4,18 +4,6 @@ plugins {
 
 description = 'Pipestream Service Registration Extension - Deployment'
 
-configurations.configureEach {
-    resolutionStrategy {
-        force libs.grpc.protobuf
-        force libs.grpc.stub
-        force libs.grpc.netty
-        force libs.grpc.core
-        force libs.grpc.api
-        force libs.protobuf.java
-        force libs.protobuf.java.util
-    }
-}
-
 dependencies {
     // Quarkus deployment
     api platform(libs.quarkus.bom)

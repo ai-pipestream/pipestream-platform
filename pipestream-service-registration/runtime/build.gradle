@@ -34,18 +34,6 @@ pipestreamProtos {
 // END PROTOBUF CONFIGURATION
 // ============================================================
 
-configurations.configureEach {
-    resolutionStrategy {
-        force libs.grpc.protobuf
-        force libs.grpc.stub
-        force libs.grpc.netty
-        force libs.grpc.core
-        force libs.grpc.api
-        force libs.protobuf.java
-        force libs.protobuf.java.util
-    }
-}
-
 dependencies {
     api platform(libs.quarkus.bom)
     api 'io.quarkus:quarkus-arc'
@@ -53,7 +41,7 @@ dependencies {
     api 'io.quarkus:quarkus-smallrye-health'
     api 'io.quarkus:quarkus-vertx'
 
-    // gRPC and Protobuf runtime - explicitly specify versions to override BOM
+    // gRPC and Protobuf runtime — versions from Quarkus BOM (see root pipestream-bom).
     api libs.grpc.protobuf
     api libs.grpc.stub
     api libs.grpc.netty

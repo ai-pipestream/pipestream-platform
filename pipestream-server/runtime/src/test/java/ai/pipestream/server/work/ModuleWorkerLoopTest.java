@@ -25,6 +25,7 @@ import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,7 +37,6 @@ class ModuleWorkerLoopTest {
 
     private String serverName;
     private Server server;
-    private ManagedChannel channel;
     private final AtomicInteger workUnitsServed = new AtomicInteger();
 
     @BeforeEach
@@ -47,14 +47,10 @@ class ModuleWorkerLoopTest {
                 .addService(new AlwaysNoWorkEngine())
                 .build()
                 .start();
-        channel = InProcessChannelBuilder.forName(serverName).directExecutor().build();
     }
 
     @AfterEach
     void stopServer() throws Exception {
-        if (channel != null) {
-            channel.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
-        }
         if (server != null) {
             server.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
         }
@@ -99,12 +95,27 @@ class ModuleWorkerLoopTest {
     }
 
     private ModuleWorkerLoop<Hello> newLoop(int min, int max) {
-        ModuleWorkServiceGrpc.ModuleWorkServiceStub stub =
-                ModuleWorkServiceGrpc.newStub(channel);
+        AtomicReference<ManagedChannel> channelRef = new AtomicReference<>(
+                InProcessChannelBuilder.forName(serverName).directExecutor().build());
+        ModuleWorkEngineClient engineClient = new ModuleWorkEngineClient() {
+            @Override
+            public ModuleWorkServiceGrpc.ModuleWorkServiceStub stub() {
+                return ModuleWorkServiceGrpc.newStub(channelRef.get());
+            }
+
+            @Override
+            public void reconnect() {
+                ManagedChannel old = channelRef.getAndSet(
+                        InProcessChannelBuilder.forName(serverName).directExecutor().build());
+                if (old != null) {
+                    old.shutdownNow();
+                }
+            }
+        };
         return new ModuleWorkerLoop<>(
                 Hello.class,
                 input -> input,
-                stub,
+                engineClient,
                 rampConfig(min, max));
     }
 
@@ -112,6 +123,7 @@ class ModuleWorkerLoopTest {
         return new WorkerLoopConfig() {
             @Override public boolean enabled() { return true; }
             @Override public String moduleId() { return "echo"; }
+            @Override public String grpcClientName() { return "engine"; }
             @Override public int concurrency() { return max; }
             @Override public int minConcurrency() { return min; }
             @Override public Duration heartbeatInterval() { return Duration.ofMinutes(5); }

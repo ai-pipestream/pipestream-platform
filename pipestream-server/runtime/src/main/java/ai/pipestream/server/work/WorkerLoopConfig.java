@@ -49,6 +49,16 @@ public interface WorkerLoopConfig {
     String moduleId();
 
     /**
+     * Quarkus gRPC client name used to reach the engine's
+     * {@code ModuleWorkService} ({@code quarkus.grpc.clients.<name>.*}).
+     * Each work session opens a fresh channel via this client config so
+     * late-registered engine instances are picked up without restarting
+     * the module process.
+     */
+    @WithDefault("engine")
+    String grpcClientName();
+
+    /**
      * Maximum concurrent open streams when work is available. The
      * loop starts at {@link #minConcurrency()} and adds workers after
      * each successful unit until this cap is reached; idle workers

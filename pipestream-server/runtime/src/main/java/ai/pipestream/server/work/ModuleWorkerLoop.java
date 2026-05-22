@@ -1,6 +1,5 @@
 package ai.pipestream.server.work;
 
-import ai.pipestream.module.work.v1.ModuleWorkServiceGrpc;
 import com.google.protobuf.Message;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
@@ -36,7 +35,7 @@ public final class ModuleWorkerLoop<T extends Message> {
 
     private static final Logger LOG = Logger.getLogger(ModuleWorkerLoop.class);
 
-    private final ModuleWorkServiceGrpc.ModuleWorkServiceStub asyncStub;
+    private final ModuleWorkEngineClient engineClient;
     private final ModuleProcessor<T> processor;
     private final PayloadCodec<T> codec;
     private final WorkerLoopConfig config;
@@ -50,11 +49,11 @@ public final class ModuleWorkerLoop<T extends Message> {
 
     public ModuleWorkerLoop(Class<T> messageClass,
                             ModuleProcessor<T> processor,
-                            ModuleWorkServiceGrpc.ModuleWorkServiceStub asyncStub,
+                            ModuleWorkEngineClient engineClient,
                             WorkerLoopConfig config) {
         this.processor = Objects.requireNonNull(processor, "processor");
         this.codec = new PayloadCodec<>(Objects.requireNonNull(messageClass, "messageClass"));
-        this.asyncStub = Objects.requireNonNull(asyncStub, "asyncStub");
+        this.engineClient = Objects.requireNonNull(engineClient, "engineClient");
         this.config = Objects.requireNonNull(config, "config");
         int max = Math.max(1, config.concurrency());
         int min = Math.max(1, Math.min(config.minConcurrency(), max));
@@ -121,8 +120,10 @@ public final class ModuleWorkerLoop<T extends Message> {
                 config.reconnectInitialDelay(), config.reconnectMaxDelay());
         try {
             while (running.get()) {
-                WorkStreamSession<T> session = new WorkStreamSession<>(asyncStub, processor, codec, config);
+                WorkStreamSession<T> session = new WorkStreamSession<>(
+                        engineClient.stub(), processor, codec, config);
                 WorkStreamSession.Outcome outcome = session.run();
+                Duration suggestedNoWorkRetry = session.suggestedNoWorkRetry();
                 sessionsCompleted.incrementAndGet();
                 switch (outcome) {
                     case SUCCESS, FAILED_BY_MODULE -> {
@@ -134,7 +135,7 @@ public final class ModuleWorkerLoop<T extends Message> {
                         if (activeWorkers.get() > minWorkers) {
                             return;
                         }
-                        Duration wait = session.suggestedNoWorkRetry();
+                        Duration wait = suggestedNoWorkRetry;
                         if (wait.isZero() || wait.isNegative()) {
                             wait = config.noWorkRetryAfter();
                         }
@@ -142,6 +143,7 @@ public final class ModuleWorkerLoop<T extends Message> {
                     }
                     case STREAM_ERROR -> {
                         streamErrors.incrementAndGet();
+                        engineClient.reconnect();
                         Duration wait = backoff.next();
                         LOG.warnf("Stream error; backing off %s before reconnect "
                                 + "(total stream-errors=%d)", wait, streamErrors.get());

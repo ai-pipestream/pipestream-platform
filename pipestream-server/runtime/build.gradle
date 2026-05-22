@@ -53,6 +53,7 @@ dependencies {
     api 'io.quarkus:quarkus-info'
     api 'io.smallrye.config:smallrye-config'
     implementation libs.grpc.services
+    implementation 'io.grpc:grpc-netty'
     implementation libs.vertx.web.client
 
     annotationProcessor enforcedPlatform(libs.quarkus.bom)

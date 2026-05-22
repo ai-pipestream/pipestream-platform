@@ -241,64 +241,71 @@ public class PatchedGrpcStorkServiceDiscovery extends NameResolverProvider {
             }
 
             private void informListener(List<ServiceInstance> instances) {
-                ArrayList<EquivalentAddressGroup> addresses = new ArrayList<>();
                 try {
-                    if (serviceInstanceIds.size() != instances.size() || areServicesRemoved(instances)) {
-                        HashSet<Long> ids = new HashSet<>();
-                        for (ServiceInstance instance : instances) {
-                            ids.add(instance.getId());
-                        }
-                        this.serviceInstanceIds = ids;
+                    HashSet<Long> newIds = new HashSet<>();
+                    for (ServiceInstance instance : instances) {
+                        newIds.add(instance.getId());
+                    }
 
-                        for (ServiceInstance instance : instances) {
-                            List<SocketAddress> socketAddresses = new ArrayList<>();
-                            try {
-                                for (InetAddress inetAddress : InetAddress.getAllByName(instance.getHost())) {
-                                    socketAddresses.add(new InetSocketAddress(inetAddress, instance.getPort()));
-                                }
-                            } catch (UnknownHostException e) {
-                                log.warnf(e, "Ignoring wrong host: '%s' for service name '%s'",
-                                        instance.getHost(), serviceName);
-                            }
+                    boolean instanceSetChanged = !newIds.equals(serviceInstanceIds);
+                    if (instanceSetChanged) {
+                        this.serviceInstanceIds = newIds;
+                    }
 
-                            if (!socketAddresses.isEmpty()) {
-                                Attributes attributes = Attributes.newBuilder()
-                                        .set(SERVICE_INSTANCE, instance)
-                                        .build();
-                                EquivalentAddressGroup addressGroup =
-                                        new EquivalentAddressGroup(socketAddresses, attributes);
-                                addresses.add(addressGroup);
-                            }
-                        }
-
-                        if (addresses.isEmpty()) {
-                            log.errorf("Failed to determine working socket addresses for service-name: %s",
+                    if (instances.isEmpty()) {
+                        if (instanceSetChanged || serviceInstanceIds.isEmpty()) {
+                            log.debugf("Stork returned no instances for '%s'; notifying UNAVAILABLE",
                                     serviceName);
                             listener.onError(Status.UNAVAILABLE.withDescription(
-                                    "No reachable socket addresses for '" + serviceName
-                                            + "' (Stork returned " + instances.size()
-                                            + " instance(s) but none had resolvable hosts)"));
-                        } else {
-                            ConfigOrError serviceConfig =
-                                    configParser.parseServiceConfig(mapConfigForServiceName());
-                            listener.onResult(ResolutionResult.newBuilder()
-                                    .setAddresses(addresses)
-                                    .setServiceConfig(serviceConfig)
-                                    .build());
+                                    "No instances registered for '" + serviceName + "'"));
                         }
+                        return;
+                    }
+
+                    if (!instanceSetChanged) {
+                        return;
+                    }
+
+                    ArrayList<EquivalentAddressGroup> addresses = new ArrayList<>();
+                    for (ServiceInstance instance : instances) {
+                        List<SocketAddress> socketAddresses = new ArrayList<>();
+                        try {
+                            for (InetAddress inetAddress : InetAddress.getAllByName(instance.getHost())) {
+                                socketAddresses.add(new InetSocketAddress(inetAddress, instance.getPort()));
+                            }
+                        } catch (UnknownHostException e) {
+                            log.warnf(e, "Ignoring wrong host: '%s' for service name '%s'",
+                                    instance.getHost(), serviceName);
+                        }
+
+                        if (!socketAddresses.isEmpty()) {
+                            Attributes attributes = Attributes.newBuilder()
+                                    .set(SERVICE_INSTANCE, instance)
+                                    .build();
+                            EquivalentAddressGroup addressGroup =
+                                    new EquivalentAddressGroup(socketAddresses, attributes);
+                            addresses.add(addressGroup);
+                        }
+                    }
+
+                    if (addresses.isEmpty()) {
+                        log.errorf("Failed to determine working socket addresses for service-name: %s",
+                                serviceName);
+                        listener.onError(Status.UNAVAILABLE.withDescription(
+                                "No reachable socket addresses for '" + serviceName
+                                        + "' (Stork returned " + instances.size()
+                                        + " instance(s) but none had resolvable hosts)"));
+                    } else {
+                        ConfigOrError serviceConfig =
+                                configParser.parseServiceConfig(mapConfigForServiceName());
+                        listener.onResult(ResolutionResult.newBuilder()
+                                .setAddresses(addresses)
+                                .setServiceConfig(serviceConfig)
+                                .build());
                     }
                 } finally {
                     resolving = false;
                 }
-            }
-
-            private boolean areServicesRemoved(List<ServiceInstance> instances) {
-                for (ServiceInstance instance : instances) {
-                    if (!serviceInstanceIds.contains(instance.getId())) {
-                        return true;
-                    }
-                }
-                return false;
             }
 
             private Map<String, List<Map<String, Map<String, String>>>> mapConfigForServiceName() {

@@ -259,6 +259,7 @@ class WorkStreamSessionTest {
         return new WorkerLoopConfig() {
             @Override public boolean enabled() { return true; }
             @Override public String moduleId() { return "test-m"; }
+            @Override public String grpcClientName() { return "engine"; }
             @Override public int concurrency() { return 1; }
             @Override public int minConcurrency() { return 1; }
             @Override public Duration heartbeatInterval() { return Duration.ofSeconds(60); } // suppress heartbeats in tests

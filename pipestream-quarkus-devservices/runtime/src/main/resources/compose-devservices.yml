@@ -59,7 +59,7 @@ services:
   # PostgreSQL instance for services (primary database)
   postgres:
     container_name: pipeline-postgres
-    image: postgres:18.3-alpine
+    image: postgres:18.4-alpine
     networks:
       - pipeline-test-network
     command: ["postgres", "-c", "max_connections=2000"]
@@ -89,7 +89,7 @@ services:
   # Kafka in KRaft mode (proven configuration)
   kafka:
     container_name: pipeline-kafka
-    image: apache/kafka:4.2.0
+    image: apache/kafka:4.3.0
     hostname: kafka
     networks:
       - pipeline-test-network
@@ -124,7 +124,7 @@ services:
   # Apicurio Registry v3
   apicurio-registry:
     container_name: pipeline-apicurio-registry
-    image: apicurio/apicurio-registry:3.2.2
+    image: apicurio/apicurio-registry:3.2.4
     networks:
       - pipeline-test-network
     ports:
@@ -143,8 +143,10 @@ services:
       quarkus-dev-service-apicurio-registry: shared
       quarkus-dev-service-apicurio-registry-protobuf: apicurio-registry
     healthcheck:
-      # Try multiple known health endpoints to accommodate image differences
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || curl -sf http://localhost:8080/q/health || curl -sf http://localhost:8080/q/health/ready"]
+      # Apicurio 3.2.x exposes health on the management port 9000 at /health
+      # (older 2.x served /health on the API port 8080, hence the historical
+      # fallback chain).
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health/ready || curl -sf http://localhost:9000/health || curl -sf http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -153,7 +155,7 @@ services:
   # Apicurio Registry UI
   apicurio-registry-ui:
     container_name: pipeline-apicurio-registry-ui
-    image: apicurio/apicurio-registry-ui:3.2.2
+    image: apicurio/apicurio-registry-ui:3.2.4
     networks:
       - pipeline-test-network
     ports:
@@ -252,7 +254,7 @@ services:
   # SeaweedFS for S3-compatible storage & high-performance Filer
   seaweedfs:
     container_name: pipeline-seaweedfs
-    image: chrislusf/seaweedfs:4.21.0
+    image: chrislusf/seaweedfs:4.28
     networks:
       - pipeline-test-network
     ports:
@@ -304,7 +306,7 @@ services:
   # sweep without inter-run cleanup can stack 6GB+ of orphaned entries.
   redis:
     container_name: pipeline-redis
-    image: redis:8.6-alpine
+    image: redis:8.6.3-alpine
     hostname: redis
     networks:
       - pipeline-test-network
@@ -324,7 +326,7 @@ services:
   # Kafka UI for monitoring and management
   kafka-ui:
     container_name: pipeline-kafka-ui
-    image: provectuslabs/kafka-ui:0.7.2
+    image: ghcr.io/kafbat/kafka-ui:v1.3.0
     networks:
       - pipeline-test-network
     ports:
@@ -347,7 +349,7 @@ services:
   # Grafana LGTM (Grafana + OTel Collector + Prometheus + Tempo + Loki)
   lgtm:
     container_name: pipeline-lgtm
-    image: grafana/otel-lgtm:v0.26.0
+    image: grafana/otel-lgtm:0.28.0
     networks:
       - pipeline-test-network
     ports:

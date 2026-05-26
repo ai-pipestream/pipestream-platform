@@ -1,0 +1,64 @@
+plugins {
+    alias(libs.plugins.java.library)
+    alias(libs.plugins.quarkus.extension)
+    alias(libs.plugins.proto.toolchain)
+}
+
+description = 'Pipestream Module Runtime Extension - Runtime'
+
+quarkusExtension {
+    deploymentModule = 'pipestream-module-runtime-deployment'
+}
+
+// Workaround for Gradle 9: disable validateExtension which performs unsafe configuration resolution
+tasks.matching { it.name == 'validateExtension' }.configureEach {
+    enabled = false
+}
+
+// ============================================================
+// PROTOBUF CONFIGURATION
+// ============================================================
+// Generates the ModuleWorkService client stubs used by the
+// ModuleWorkerLoop<T extends Message> helper. Only the self-contained
+// 'module-worker' proto module is registered — it depends only on grpc
+// well-knowns and google.protobuf.Any, so this does NOT pull engine
+// internals, common data types, or graph config onto the classpath.
+//
+// Payloads are carried as google.protobuf.Any on the wire; modules
+// supply their own concrete payload class to ModuleWorkerLoop, which
+// pack/unpacks at the wire boundary. The extension itself knows nothing
+// about PipeStream, ProcessNodeRequest, or any other engine-private type.
+pipestreamProtos {
+    sourceMode = 'git-proto-workspace'
+    gitRepo = "https://github.com/ai-pipestream/pipestream-protos.git"
+    gitRef = "bom/engine-refactor-pr0"
+
+    modules {
+        register("module-worker")
+    }
+}
+
+dependencies {
+    api platform(libs.quarkus.bom)
+    api project(':pipestream-server')
+    api 'io.quarkus:quarkus-arc'
+    api 'io.quarkus:quarkus-grpc'
+    api 'io.smallrye.config:smallrye-config'
+    implementation 'io.grpc:grpc-netty'
+
+    annotationProcessor enforcedPlatform(libs.quarkus.bom)
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+
+    // Plain JUnit tests for the worker framework helpers (PayloadCodec,
+    // BackoffSchedule, WorkStreamSession, ModuleWorkerLoop).
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+    testImplementation libs.assertj.core
+    testImplementation 'org.mockito:mockito-core'
+    testImplementation 'io.grpc:grpc-inprocess'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}

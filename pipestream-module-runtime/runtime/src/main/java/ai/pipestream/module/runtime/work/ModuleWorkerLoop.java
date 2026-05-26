@@ -1,9 +1,10 @@
-package ai.pipestream.server.work;
+package ai.pipestream.module.runtime.work;
 
 import com.google.protobuf.Message;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.inject.Vetoed;
 import org.jboss.logging.Logger;
 
 import java.time.Duration;
@@ -30,7 +31,13 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>Set {@code min-concurrency == concurrency} for legacy fixed-pool
  * behavior (all workers start at once).
+ *
+ * <p>{@code @Vetoed} so CDI never auto-registers this generic class as a
+ * bean — the {@code @Observes} lifecycle methods are invoked manually by
+ * the module's {@code @Produces}/{@code @Inject} wrapper, which supplies
+ * the concrete {@code T}, processor, and engine client at construction.
  */
+@Vetoed
 public final class ModuleWorkerLoop<T extends Message> {
 
     private static final Logger LOG = Logger.getLogger(ModuleWorkerLoop.class);

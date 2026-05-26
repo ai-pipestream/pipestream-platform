@@ -13,9 +13,10 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Opens a {@link ManagedChannel} using the same {@code quarkus.grpc.clients.*}
- * keys as {@code @GrpcClient}. Used by {@link ai.pipestream.server.work.SharedModuleWorkEngineClient}
- * for the worker loop (one channel per JVM, reconnect on stream error) and by
- * one-shot callers such as echo-loop graph registration.
+ * keys as {@code @GrpcClient}. Used by {@code ai.pipestream.module.runtime.work.SharedModuleWorkEngineClient}
+ * (in the pipestream-module-runtime extension) for the worker loop — one
+ * channel per JVM, reconnect on stream error — and by one-shot callers such
+ * as echo-loop graph registration.
  */
 @ApplicationScoped
 public class EphemeralGrpcChannelFactory {

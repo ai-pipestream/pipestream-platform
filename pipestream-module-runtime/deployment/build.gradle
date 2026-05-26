@@ -1,0 +1,16 @@
+plugins {
+    alias(libs.plugins.java.library)
+}
+
+description = 'Pipestream Module Runtime Extension - Deployment'
+
+dependencies {
+    implementation platform(libs.quarkus.bom)
+    implementation 'io.quarkus:quarkus-arc-deployment'
+    implementation 'io.quarkus:quarkus-grpc-deployment'
+
+    implementation project(':pipestream-module-runtime')
+    implementation project(':pipestream-server-deployment')
+
+    annotationProcessor 'io.quarkus:quarkus-extension-processor'
+}

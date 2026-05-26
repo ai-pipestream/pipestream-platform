@@ -1,4 +1,4 @@
-package ai.pipestream.server.work;
+package ai.pipestream.module.runtime.work;
 
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;

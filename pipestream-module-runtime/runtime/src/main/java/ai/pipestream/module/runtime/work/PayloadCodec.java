@@ -1,4 +1,4 @@
-package ai.pipestream.server.work;
+package ai.pipestream.module.runtime.work;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.InvalidProtocolBufferException;

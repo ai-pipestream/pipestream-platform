@@ -62,6 +62,9 @@ dependencies {
         api project(':pipestream-server')
         api project(':pipestream-server-deployment')
 
+        api project(':pipestream-module-runtime')
+        api project(':pipestream-module-runtime-deployment')
+
         api project(':pipestream-descriptor-api')
         api project(':pipestream-descriptor-apicurio')
         api project(':pipestream-descriptor-apicurio-deployment')

@@ -1,4 +1,4 @@
-package ai.pipestream.server.work;
+package ai.pipestream.module.runtime.work;
 
 import ai.pipestream.module.work.v1.AckConfirmed;
 import ai.pipestream.module.work.v1.Hello;

@@ -209,63 +209,9 @@ processes:
       timeout_seconds: 30
     log_location: ${HOME}/.pipeline/dev/logs/connector-intake-service.log
 
-  # ---- Engine tier: starts once the core business services are healthy ----
-
-  pipestream-engine:
-    command: quarkus dev
-    working_dir: ${PIPESTREAM_ENGINE_DIR:-${CORE_SERVICES_DIR}/pipestream-engine}
-    depends_on:
-      platform-registration:
-        condition: process_healthy
-      account-service:
-        condition: process_healthy
-      connector-admin:
-        condition: process_healthy
-      repository-service:
-        condition: process_healthy
-    readiness_probe:
-      http_get:
-        host: localhost
-        port: ${PIPESTREAM_ENGINE_HTTP_PORT:-18100}
-        path: /q/health/ready
-      initial_delay_seconds: 15
-      period_seconds: 5
-      timeout_seconds: 5
-      success_threshold: 1
-      failure_threshold: 60
-    availability:
-      restart: on_failure
-      max_restarts: 3
-    shutdown:
-      signal: 15
-      timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/pipestream-engine.log
-
-  pipestream-engine-kafka-sidecar:
-    command: quarkus dev
-    working_dir: ${PIPESTREAM_ENGINE_KAFKA_SIDECAR_DIR:-${CORE_SERVICES_DIR}/pipestream-engine-kafka-sidecar}
-    depends_on:
-      pipestream-engine:
-        condition: process_healthy
-    readiness_probe:
-      http_get:
-        host: localhost
-        port: ${PIPESTREAM_ENGINE_KAFKA_SIDECAR_HTTP_PORT:-18104}
-        path: /q/health/ready
-      initial_delay_seconds: 15
-      period_seconds: 5
-      timeout_seconds: 5
-      success_threshold: 1
-      failure_threshold: 60
-    availability:
-      restart: on_failure
-      max_restarts: 3
-    shutdown:
-      signal: 15
-      timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/pipestream-engine-kafka-sidecar.log
-
   # ---- Modules: each boots once platform-registration is healthy ----
+  # Engine waits for these to be ready (see pipestream-engine depends_on).
+  # If a module is broken, start pipestream-engine manually from the TUI.
 
   module-echo:
     command: quarkus dev
@@ -419,6 +365,80 @@ processes:
       timeout_seconds: 30
     log_location: ${HOME}/.pipeline/dev/logs/module-opensearch-sink.log
 
+  # NOTE: module-testing-sidecar defines `%dev.quarkus.http.port=19140`, which
+  # overrides the base port 19040 in dev mode. The default here matches dev.
+  module-testing-sidecar:
+    command: quarkus dev
+    working_dir: ${MODULE_TESTING_SIDECAR_DIR:-${MODULES_DIR}/module-testing-sidecar}
+    depends_on:
+      platform-registration:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${MODULE_TESTING_SIDECAR_HTTP_PORT:-19140}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/module-testing-sidecar.log
+
+  # ---- Engine: starts after core services and all modules are healthy ----
+  # Manual start from the process-compose TUI still works when skipping a
+  # broken module (e.g. during a Quarkus dev-mode regression).
+
+  pipestream-engine:
+    command: quarkus dev
+    working_dir: ${PIPESTREAM_ENGINE_DIR:-${CORE_SERVICES_DIR}/pipestream-engine}
+    depends_on:
+      platform-registration:
+        condition: process_healthy
+      account-service:
+        condition: process_healthy
+      connector-admin:
+        condition: process_healthy
+      repository-service:
+        condition: process_healthy
+      module-echo:
+        condition: process_healthy
+      module-parser:
+        condition: process_healthy
+      module-chunker:
+        condition: process_healthy
+      module-embedder:
+        condition: process_healthy
+      module-semantic-graph:
+        condition: process_healthy
+      module-opensearch-sink:
+        condition: process_healthy
+      module-testing-sidecar:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${PIPESTREAM_ENGINE_HTTP_PORT:-18100}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/pipestream-engine.log
+
   # ---- Connectors: pull metadata from platform-registration on startup ----
 
   # NOTE: jdbc-connector defines `%dev.quarkus.http.port=18121` (base port is
@@ -472,29 +492,3 @@ processes:
       signal: 15
       timeout_seconds: 30
     log_location: ${HOME}/.pipeline/dev/logs/s3-connector.log
-
-  # NOTE: module-testing-sidecar defines `%dev.quarkus.http.port=19140`, which
-  # overrides the base port 19040 in dev mode. The default here matches dev.
-  module-testing-sidecar:
-    command: quarkus dev
-    working_dir: ${MODULE_TESTING_SIDECAR_DIR:-${MODULES_DIR}/module-testing-sidecar}
-    depends_on:
-      platform-registration:
-        condition: process_healthy
-    readiness_probe:
-      http_get:
-        host: localhost
-        port: ${MODULE_TESTING_SIDECAR_HTTP_PORT:-19140}
-        path: /q/health/ready
-      initial_delay_seconds: 15
-      period_seconds: 5
-      timeout_seconds: 5
-      success_threshold: 1
-      failure_threshold: 60
-    availability:
-      restart: on_failure
-      max_restarts: 3
-    shutdown:
-      signal: 15
-      timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/module-testing-sidecar.log

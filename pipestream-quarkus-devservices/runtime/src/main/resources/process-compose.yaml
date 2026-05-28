@@ -209,15 +209,49 @@ processes:
       timeout_seconds: 30
     log_location: ${HOME}/.pipeline/dev/logs/connector-intake-service.log
 
-  # ---- Modules: each boots once platform-registration is healthy ----
-  # Engine waits for these to be ready (see pipestream-engine depends_on).
-  # If a module is broken, start pipestream-engine manually from the TUI.
+  # ---- Engine: starts after core platform services are healthy ----
+  # Modules do not start unless the engine reaches ready (see module depends_on).
+  # Start a module manually from the TUI if you need it without a healthy engine.
+
+  pipestream-engine:
+    command: quarkus dev
+    working_dir: ${PIPESTREAM_ENGINE_DIR:-${CORE_SERVICES_DIR}/pipestream-engine}
+    depends_on:
+      platform-registration:
+        condition: process_healthy
+      account-service:
+        condition: process_healthy
+      connector-admin:
+        condition: process_healthy
+      repository-service:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: localhost
+        port: ${PIPESTREAM_ENGINE_HTTP_PORT:-18100}
+        path: /q/health/ready
+      initial_delay_seconds: 15
+      period_seconds: 5
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 60
+    availability:
+      restart: on_failure
+      max_restarts: 3
+    shutdown:
+      signal: 15
+      timeout_seconds: 30
+    log_location: ${HOME}/.pipeline/dev/logs/pipestream-engine.log
+
+  # ---- Modules: each boots once platform-registration and engine are healthy ----
 
   module-echo:
     command: quarkus dev
     working_dir: ${MODULE_ECHO_DIR:-${MODULES_DIR}/module-echo}
     depends_on:
       platform-registration:
+        condition: process_healthy
+      pipestream-engine:
         condition: process_healthy
     readiness_probe:
       http_get:
@@ -245,6 +279,8 @@ processes:
     depends_on:
       platform-registration:
         condition: process_healthy
+      pipestream-engine:
+        condition: process_healthy
     readiness_probe:
       http_get:
         host: localhost
@@ -268,6 +304,8 @@ processes:
     working_dir: ${MODULE_CHUNKER_DIR:-${MODULES_DIR}/module-chunker}
     depends_on:
       platform-registration:
+        condition: process_healthy
+      pipestream-engine:
         condition: process_healthy
     readiness_probe:
       http_get:
@@ -297,6 +335,8 @@ processes:
     depends_on:
       platform-registration:
         condition: process_healthy
+      pipestream-engine:
+        condition: process_healthy
       dev-djl-models:
         condition: process_completed_successfully
     readiness_probe:
@@ -323,6 +363,8 @@ processes:
     depends_on:
       platform-registration:
         condition: process_healthy
+      pipestream-engine:
+        condition: process_healthy
     readiness_probe:
       http_get:
         host: localhost
@@ -346,6 +388,8 @@ processes:
     working_dir: ${MODULE_OPENSEARCH_SINK_DIR:-${MODULES_DIR}/module-opensearch-sink}
     depends_on:
       platform-registration:
+        condition: process_healthy
+      pipestream-engine:
         condition: process_healthy
     readiness_probe:
       http_get:
@@ -373,6 +417,8 @@ processes:
     depends_on:
       platform-registration:
         condition: process_healthy
+      pipestream-engine:
+        condition: process_healthy
     readiness_probe:
       http_get:
         host: localhost
@@ -390,54 +436,6 @@ processes:
       signal: 15
       timeout_seconds: 30
     log_location: ${HOME}/.pipeline/dev/logs/module-testing-sidecar.log
-
-  # ---- Engine: starts after core services and all modules are healthy ----
-  # Manual start from the process-compose TUI still works when skipping a
-  # broken module (e.g. during a Quarkus dev-mode regression).
-
-  pipestream-engine:
-    command: quarkus dev
-    working_dir: ${PIPESTREAM_ENGINE_DIR:-${CORE_SERVICES_DIR}/pipestream-engine}
-    depends_on:
-      platform-registration:
-        condition: process_healthy
-      account-service:
-        condition: process_healthy
-      connector-admin:
-        condition: process_healthy
-      repository-service:
-        condition: process_healthy
-      module-echo:
-        condition: process_healthy
-      module-parser:
-        condition: process_healthy
-      module-chunker:
-        condition: process_healthy
-      module-embedder:
-        condition: process_healthy
-      module-semantic-graph:
-        condition: process_healthy
-      module-opensearch-sink:
-        condition: process_healthy
-      module-testing-sidecar:
-        condition: process_healthy
-    readiness_probe:
-      http_get:
-        host: localhost
-        port: ${PIPESTREAM_ENGINE_HTTP_PORT:-18100}
-        path: /q/health/ready
-      initial_delay_seconds: 15
-      period_seconds: 5
-      timeout_seconds: 5
-      success_threshold: 1
-      failure_threshold: 60
-    availability:
-      restart: on_failure
-      max_restarts: 3
-    shutdown:
-      signal: 15
-      timeout_seconds: 30
-    log_location: ${HOME}/.pipeline/dev/logs/pipestream-engine.log
 
   # ---- Connectors: pull metadata from platform-registration on startup ----
 

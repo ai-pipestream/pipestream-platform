@@ -106,10 +106,13 @@ public final class ModuleWorkerLoop<T extends Message> {
         Thread.ofVirtual()
                 .name(namePrefix + slot)
                 .start(() -> {
+                    boolean alreadyDecremented = false;
                     try {
-                        runWorker();
+                        alreadyDecremented = runWorker();
                     } finally {
-                        activeWorkers.decrementAndGet();
+                        if (!alreadyDecremented) {
+                            activeWorkers.decrementAndGet();
+                        }
                     }
                 });
     }
@@ -122,45 +125,59 @@ public final class ModuleWorkerLoop<T extends Message> {
         startWorker(namePrefix);
     }
 
-    private void runWorker() {
+    /**
+     * Worker body. Returns {@code true} if this worker atomically
+     * decremented {@link #activeWorkers} as part of a voluntary
+     * ramp-down (so the caller must skip the finally-block decrement
+     * to avoid double-counting). Returns {@code false} on shutdown or
+     * any non-ramp-down exit, in which case the caller's finally-block
+     * decrement is the single accounting point.
+     */
+    private boolean runWorker() {
         BackoffSchedule backoff = new BackoffSchedule(
                 config.reconnectInitialDelay(), config.reconnectMaxDelay());
-        try {
-            while (running.get()) {
-                WorkStreamSession<T> session = new WorkStreamSession<>(
-                        engineClient.stub(), processor, codec, config);
-                WorkStreamSession.Outcome outcome = session.run();
-                Duration suggestedNoWorkRetry = session.suggestedNoWorkRetry();
-                sessionsCompleted.incrementAndGet();
-                switch (outcome) {
-                    case SUCCESS, FAILED_BY_MODULE -> {
-                        backoff.reset();
-                        tryRampUp();
+        while (running.get()) {
+            WorkStreamSession<T> session = new WorkStreamSession<>(
+                    engineClient.stub(), processor, codec, config);
+            WorkStreamSession.Outcome outcome = session.run();
+            Duration suggestedNoWorkRetry = session.suggestedNoWorkRetry();
+            sessionsCompleted.incrementAndGet();
+            switch (outcome) {
+                case SUCCESS, FAILED_BY_MODULE -> {
+                    backoff.reset();
+                    tryRampUp();
+                }
+                case NO_WORK_AVAILABLE -> {
+                    backoff.reset();
+                    // Atomic check-and-decrement: only this worker
+                    // exits if doing so still leaves >= minWorkers
+                    // alive. Plain `get() > min` + finally-decrement
+                    // races when many workers see NO_WORK at once —
+                    // all read the same value, all decide to exit,
+                    // all decrement, leaving zero workers and a dead
+                    // module until restart.
+                    int prev = activeWorkers.getAndUpdate(
+                            n -> n > minWorkers ? n - 1 : n);
+                    if (prev > minWorkers) {
+                        return true;
                     }
-                    case NO_WORK_AVAILABLE -> {
-                        backoff.reset();
-                        if (activeWorkers.get() > minWorkers) {
-                            return;
-                        }
-                        Duration wait = suggestedNoWorkRetry;
-                        if (wait.isZero() || wait.isNegative()) {
-                            wait = config.noWorkRetryAfter();
-                        }
-                        sleepInterruptibly(wait);
+                    Duration wait = suggestedNoWorkRetry;
+                    if (wait.isZero() || wait.isNegative()) {
+                        wait = config.noWorkRetryAfter();
                     }
-                    case STREAM_ERROR -> {
-                        streamErrors.incrementAndGet();
-                        engineClient.reconnect();
-                        Duration wait = backoff.next();
-                        LOG.warnf("Stream error; backing off %s before reconnect "
-                                + "(total stream-errors=%d)", wait, streamErrors.get());
-                        sleepInterruptibly(wait);
-                    }
+                    sleepInterruptibly(wait);
+                }
+                case STREAM_ERROR -> {
+                    streamErrors.incrementAndGet();
+                    engineClient.reconnect();
+                    Duration wait = backoff.next();
+                    LOG.warnf("Stream error; backing off %s before reconnect "
+                            + "(total stream-errors=%d)", wait, streamErrors.get());
+                    sleepInterruptibly(wait);
                 }
             }
-        } finally {
-            // worker thread exits
         }
+        return false;
     }
 
     private void sleepInterruptibly(Duration d) {

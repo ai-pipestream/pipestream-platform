@@ -169,9 +169,33 @@ public final class ModuleWorkerLoop<T extends Message> {
                 }
                 case STREAM_ERROR -> {
                     streamErrors.incrementAndGet();
-                    engineClient.reconnect();
+                    // A stream error is CALL-scoped: this one bidi Work
+                    // stream aborted (engine watchdog close, a slow/missed
+                    // first response, a transient transport blip). It does
+                    // NOT mean the shared channel is bad. We deliberately do
+                    // NOT tear the channel down here.
+                    //
+                    // The channel is an @ApplicationScoped singleton reused by
+                    // every worker virtual thread (HTTP/2 multiplexing). A
+                    // ManagedChannel.shutdownNow() cancels ALL in-flight calls
+                    // on it — so one worker's stream error would cancel every
+                    // sibling's in-flight Work stream, each of which then
+                    // reports STREAM_ERROR and reconnects in turn: a
+                    // self-amplifying cancellation storm. Under load that storm
+                    // re-served the same work unit fast enough to exhaust the
+                    // engine's per-record redelivery cap, quarantining a
+                    // perfectly good document (observed: 999/1000 at a terminal
+                    // node). See SharedModuleWorkEngineClient.
+                    //
+                    // gRPC's ManagedChannel already re-resolves and reconnects
+                    // the transport on its own with backoff, and
+                    // SharedModuleWorkEngineClient.channel() rebuilds a
+                    // terminated channel lazily on the next stub() call, so a
+                    // genuinely-dead channel still recovers without us forcing
+                    // it. Here we just back off and open a fresh stream on the
+                    // same channel.
                     Duration wait = backoff.next();
-                    LOG.warnf("Stream error; backing off %s before reconnect "
+                    LOG.warnf("Stream error; backing off %s before retry "
                             + "(total stream-errors=%d)", wait, streamErrors.get());
                     sleepInterruptibly(wait);
                 }

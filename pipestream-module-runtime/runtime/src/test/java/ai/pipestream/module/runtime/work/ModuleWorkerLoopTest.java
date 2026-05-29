@@ -94,7 +94,71 @@ class ModuleWorkerLoopTest {
         assertThat(workUnitsServed.get()).isGreaterThanOrEqualTo(2);
     }
 
+    @Test
+    void streamError_doesNotTearDownSharedChannel() throws Exception {
+        // Engine that aborts every stream right after Hello → STREAM_ERROR
+        // on the client, repeatedly.
+        server.shutdownNow().awaitTermination(2, TimeUnit.SECONDS);
+        server = InProcessServerBuilder.forName(serverName)
+                .directExecutor()
+                .addService(new AlwaysErrorEngine())
+                .build()
+                .start();
+
+        AtomicInteger reconnects = new AtomicInteger();
+        ModuleWorkerLoop<Hello> loop = newLoop(minWorkers(2), maxWorkers(4), reconnects);
+        loop.onStart(new StartupEvent());
+
+        // Let workers cycle through several stream errors.
+        for (int i = 0; i < 200 && loop.snapshot().streamErrors() < 3; i++) {
+            Thread.sleep(20);
+        }
+        int errors = loop.snapshot().streamErrors();
+        loop.onStop(new ShutdownEvent());
+
+        assertThat(errors)
+                .as("workers should hit stream errors against the erroring engine")
+                .isGreaterThanOrEqualTo(3);
+        assertThat(reconnects.get())
+                .as("a per-stream error must NOT tear down the channel — it is shared by "
+                        + "every worker, so shutdownNow() would cancel siblings' in-flight "
+                        + "streams and cascade into a fleet-wide cancellation storm")
+                .isZero();
+    }
+
+    @Test
+    void recoversAfterTransientStreamErrors_onSameChannel_withoutReconnect() throws Exception {
+        server.shutdownNow().awaitTermination(2, TimeUnit.SECONDS);
+        AtomicInteger served = new AtomicInteger();
+        server = InProcessServerBuilder.forName(serverName)
+                .directExecutor()
+                .addService(new FlakyThenWorkEngine(3, served))
+                .build()
+                .start();
+
+        AtomicInteger reconnects = new AtomicInteger();
+        ModuleWorkerLoop<Hello> loop = newLoop(minWorkers(1), maxWorkers(2), reconnects);
+        loop.onStart(new StartupEvent());
+
+        for (int i = 0; i < 300 && served.get() < 2; i++) {
+            Thread.sleep(20);
+        }
+        int finalServed = served.get();
+        loop.onStop(new ShutdownEvent());
+
+        assertThat(finalServed)
+                .as("loop should recover after transient stream errors and process work")
+                .isGreaterThanOrEqualTo(2);
+        assertThat(reconnects.get())
+                .as("recovery must happen on the same shared channel — no explicit teardown")
+                .isZero();
+    }
+
     private ModuleWorkerLoop<Hello> newLoop(int min, int max) {
+        return newLoop(min, max, new AtomicInteger());
+    }
+
+    private ModuleWorkerLoop<Hello> newLoop(int min, int max, AtomicInteger reconnects) {
         AtomicReference<ManagedChannel> channelRef = new AtomicReference<>(
                 InProcessChannelBuilder.forName(serverName).directExecutor().build());
         ModuleWorkEngineClient engineClient = new ModuleWorkEngineClient() {
@@ -105,6 +169,7 @@ class ModuleWorkerLoopTest {
 
             @Override
             public void reconnect() {
+                reconnects.incrementAndGet();
                 ManagedChannel old = channelRef.getAndSet(
                         InProcessChannelBuilder.forName(serverName).directExecutor().build());
                 if (old != null) {
@@ -148,6 +213,79 @@ class ModuleWorkerLoopTest {
                                 .setNoWork(NoWorkAvailable.newBuilder().setRetryAfterMs(50).build())
                                 .build());
                         responses.onCompleted();
+                    }
+                }
+
+                @Override public void onError(Throwable t) { }
+                @Override public void onCompleted() { }
+            };
+        }
+    }
+
+    /** Aborts every stream right after Hello, exercising the STREAM_ERROR path. */
+    private static final class AlwaysErrorEngine extends ModuleWorkServiceGrpc.ModuleWorkServiceImplBase {
+        @Override
+        public StreamObserver<WorkRequest> work(StreamObserver<WorkResponse> responses) {
+            return new StreamObserver<>() {
+                @Override
+                public void onNext(WorkRequest req) {
+                    if (req.hasHello()) {
+                        responses.onError(io.grpc.Status.UNAVAILABLE
+                                .withDescription("simulated transient stream error")
+                                .asRuntimeException());
+                    }
+                }
+
+                @Override public void onError(Throwable t) { }
+                @Override public void onCompleted() { }
+            };
+        }
+    }
+
+    /**
+     * Errors the first {@code failFirst} Hello calls (across streams), then
+     * serves work normally — proving the loop recovers on the same channel
+     * without an explicit reconnect.
+     */
+    private static final class FlakyThenWorkEngine extends ModuleWorkServiceGrpc.ModuleWorkServiceImplBase {
+        private final int failFirst;
+        private final AtomicInteger helloCount = new AtomicInteger();
+        private final AtomicInteger served;
+
+        FlakyThenWorkEngine(int failFirst, AtomicInteger served) {
+            this.failFirst = failFirst;
+            this.served = served;
+        }
+
+        @Override
+        public StreamObserver<WorkRequest> work(StreamObserver<WorkResponse> responses) {
+            return new StreamObserver<>() {
+                @Override
+                public void onNext(WorkRequest req) {
+                    if (req.hasHello()) {
+                        if (helloCount.incrementAndGet() <= failFirst) {
+                            responses.onError(io.grpc.Status.UNAVAILABLE
+                                    .withDescription("flaky")
+                                    .asRuntimeException());
+                            return;
+                        }
+                        responses.onNext(WorkResponse.newBuilder()
+                                .setWorkUnit(WorkUnit.newBuilder()
+                                        .setWorkUnitId("wu-" + UUID.randomUUID())
+                                        .setPayload(Any.pack(Hello.newBuilder().setModuleId("echo").build()))
+                                        .build())
+                                .build());
+                        return;
+                    }
+                    if (req.hasAck()) {
+                        responses.onNext(WorkResponse.newBuilder()
+                                .setAckConfirmed(AckConfirmed.newBuilder()
+                                        .setWorkUnitId(req.getAck().getWorkUnitId())
+                                        .setAccepted(true)
+                                        .build())
+                                .build());
+                        responses.onCompleted();
+                        served.incrementAndGet();
                     }
                 }
 

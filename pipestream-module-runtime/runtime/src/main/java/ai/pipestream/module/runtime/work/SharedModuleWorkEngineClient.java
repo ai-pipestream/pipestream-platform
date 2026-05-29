@@ -10,8 +10,15 @@ import org.jboss.logging.Logger;
 
 /**
  * JVM-scoped engine channel for demand-pull workers. Matches the old
- * {@code @GrpcClient("engine")} lifetime while allowing explicit
- * {@link #reconnect()} after stream errors.
+ * {@code @GrpcClient("engine")} lifetime.
+ *
+ * <p>The channel is a process-wide singleton shared by every worker virtual
+ * thread, so {@link #reconnect()} ({@code channel.shutdownNow()}) cancels all
+ * of their in-flight Work streams at once. It is therefore only invoked on
+ * shutdown ({@link #onShutdown()}); the worker loop must NOT call it per
+ * stream error (that cascades into a fleet-wide cancellation storm — see
+ * {@link ModuleWorkEngineClient}). A channel that genuinely dies is rebuilt
+ * lazily by {@link #channel()} on the next {@link #stub()} call.
  */
 @ApplicationScoped
 public class SharedModuleWorkEngineClient implements ModuleWorkEngineClient {

@@ -31,7 +31,7 @@ tasks.matching { it.name == 'validateExtension' }.configureEach {
 pipestreamProtos {
     sourceMode = 'git-proto-workspace'
     gitRepo = "https://github.com/ai-pipestream/pipestream-protos.git"
-    gitRef = "bom/engine-refactor-pr0"
+    gitRef = "main"
 
     modules {
         register("module-worker")

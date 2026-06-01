@@ -86,27 +86,23 @@ public class ChannelLifecycleTest {
     }
 
     @Test
-    @DisplayName("Channel cache hit ratio should improve over time")
-    void testCacheHitRatio() {
+    @DisplayName("Repeated calls for the same service reuse the same channel")
+    void testChannelReusedAcrossCalls() {
         consulRegistration.registerService(serviceName, serviceName + "-1", "127.0.0.1", lifecyclePort);
 
-        // First call - miss (creates channel). Generous budget covers warmup.
+        // First call: miss (creates channel). Generous budget covers warmup.
         clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(10));
+        int afterFirst = clientFactory.getActiveServiceCount();
 
-        String stats1 = clientFactory.getCacheStats();
-        LOG.infof("After 1 call: %s", stats1);
-
-        // Next 10 calls - should all be hits
+        // 10 more calls — each should reuse the same channel.
         for (int i = 0; i < 10; i++) {
             clientFactory.getChannel(serviceName).await().atMost(Duration.ofSeconds(2));
         }
+        int afterEleven = clientFactory.getActiveServiceCount();
 
-        String stats2 = clientFactory.getCacheStats();
-        LOG.infof("After 11 calls: %s", stats2);
-
-        assertThat(stats2)
-            .as("Cache stats should indicate hits were recorded")
-            .containsIgnoringCase("hit");
+        assertThat(afterEleven)
+            .as("getActiveServiceCount must not grow when calls all target the same service")
+            .isEqualTo(afterFirst);
     }
 
     @Test
@@ -238,7 +234,9 @@ public class ChannelLifecycleTest {
         String stats = clientFactory.getCacheStats();
         assertThat(stats).as("Stats should not be null").isNotNull();
         assertThat(stats).as("Stats should not be empty").isNotEmpty();
-        assertThat(stats.toLowerCase()).as("Stats should mention hits or cache").containsAnyOf("hit", "cache", "request");
+        assertThat(stats.toLowerCase())
+            .as("Stats should report active channel count")
+            .contains("channel");
     }
 
     @Test

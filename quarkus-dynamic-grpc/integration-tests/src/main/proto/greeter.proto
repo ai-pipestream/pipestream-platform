@@ -10,6 +10,27 @@ package helloworld;
 service Greeter {
   // Sends a greeting
   rpc SayHello (HelloRequest) returns (HelloReply) {}
+
+  // Accepts a single binary blob and reports how many bytes the server
+  // actually received. Used by LargePayloadConcurrencyTest to exercise
+  // the dynamic-grpc transport at PipeDoc-class payload sizes
+  // (multi-MB to tens-of-MB) where flow-control and direct-buffer
+  // sizing become load-bearing.
+  rpc EchoBytes (EchoBytesRequest) returns (EchoBytesReply) {}
+
+  // Client-streaming RPC: client pushes N EchoBytesRequest messages
+  // onto a single stream, server replies once with the cumulative byte
+  // count it actually received. Hits the same BridgeMessageEncoder path
+  // that EchoBytes does for unary, but also exercises HTTP/2 stream
+  // multiplexing under sustained writes — which is where the original
+  // silent-drop bug was first observed in production.
+  rpc UploadStream (stream EchoBytesRequest) returns (EchoBytesReply) {}
+
+  // Server returns a payload of caller-specified size. Mirror of
+  // EchoBytes for the server-to-client direction: tests outbound
+  // flow control on the client read path, which is a different code
+  // path than the inbound write path everything else exercises.
+  rpc DownloadBytes (DownloadBytesRequest) returns (DownloadBytesReply) {}
 }
 
 // The request message containing the user's name
@@ -20,4 +41,30 @@ message HelloRequest {
 // The response message containing the greetings
 message HelloReply {
   string message = 1;
+  // Set by the server impl to identify which physical instance answered
+  // the call. Used by RoundRobinLoadBalancingTest to verify the channel
+  // distributes requests across all registered instances.
+  string instance_id = 2;
+}
+
+// Request carrying an opaque binary payload.
+message EchoBytesRequest {
+  bytes payload = 1;
+}
+
+// Response confirming exactly how many payload bytes the server saw.
+// A drop or truncation surfaces as received_bytes != client send size.
+message EchoBytesReply {
+  int64 received_bytes = 1;
+}
+
+// Asks the server to send back size_bytes worth of opaque payload.
+message DownloadBytesRequest {
+  int32 size_bytes = 1;
+}
+
+// Server-allocated binary payload sized by request.size_bytes. The
+// client asserts payload.size() matches what it asked for.
+message DownloadBytesReply {
+  bytes payload = 1;
 }

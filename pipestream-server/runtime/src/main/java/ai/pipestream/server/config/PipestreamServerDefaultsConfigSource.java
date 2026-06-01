@@ -70,16 +70,119 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         applyIfMissing(context, values, "%dev.pipestream.registration.required", "false");
         applyIfMissing(context, values, "%test.pipestream.registration.required", "false");
 
+        // Async console logging — wraps the default console handler with
+        // org.jboss.logmanager.handlers.AsyncHandler so log writes never block
+        // the calling thread on the underlying write() syscall.
+        //
+        // Without this, every LOG.* call goes through WriterHandler.doPublish,
+        // which holds a per-handler ReentrantLock around a synchronous
+        // FileOutputStream.writeBytes() to stdout. If stdout is a pipe (process-
+        // compose capture, container log driver, kubelet) and the reader falls
+        // behind, the kernel reports `wchan=anon_pipe_write` on whatever thread
+        // called LOG.* — including Vert.x event loops. That thread holds the
+        // WriterHandler lock indefinitely; every other log call in the JVM
+        // queues behind it; gRPC handlers that emit any log line on the
+        // response path stop responding; upstream callers retry, time out,
+        // and the service appears hung. Diagnosed 2026-05-10 in the
+        // repository-service: jstack showed event-loop-thread-15 parked in
+        // WriterHandler.safeFlush → FileOutputStream.writeBytes for 27s of
+        // CPU time, and three other event-loop threads parked on its lock.
+        //
+        // Async decouples LOG.* (cheap, returns immediately after enqueue)
+        // from the actual stdout write (done by a single drain thread). If
+        // the pipe blocks the drain thread, only the drain thread blocks —
+        // event loops keep moving. queue-length=4096 absorbs reasonable
+        // bursts; overflow=block keeps logs intact (drops nothing) at the
+        // cost of back-pressuring producers when the queue is genuinely
+        // full, which is the right trade-off for incident forensics.
+        applyIfMissing(context, values, "quarkus.log.console.async", "true");
+        applyIfMissing(context, values, "quarkus.log.console.async.queue-length", "4096");
+        applyIfMissing(context, values, "quarkus.log.console.async.overflow", "block");
+
         // Bind to all interfaces so Consul (in Docker) can reach the host service via 172.17.0.1
         applyIfMissing(context, values, "quarkus.http.host", "0.0.0.0");
 
-        // Prefer the shared HTTP server for gRPC unless explicitly overridden
-        applyIfMissing(context, values, "quarkus.grpc.server.use-separate-server", "false");
+        // Default to the SEPARATE Netty gRPC server (its own port, separate from HTTP).
+        //
+        // Re-flipped from use-separate-server=false on 2026-05-12 after the
+        // opensearch-manager test suite reproducibly hung under the unified
+        // (vertx-grpc-on-shared-HTTP) mode. Reduced reproducer: full @QuarkusTest
+        // suite with several @GrpcClient-injected stubs per class — random unary
+        // calls park indefinitely on the client side waiting for a response, with
+        // NO server-side handler frame anywhere in the thread dump. Switching to
+        // separate-Netty made the same suite pass in 1m17s (verified 32 classes,
+        // all green). Mutiny-stub rip, @RunOnVirtualThread audit, io-threads bump,
+        // and the BlockingServerInterceptor patch (Quarkus #54084) all reduce
+        // noise but DO NOT fix the underlying hang on the unified path.
+        //
+        // The earlier note about quarkusio/quarkus#51129 + initial-window-size
+        // covering the throughput regression still applies — that is a real fix.
+        // But there is at least one additional shared-server dispatch bug that
+        // hasn't been characterised upstream yet. Until that's resolved, run on
+        // the battle-tested separate Netty grpc-java path.
+        applyIfMissing(context, values, "quarkus.grpc.server.use-separate-server", "true");
         // gRPC defaults: health + reflection + large messages
         applyIfMissing(context, values, "quarkus.grpc.server.health.enabled", "true");
         applyIfMissing(context, values, "quarkus.grpc.server.grpc-health.enabled", "true");
         applyIfMissing(context, values, "quarkus.grpc.server.enable-reflection-service", "true");
         applyIfMissing(context, values, "quarkus.grpc.server.max-inbound-message-size", "2147483647");
+        // Match the production-proven connector-intake-service config: outbound
+        // limit lifted in lockstep with inbound, and HTTP/2 flow-control window
+        // bumped to 100MB so a 5–50MB PipeDoc streams in one shot rather than
+        // stop-and-waiting every 64KB. Without this default a typical PipeDoc
+        // upload is bandwidth-bottlenecked at ~7.5MB/s on localhost.
+        applyIfMissing(context, values, "quarkus.grpc.server.max-outbound-message-size", "2147483647");
+        applyIfMissing(context, values, "quarkus.grpc.server.flow-control-window", "104857600");
+
+        // HTTP/2 keep-alive ping permit window. Without this, every gRPC server
+        // in the platform inherits gRPC's default permit-keep-alive-time of
+        // 5 MINUTES, while our gRPC clients (both stock @GrpcClient and the
+        // dynamic-grpc ChannelManager) ping every 30 seconds. Mismatch causes
+        // the server to send GOAWAY with HTTP/2 ENHANCE_YOUR_CALM after the
+        // 2nd ping (~60 s in), tearing down the connection and any in-flight
+        // RPC. We saw this as exactly-one-doc loss in 1000-doc transport
+        // tests: the doc whose dispatch landed on the GOAWAY connection died
+        // with RESOURCE_EXHAUSTED ("too_many_pings"). 20s gives a safety
+        // margin under the 30s client interval.
+        applyIfMissing(context, values, "quarkus.grpc.server.netty.permit-keep-alive-time", "20s");
+
+        // HTTP/2 windows for the Vert.x HTTP server. There are TWO knobs and
+        // both matter under load — getting only one of them right is the
+        // surface that masquerades as "Vert.x grpc race / Half-closed":
+        //
+        // 1. initial-window-size  — PER-STREAM window. 64KB spec default;
+        //    bumped to 100MB so a single 5–50MB PipeDoc streams in one shot
+        //    rather than stop-and-waiting every 64KB.
+        //
+        // 2. http2-connection-window-size — CONNECTION-level window, shared
+        //    across every stream on the connection. Quarkus default is -1
+        //    which inherits the per-stream value (which the grpc-reference
+        //    docs note as "typically 64KB" before our bump above), so under
+        //    any real concurrency every stream is starved by a 64KB total
+        //    connection budget. THIS is what the Quarkus grpc-reference
+        //    explicitly calls out for unified-mode (use-separate-server=false):
+        //    https://quarkus.io/guides/grpc-reference#unified-server-mode
+        //    Symptom of leaving it at default: bursty gRPC traffic on a
+        //    shared channel triggers "INTERNAL: Half-closed without a
+        //    request" because the server-side message body never gets a
+        //    chance to land before the client moves on or the half-close
+        //    marker arrives — the connection-level WINDOW_UPDATE round-trips
+        //    serialize what should have been concurrent.
+        //
+        // Both apply uniformly to gRPC + REST in unified mode, where gRPC
+        // is just a special-cased HTTP/2 stream on the same Vert.x server.
+        applyIfMissing(context, values, "quarkus.http.initial-window-size", "104857600");
+        applyIfMissing(context, values, "quarkus.http.http2-connection-window-size", "104857600");
+
+        // No gRPC port derivation under unified server mode — gRPC piggy-backs
+        // on the HTTP port, so every service is already unique because each
+        // service has a unique HTTP port. The +10000 auto-derivation that
+        // existed when we ran on use-separate-server=true is unnecessary
+        // here and would be ignored anyway: in unified mode Quarkus uses
+        // quarkus.http.port for both HTTP and gRPC, and quarkus.grpc.server.port
+        // is silently ignored. Services that need to override (e.g. to expose
+        // gRPC on a separate port for legacy clients) can still set their own
+        // quarkus.grpc.server.port + use-separate-server=true locally.
 
         // OpenAPI defaults
         applyIfMissing(context, values, "quarkus.swagger-ui.always-include", "true");
@@ -279,10 +382,18 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         return "linux";
     }
 
+    /**
+     * IMPORTANT: this is called from {@code buildDefaults()} BEFORE the
+     * {@code values} map (which holds {@code use-separate-server=true}) has
+     * been published as a config source. Reading via {@code getOptional}
+     * here only sees OTHER sources, not our pending defaults. Defaulting
+     * to the same value we just wrote ({@code true}) keeps the registration
+     * port consistent with the gRPC server we'll actually start. If a
+     * caller has explicitly set {@code use-separate-server=false} in their
+     * own properties, that wins and we register on the HTTP port.
+     */
     private Integer resolveRegistrationPort(ConfigSourceContext context) {
-        boolean separateServer = getOptional(context, "quarkus.grpc.server.use-separate-server")
-                .map(Boolean::parseBoolean)
-                .orElse(false);
+        boolean separateServer = resolveSeparateServerDefault(context);
         if (separateServer) {
             return resolveGrpcPort(context);
         }
@@ -290,20 +401,50 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
     }
 
     private int resolveGrpcPort(ConfigSourceContext context) {
-        boolean separateServer = getOptional(context, "quarkus.grpc.server.use-separate-server")
-                .map(Boolean::parseBoolean)
-                .orElse(false);
+        boolean separateServer = resolveSeparateServerDefault(context);
         if (!separateServer) {
             return resolveHttpPort(context);
         }
-        return firstInt(
+        Optional<Integer> explicit = firstInt(
                 getOptional(context, "quarkus.grpc.server.test-port"),
-                getOptional(context, "quarkus.grpc.server.port"))
-                .orElse(9000);
+                getOptional(context, "quarkus.grpc.server.port"));
+        if (explicit.isPresent()) {
+            return explicit.get();
+        }
+        // Mirror the HTTP+10000 default applied in buildDefaults so that
+        // service registration computes the same gRPC port the server will
+        // actually bind to. Falls back to Quarkus's 9000 default only when
+        // we can't resolve an HTTP port either (e.g. running with a fully
+        // dynamic port assignment).
+        int httpPort = resolveHttpPort(context);
+        if (httpPort > 0 && httpPort <= 55535) {
+            return httpPort + 10000;
+        }
+        return 9000;
+    }
+
+    /**
+     * Reads {@code quarkus.grpc.server.use-separate-server} from upstream
+     * sources, falling back to the platform default ({@code false} since
+     * 2026-05-04 — unified Vert.x server, gRPC piggy-backs on the HTTP port)
+     * so build-time consumers in this same source see the value we publish
+     * below. Keep the fallback here in lockstep with the {@code applyIfMissing}
+     * call in {@link #buildDefaults}.
+     */
+    private boolean resolveSeparateServerDefault(ConfigSourceContext context) {
+        return getOptional(context, "quarkus.grpc.server.use-separate-server")
+                .map(Boolean::parseBoolean)
+                .orElse(false);
     }
 
     private int resolveHttpPort(ConfigSourceContext context) {
-        return firstInt(
+        // Skip values <= 0 when looking for a usable HTTP port.
+        // quarkus.http.test-port=0 is Quarkus's idiom for "pick a random
+        // ephemeral port at test time" — when it's set unconditionally
+        // (not under %test) it would otherwise short-circuit gRPC port
+        // derivation in dev/prod and fall back to Quarkus's default 9000.
+        // Same treatment for any property that resolves to 0 or negative.
+        return firstPositiveInt(
                 getOptional(context, "quarkus.http.test-port"),
                 getOptional(context, "quarkus.http.port"))
                 .orElse(0); // Use 0 to indicate unset/dynamic rather than 8080
@@ -318,6 +459,22 @@ public class PipestreamServerDefaultsConfigSource implements ConfigSource {
         if (second.isPresent()) {
             try {
                 return Optional.of(Integer.parseInt(second.get()));
+            } catch (NumberFormatException ignored) {}
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Integer> firstPositiveInt(Optional<String> first, Optional<String> second) {
+        if (first.isPresent()) {
+            try {
+                int parsed = Integer.parseInt(first.get());
+                if (parsed > 0) return Optional.of(parsed);
+            } catch (NumberFormatException ignored) {}
+        }
+        if (second.isPresent()) {
+            try {
+                int parsed = Integer.parseInt(second.get());
+                if (parsed > 0) return Optional.of(parsed);
             } catch (NumberFormatException ignored) {}
         }
         return Optional.empty();

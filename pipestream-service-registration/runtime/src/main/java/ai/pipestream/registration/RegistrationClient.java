@@ -36,14 +36,18 @@ public class RegistrationClient {
 
     private final RegistrationConfig config;
     private final ConsulClient consulClient;
+    private final ModuleRegistrationMetadataCollector moduleMetadataCollector;
     private volatile ManagedChannel channel;
     private volatile PlatformRegistrationServiceGrpc.PlatformRegistrationServiceStub asyncStub;
     private volatile PlatformRegistrationServiceGrpc.PlatformRegistrationServiceBlockingStub blockingStub;
 
     @Inject
-    public RegistrationClient(RegistrationConfig config, ConsulClient consulClient) {
+    public RegistrationClient(RegistrationConfig config,
+                              ConsulClient consulClient,
+                              ModuleRegistrationMetadataCollector moduleMetadataCollector) {
         this.config = config;
         this.consulClient = consulClient;
+        this.moduleMetadataCollector = moduleMetadataCollector;
     }
 
     /**
@@ -248,6 +252,8 @@ public class RegistrationClient {
             if (serviceInfo.getVersion() != null) {
                 requestBuilder.setVersion(serviceInfo.getVersion());
             }
+
+            moduleMetadataCollector.collect(serviceInfo).ifPresent(requestBuilder::setModule);
 
             RegisterRequest request = requestBuilder.build();
 

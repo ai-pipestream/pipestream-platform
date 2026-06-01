@@ -6,79 +6,64 @@ import ai.pipestream.quarkus.dynamicgrpc.config.DynamicGrpcTlsAdapter;
 import ai.pipestream.quarkus.dynamicgrpc.exception.ChannelCreationException;
 import ai.pipestream.quarkus.dynamicgrpc.exception.ServiceNotFoundException;
 import ai.pipestream.quarkus.dynamicgrpc.metrics.DynamicGrpcMetrics;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.RemovalCause;
 import io.grpc.Channel;
+import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
 import io.grpc.ManagedChannel;
-import io.quarkus.grpc.runtime.config.GrpcClientConfiguration;
-import io.quarkus.grpc.runtime.stork.StorkGrpcChannel;
-import io.quarkus.grpc.runtime.supports.SSLConfigHelper;
+import io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.NegotiationType;
+import io.grpc.netty.NettyChannelBuilder;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.stork.api.ServiceInstance;
-import io.vertx.core.Vertx;
-import io.vertx.core.http.Http2Settings;
-import io.vertx.core.http.HttpClientOptions;
-import io.vertx.grpc.client.GrpcClient;
-import io.vertx.grpc.client.GrpcClientOptions;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
-import java.time.Duration;
-import java.util.ArrayList;
+import javax.net.ssl.SSLException;
+import java.io.File;
 import java.util.List;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Manages Stork-backed gRPC {@link Channel}s for logical service names.
+ * One {@link ManagedChannel} per logical service for the JVM lifetime.
  * <p>
- * One {@link StorkGrpcChannel} per service, cached with Caffeine and
- * evicted after an idle TTL. Stork itself handles load balancing across
- * service instances (round-robin by default; configurable via
- * {@code quarkus.stork.<name>.load-balancer.type}), health-check-driven
- * instance filtering, and periodic instance refresh. This class's job is
- * the caching + lifecycle; the transport-level policy is Stork's.
+ * Backed by a plain {@link ConcurrentHashMap} — no Caffeine, no idle TTL,
+ * no eviction listener. There are roughly a dozen logical services in this
+ * platform; gRPC's own subchannel pool inside each {@link ManagedChannel}
+ * already handles idle connections, transport pings, and reconnects.
+ * Caching the {@link ManagedChannel} itself adds nothing.
  *
- * <h2>What this class intentionally is not</h2>
- * <ul>
- *   <li><b>Not a pool of N parallel channels per service.</b> The previous
- *       round-robin-of-StorkGrpcChannels layer collided with Stork's own
- *       round-robin retry logic; at retries &ge; 2 this produced silent
- *       duplicate delivery and drops when the channel-level retry window
- *       raced the caller's deadline. Single channel per service + Stork
- *       {@code retries=1} = no duplication, no silent drops.</li>
- *   <li><b>Not an application-level retry orchestrator.</b> Retries belong
- *       at the call site where they can be paired with idempotency,
- *       backoff, and DLQ. Stork's retries stay at 1 for that reason.</li>
- *   <li><b>Not a place to reinvent Stork.</b> Load balancing, discovery
- *       backend (Consul / Kubernetes / static-list / DNS), instance health,
- *       and refresh cadence are all Stork config. Consumers get those
- *       features by configuring {@code quarkus.stork.<name>.*} — not by
- *       editing this class.</li>
- * </ul>
+ * <h2>Stork name resolution + load balancing</h2>
+ *
+ * <p>Channels are built with
+ * {@code NettyChannelBuilder.forTarget("stork:///<name>")} and explicitly
+ * configured with {@link StorkNameResolverProvider} as the resolver
+ * factory plus {@code round_robin} as the load-balancing policy. Stork
+ * handles instance discovery (Consul / static / Kubernetes), instance
+ * health, and refresh cadence; grpc-java handles connection management
+ * and per-call instance rotation.
+ *
+ * <h2>Why every channel goes through {@link ContextDetachingInterceptor}</h2>
+ *
+ * <p>Calls made from inside a Caffeine async-cache loader or other
+ * fire-and-forget async chain inherit {@link io.grpc.Context#current()} at
+ * call-start time. When the original caller's Vertx / gRPC-server Context
+ * unwinds, any in-flight outbound call dies as
+ * {@code CANCELLED: io.grpc.Context was cancelled without error}. The
+ * interceptor pins outbound calls to {@link io.grpc.Context#ROOT} so they
+ * survive caller unwinding.
  */
 @ApplicationScoped
 public class ChannelManager {
 
-    /** Default constructor for CDI frameworks. */
+    /** Default constructor for CDI. */
     public ChannelManager() {}
 
     private static final Logger LOG = Logger.getLogger(ChannelManager.class);
-
-    @Inject
-    Vertx vertx;
-
-    @Inject
-    Executor executor;
 
     @Inject
     DynamicGrpcMetrics metrics;
@@ -92,293 +77,174 @@ public class ChannelManager {
     @Inject
     AuthMetadataInterceptor authInterceptor;
 
-    /** Cached per-service channel + its backing {@link GrpcClient}. Closed together on eviction. */
-    private record Entry(Channel channel, GrpcClient grpcClient) {}
+    /**
+     * One per service. {@code channel} is what callers use (carries the
+     * client-interceptor chain); {@code managed} is the underlying
+     * {@link ManagedChannel} we own the lifecycle of.
+     */
+    private record Entry(Channel channel, ManagedChannel managed) {}
 
-    private Cache<String, Entry> channelCache;
+    private final Map<String, Entry> channels = new ConcurrentHashMap<>();
     private final AtomicBoolean shuttingDown = new AtomicBoolean(false);
 
-    /** Initializes the cache and registers the active-channel gauge. */
-    @PostConstruct
-    void init() {
-        this.channelCache = Caffeine.newBuilder()
-                .expireAfterAccess(Duration.ofMinutes(config.channel().idleTtlMinutes()))
-                .maximumSize(config.channel().maxSize())
-                .removalListener(this::onChannelRemoved)
-                .recordStats()
-                .build();
-
-        LOG.infof("Initialized ChannelManager with TTL=%d minutes, max cache size=%d, maxInboundMessageSize=%d, maxOutboundMessageSize=%d",
-                config.channel().idleTtlMinutes(),
-                config.channel().maxSize(),
-                config.channel().maxInboundMessageSize(),
-                config.channel().maxOutboundMessageSize());
-
-        if (tlsConfig.enabled()) {
-            LOG.infof("TLS Configuration: enabled=true, trustAll=%s, verifyHostname=%s",
-                    tlsConfig.trustAll(), tlsConfig.verifyHostname());
-        }
-
-        metrics.registerActiveChannelGauge(this::getActiveServiceCount);
-    }
-
-    private void onChannelRemoved(String serviceName, Entry entry, RemovalCause cause) {
-        if (entry == null) return;
-
-        String evictionReason = switch (cause) {
-            case EXPIRED -> "ttl_expired";
-            case SIZE -> "size_limit";
-            case EXPLICIT -> "manual";
-            case REPLACED -> "replaced";
-            default -> "other";
-        };
-        metrics.recordChannelEvicted(serviceName, evictionReason);
-
-        if (shuttingDown.get()) {
-            LOG.debugf("Application shutting down, initiating non-blocking channel shutdown for service '%s'", serviceName);
-            closeEntryQuietly(entry, serviceName);
-            return;
-        }
-
-        LOG.infof("Evicting gRPC channel for service '%s' due to: %s", serviceName, cause);
-        closeEntryQuietly(entry, serviceName);
-    }
-
-    private void closeEntryQuietly(Entry entry, String serviceName) {
-        try {
-            if (entry.channel() instanceof ManagedChannel mc) {
-                mc.shutdownNow();
-            } else if (entry.channel() instanceof StorkGrpcChannel sgc) {
-                sgc.close();
-            }
-        } catch (Exception e) {
-            LOG.tracef("Error closing channel for service %s: %s", serviceName, e.getMessage());
-        }
-        try {
-            entry.grpcClient().close();
-        } catch (Exception e) {
-            LOG.tracef("Error closing GrpcClient for service %s: %s", serviceName, e.getMessage());
-        }
-    }
-
     /**
-     * Gets or creates a gRPC Channel for the given service.
+     * Gets or creates a gRPC Channel for the given service. Channels are
+     * built once per service and reused for the JVM lifetime — gRPC's own
+     * subchannel pool handles idle connections.
      *
-     * @param serviceName the logical service name used for discovery and caching
-     * @param instances   the list of discovered service instances (must be non-empty)
-     * @return a Uni that emits the Channel when ready
-     * @throws ServiceNotFoundException if no instances are found for the service
-     * @throws ChannelCreationException if channel creation fails
+     * @param serviceName logical service name
+     * @param instances   discovered instances; only consulted on first
+     *                    creation since the long-lived channel uses its
+     *                    own {@link StorkNameResolverProvider} thereafter
      */
     public Uni<Channel> getOrCreateChannel(String serviceName, List<ServiceInstance> instances) {
         if (instances == null || instances.isEmpty()) {
             return Uni.createFrom().failure(
-                    new ServiceNotFoundException(serviceName, "No service instances available")
-            );
+                    new ServiceNotFoundException(serviceName, "No service instances available"));
         }
-
         if (shuttingDown.get()) {
             return Uni.createFrom().failure(
-                    new ChannelCreationException(serviceName, "Channel manager is shutting down")
-            );
+                    new ChannelCreationException(serviceName, "Channel manager is shutting down"));
         }
-
-        if (channelCache == null) {
-            init();
-        }
-
-        // Caffeine.get(key, loader) is atomic — concurrent callers for the
-        // same serviceName all wait on a single loader invocation.
         try {
-            Entry entry = channelCache.get(serviceName, key -> {
-                LOG.infof("Creating new Stork gRPC channel for service: %s", key);
-                metrics.recordCacheMiss(key);
-                return createEntry(key);
-            });
-            LOG.tracef("Returning gRPC channel for service: %s", serviceName);
+            Entry entry = channels.computeIfAbsent(serviceName, this::createEntry);
             return Uni.createFrom().item(entry.channel());
-        } catch (Exception e) {
-            Throwable cause = e.getCause() != null ? e.getCause() : e;
-            LOG.errorf(cause, "Failed to create gRPC channel for service: %s", serviceName);
-            metrics.recordException(cause.getClass().getSimpleName(), serviceName, "channel_creation");
-            return Uni.createFrom().failure(
-                    new ChannelCreationException(serviceName, "Channel creation failed", cause)
-            );
-        }
-    }
-
-    /**
-     * Builds one {@link StorkGrpcChannel} for {@code serviceName} plus its
-     * backing Vert.x {@link GrpcClient}. Returned as an {@link Entry} so the
-     * two close together on eviction. Called inside Caffeine's atomic loader.
-     */
-    private Entry createEntry(String serviceName) {
-        GrpcClient grpcClient = buildGrpcClient(serviceName);
-        try {
-            Channel raw = new StorkGrpcChannel(grpcClient, serviceName, buildStorkConfig(), executor);
-            Channel finalChannel = config.auth().enabled()
-                    ? ClientInterceptors.intercept(raw, authInterceptor)
-                    : raw;
-            metrics.recordChannelCreated(serviceName);
-            LOG.infof("Created StorkGrpcChannel for %s", serviceName);
-            return new Entry(finalChannel, grpcClient);
         } catch (RuntimeException e) {
-            try { grpcClient.close(); } catch (Exception ignore) { /* shutting down */ }
-            throw e;
+            LOG.errorf(e, "Failed to create gRPC channel for service: %s", serviceName);
+            metrics.recordException(e.getClass().getSimpleName(), serviceName, "channel_creation");
+            return Uni.createFrom().failure(
+                    new ChannelCreationException(serviceName, "Channel creation failed", e));
         }
     }
 
-    private GrpcClient buildGrpcClient(String serviceName) {
-        HttpClientOptions httpOptions = new HttpClientOptions();
-        httpOptions.setHttp2ClearTextUpgrade(false);
+    private Entry createEntry(String serviceName) {
+        LOG.infof("Creating Stork-resolved gRPC channel for service: %s", serviceName);
+        metrics.recordCacheMiss(serviceName);
 
-        // HTTP/2 connection pooling. Vert.x defaults to 1 connection per host
-        // with unlimited stream multiplexing — a serialisation point under
-        // pipeline load (observed 2026-04-24: 1/100 uploadPipeDoc timed out
-        // at 30s on a single overloaded connection).
-        httpOptions.setHttp2MaxPoolSize(config.channel().http2MaxPoolSize());
-        httpOptions.setHttp2MultiplexingLimit(config.channel().http2MultiplexingLimit());
-
-        // HTTP/2 flow control. The spec default of 65535 bytes is orders of
-        // magnitude below typical pipeline payload sizes; streams carrying
-        // PipeDocs exhaust it in one frame and park waiting for WINDOW_UPDATE.
-        // Set both the connection window and the client's advertised stream
-        // SETTINGS_INITIAL_WINDOW_SIZE to match the server-side setting
-        // (quarkus.grpc.server.flow-control-window, typically 100 MB).
-        int flowWindow = config.channel().flowControlWindow();
-        httpOptions.setHttp2ConnectionWindowSize(flowWindow);
-        httpOptions.setInitialSettings(new Http2Settings().setInitialWindowSize(flowWindow));
+        NettyChannelBuilder builder = NettyChannelBuilder
+                .forTarget(StorkNameResolverProvider.SCHEME + ":///" + serviceName)
+                .nameResolverFactory(STORK_RESOLVER_FACTORY)
+                .defaultLoadBalancingPolicy("round_robin")
+                .flowControlWindow(config.channel().flowControlWindow())
+                .maxInboundMessageSize(config.channel().maxInboundMessageSize())
+                .keepAliveTime(30, TimeUnit.SECONDS)
+                .keepAliveTimeout(10, TimeUnit.SECONDS)
+                // Send keepalive pings even when the channel has no active
+                // calls. Without this, gRPC only pings during in-flight RPCs,
+                // so a channel that goes idle between bursts of work (e.g.
+                // between test iterations, or while a downstream service is
+                // being restarted) will keep dead subchannels around. The
+                // first call after the idle window then races request-send
+                // against connection-teardown and surfaces as
+                // "INTERNAL: Half-closed without a request" on the client.
+                // Pinging while idle is cheap and lets dead subchannels be
+                // evicted before the next call lands on them.
+                .keepAliveWithoutCalls(true);
 
         if (tlsConfig.enabled()) {
-            LOG.debugf("Configuring TLS for service: %s", serviceName);
-            httpOptions.setSsl(true);
-            httpOptions.setUseAlpn(true);
-            httpOptions.setTrustAll(tlsConfig.trustAll());
-
-            SSLConfigHelper.configurePemTrustOptions(httpOptions, tlsConfig.trustCertificatePem());
-            SSLConfigHelper.configureJksTrustOptions(httpOptions, tlsConfig.trustCertificateJks());
-            SSLConfigHelper.configurePfxTrustOptions(httpOptions, tlsConfig.trustCertificateP12());
-
-            SSLConfigHelper.configurePemKeyCertOptions(httpOptions, tlsConfig.keyCertificatePem());
-            SSLConfigHelper.configureJksKeyCertOptions(httpOptions, tlsConfig.keyCertificateJks());
-            SSLConfigHelper.configurePfxKeyCertOptions(httpOptions, tlsConfig.keyCertificateP12());
-
-            httpOptions.setVerifyHost(tlsConfig.verifyHostname());
+            applyTls(builder, serviceName);
+        } else {
+            builder.negotiationType(NegotiationType.PLAINTEXT);
         }
 
-        GrpcClientOptions clientOptions = new GrpcClientOptions()
-                .setTransportOptions(httpOptions)
-                .setMaxMessageSize(config.channel().maxInboundMessageSize());
-
-        return GrpcClient.client(vertx, clientOptions);
-    }
-
-    private GrpcClientConfiguration.StorkConfig buildStorkConfig() {
-        return new GrpcClientConfiguration.StorkConfig() {
-            @Override
-            public int threads() {
-                return 10;
-            }
-
-            @Override
-            public long deadline() {
-                return config.channel().deadlineMs();
-            }
-
-            @Override
-            public int retries() {
-                // Channel-level retries caused silent duplicate delivery and
-                // drops when the retry window raced the caller's deadline
-                // (observed 2026-04-22: retries=3 dropped 10-12/1000 with
-                // zero exceptions reaching the caller). Retries belong at
-                // the call site. Default 1 = fail-fast.
-                return config.channel().storkRetries();
-            }
-
-            @Override
-            public long delay() {
-                return 60;
-            }
-
-            @Override
-            public long period() {
-                return 120;
-            }
-        };
+        ManagedChannel managed = builder.build();
+        Channel intercepted = ClientInterceptors.intercept(managed, buildInterceptors());
+        metrics.recordChannelCreated(serviceName);
+        return new Entry(intercepted, managed);
     }
 
     /**
-     * Manually evicts a channel for a service from the cache.
-     *
-     * @param serviceName the service whose channel should be removed
+     * Builds the per-call interceptor chain, in order:
+     * <ol>
+     *   <li>{@link ContextDetachingInterceptor} — pins call to
+     *       {@code Context.ROOT} so async-loader calls survive caller
+     *       Context cancellation.</li>
+     *   <li>{@link AuthMetadataInterceptor} — only when
+     *       {@code dynamic-grpc.auth.enabled} is set.</li>
+     * </ol>
+     */
+    private ClientInterceptor[] buildInterceptors() {
+        ClientInterceptor contextDetacher = new ContextDetachingInterceptor();
+        if (config.auth().enabled()) {
+            return new ClientInterceptor[]{contextDetacher, authInterceptor};
+        }
+        return new ClientInterceptor[]{contextDetacher};
+    }
+
+    private void applyTls(NettyChannelBuilder builder, String serviceName) {
+        try {
+            io.netty.handler.ssl.SslContextBuilder ssl = GrpcSslContexts.forClient();
+            if (tlsConfig.trustAll()) {
+                ssl.trustManager(io.netty.handler.ssl.util.InsecureTrustManagerFactory.INSTANCE);
+            } else {
+                tlsConfig.trustCertificatePem().certs()
+                        .filter(certs -> !certs.isEmpty())
+                        .ifPresent(certs -> ssl.trustManager(new File(certs.get(0))));
+            }
+            var keyPem = tlsConfig.keyCertificatePem();
+            var keyCerts = keyPem.certs().orElse(List.of());
+            var keyKeys = keyPem.keys().orElse(List.of());
+            if (!keyCerts.isEmpty() && !keyKeys.isEmpty()) {
+                ssl.keyManager(new File(keyCerts.get(0)), new File(keyKeys.get(0)));
+            }
+            builder.sslContext(ssl.build()).negotiationType(NegotiationType.TLS);
+            if (!tlsConfig.verifyHostname()) {
+                builder.overrideAuthority(serviceName);
+            }
+        } catch (SSLException e) {
+            throw new IllegalStateException(
+                    "Failed to build TLS context for dynamic-grpc service " + serviceName, e);
+        }
+    }
+
+    private static final StorkNameResolverProvider STORK_RESOLVER_FACTORY =
+            new StorkNameResolverProvider();
+
+    /**
+     * Removes a channel for a service. Mostly retained for backwards
+     * compatibility — callers shouldn't normally need to evict, since
+     * channels are sized for the JVM lifetime.
      */
     public void evictChannel(String serviceName) {
-        LOG.infof("Manually evicting channel for service: %s", serviceName);
-        channelCache.invalidate(serviceName);
+        Entry removed = channels.remove(serviceName);
+        if (removed != null) {
+            shutdownChannel(removed.managed(), serviceName);
+        }
+    }
+
+    /** Number of active service channels. */
+    public int getActiveServiceCount() {
+        return channels.size();
     }
 
     /**
-     * Gets cache statistics for monitoring.
-     *
-     * @return a human-readable summary of cache statistics
+     * Tiny diagnostic string. Kept for callers that already log this on
+     * an admin endpoint; no Caffeine stats are tracked anymore so this
+     * just reports the current size.
      */
     public String getCacheStats() {
-        var stats = channelCache.stats();
-        metrics.updateCacheStats(
-                stats.hitCount(),
-                stats.missCount(),
-                stats.evictionCount(),
-                channelCache.estimatedSize()
-        );
-        return String.format("Cache stats - Size: %d, Hits: %d, Misses: %d, Hit rate: %.2f%%, Evictions: %d",
-                channelCache.estimatedSize(),
-                stats.hitCount(),
-                stats.missCount(),
-                stats.hitRate() * 100,
-                stats.evictionCount());
+        return "Active channels: " + channels.size();
     }
 
-    /**
-     * Gets the number of active services with cached channels.
-     *
-     * @return approximate count of active services
-     */
-    public int getActiveServiceCount() {
-        return Math.toIntExact(channelCache.estimatedSize());
-    }
-
-    /** Shuts down all channels on application exit. */
     @PreDestroy
     void cleanup() {
         shuttingDown.set(true);
+        LOG.infof("Shutting down %d gRPC channels on application exit", channels.size());
+        channels.forEach((name, entry) -> shutdownChannel(entry.managed(), name));
+        channels.clear();
+    }
 
-        if (channelCache == null) {
-            LOG.debug("No channel cache to clean up");
-            return;
-        }
-
-        LOG.infof("Shutting down %d cached gRPC channels on application exit...", channelCache.estimatedSize());
-
-        List<Entry> entries = new ArrayList<>(channelCache.asMap().values());
-        channelCache.invalidateAll();
-        channelCache.cleanUp();
-
-        ExecutorService shutdownExecutor = Executors.newSingleThreadExecutor();
+    private static void shutdownChannel(ManagedChannel mc, String serviceName) {
         try {
-            shutdownExecutor.submit(() -> {
-                for (Entry entry : entries) {
-                    closeEntryQuietly(entry, "<shutdown>");
-                }
-            }).get(config.channel().shutdownTimeoutSeconds(), TimeUnit.SECONDS);
-        } catch (TimeoutException e) {
-            LOG.warn("Channel shutdown timed out, forcing immediate termination");
-            entries.forEach(entry -> closeEntryQuietly(entry, "<shutdown-forced>"));
-        } catch (Exception e) {
-            LOG.error("Error during channel cleanup", e);
-        } finally {
-            shutdownExecutor.shutdownNow();
+            mc.shutdown();
+            if (!mc.awaitTermination(5, TimeUnit.SECONDS)) {
+                mc.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            mc.shutdownNow();
+        } catch (RuntimeException e) {
+            LOG.tracef("Error closing channel for %s: %s", serviceName, e.getMessage());
         }
-
-        LOG.info("ChannelManager cleanup complete.");
     }
 }

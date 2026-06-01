@@ -39,25 +39,25 @@ EXTRA_ARGS=()
 
 case "$OS" in
   Linux)
+    # GPU path requires three things: the driver (nvidia-smi), the
+    # container toolkit (nvidia-ctk), and the CDI spec docker reads.
+    # All three present → run the GPU image. Any missing → fall back to
+    # the cpu-full image (PyTorch bundled — required for HuggingFace
+    # sentence-transformer models) and log what was missing.
     if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1; then
-      IMAGE="deepjavalibrary/djl-serving:${DJL_VERSION}-pytorch-gpu"
-      EXTRA_ARGS+=(--gpus all)
-      echo "djl-serving: detected Linux + NVIDIA GPU → $IMAGE"
-
-      # Docker needs nvidia-container-toolkit (CDI) to actually expose the
-      # GPU to the container. Fail loudly with a pointer rather than the
-      # cryptic 'failed to discover GPU vendor from CDI' error from docker.
-      if ! command -v nvidia-ctk >/dev/null 2>&1; then
-        echo "djl-serving: NVIDIA driver is installed but nvidia-container-toolkit is missing." >&2
-        echo "djl-serving: Docker can't pass --gpus all without it." >&2
-        echo "djl-serving: Run the one-time setup:" >&2
-        echo "  sudo \${HOME}/.pipeline/dev/nvidia-gpu-setup.sh" >&2
-        exit 1
+      if command -v nvidia-ctk >/dev/null 2>&1 && [ -f /etc/cdi/nvidia.yaml ]; then
+        IMAGE="deepjavalibrary/djl-serving:${DJL_VERSION}-pytorch-gpu"
+        EXTRA_ARGS+=(--gpus all)
+        echo "djl-serving: detected Linux + NVIDIA GPU + container toolkit → $IMAGE"
+      else
+        IMAGE="deepjavalibrary/djl-serving:${DJL_VERSION}-cpu-full"
+        echo "djl-serving: NVIDIA driver present but container toolkit/CDI missing — falling back to CPU image $IMAGE" >&2
+        echo "djl-serving: for GPU mode, run:  sudo \${HOME}/.pipeline/dev/nvidia-gpu-setup.sh" >&2
       fi
     else
       # Intel integrated graphics → OpenVINO (deferred; see roadmap).
       # For now, fall through to CPU.
-      IMAGE="deepjavalibrary/djl-serving:${DJL_VERSION}-cpu"
+      IMAGE="deepjavalibrary/djl-serving:${DJL_VERSION}-cpu-full"
       echo "djl-serving: detected Linux, no NVIDIA GPU → CPU $IMAGE"
       echo "djl-serving: TODO: OpenVINO variant for Intel integrated graphics is not implemented yet"
     fi

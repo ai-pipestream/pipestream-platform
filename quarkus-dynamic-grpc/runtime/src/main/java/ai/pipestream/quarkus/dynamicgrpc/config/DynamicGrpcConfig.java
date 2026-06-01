@@ -90,6 +90,23 @@ public interface DynamicGrpcConfig {
         int maxOutboundMessageSize();
 
         /**
+         * HTTP/2 flow-control window size in bytes for each
+         * {@link io.grpc.netty.NettyChannelBuilder NettyChannelBuilder}-built
+         * channel. The HTTP/2 spec default of 65535 is orders of magnitude
+         * below typical pipeline payload sizes; streams carrying PipeDocs
+         * exhaust it in a single frame and stop-and-wait for WINDOW_UPDATE.
+         *
+         * <p>Default: 100&nbsp;MB. Matches the production-proven
+         * {@code quarkus.grpc.server.flow-control-window} setting on the
+         * separate Netty gRPC server side, so a single 5–50&nbsp;MB
+         * payload streams in one shot in both directions.
+         *
+         * @return the per-stream initial window size in bytes
+         */
+        @WithDefault("104857600")
+        int flowControlWindow();
+
+        /**
          * gRPC call deadline in milliseconds.
          * Default is 15 seconds. Override per-service via application.properties.
          *
@@ -117,73 +134,6 @@ public interface DynamicGrpcConfig {
          */
         @WithDefault("1")
         int storkRetries();
-
-        /**
-         * Number of HTTP/2 connections the underlying Vert.x client keeps in
-         * its pool <i>per destination host</i>.
-         * <p>
-         * Vert.x defaults to <b>one</b> HTTP/2 connection per host. Under
-         * pipeline load — 100+ concurrent {@code uploadPipeDoc} streams into
-         * connector-intake or module dispatches from the engine — that one
-         * connection's flow-control window becomes a serialisation point:
-         * all streams share one event loop on the server side, and the 64 KB
-         * default stream window is quickly exhausted by large PipeDocs,
-         * leaving individual streams parked until {@code WINDOW_UPDATE} frames
-         * catch up. Observed 2026-04-24: single-connection default caused
-         * 1/100 intake uploads to time out at 30s, tripping the JDBC
-         * crawl's no-loss circuit breaker and aborting the whole run.
-         * <p>
-         * Default <b>8</b> — enough parallelism that each destination is
-         * backed by a real pool, small enough that a service talking to a
-         * dozen downstreams doesn't open hundreds of connections.
-         *
-         * @return HTTP/2 connections per host
-         */
-        @WithDefault("8")
-        int http2MaxPoolSize();
-
-        /**
-         * Max concurrent streams Vert.x will multiplex on a single HTTP/2
-         * connection before it opens another from the pool (up to
-         * {@link #http2MaxPoolSize()}).
-         * <p>
-         * Must be strictly less than the server's advertised
-         * {@code max-concurrent-streams}. Otherwise Vert.x treats one
-         * connection as having infinite capacity and never opens #2, #3, &hellip;
-         * Paired with {@link #http2MaxPoolSize()}: with pool=8 and limit=4,
-         * the second connection opens as soon as the first has 4 streams
-         * in flight, up to 8 connections total.
-         * <p>
-         * Default <b>4</b> — intentionally low. Each new TCP connection
-         * lands on a fresh event loop on the receiver, so a low multiplex
-         * limit fans inbound work out across multiple server loops quickly
-         * instead of piling everything onto one.
-         *
-         * @return stream multiplexing threshold per connection
-         */
-        @WithDefault("4")
-        int http2MultiplexingLimit();
-
-        /**
-         * HTTP/2 flow-control window size, in bytes, applied to both the
-         * connection-level window and each stream's
-         * {@code SETTINGS_INITIAL_WINDOW_SIZE} advertised by the client.
-         * <p>
-         * HTTP/2's spec default is 65535 (64 KB). Under pipeline load with
-         * large PipeDoc payloads, 64 KB exhausts within milliseconds and the
-         * stream parks waiting for {@code WINDOW_UPDATE} frames from the
-         * peer. Pair this with the server-side
-         * {@code quarkus.grpc.server.flow-control-window} on the receiving
-         * service — mismatched windows are a common source of mysterious
-         * tail-latency hangs.
-         * <p>
-         * Default <b>100 MB</b> ({@code 104857600}) to match the typical
-         * server-side setting in this platform.
-         *
-         * @return HTTP/2 flow-control window in bytes
-         */
-        @WithDefault("104857600")
-        int flowControlWindow();
     }
 
     /**

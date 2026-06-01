@@ -12,7 +12,9 @@ javaPlatform {
 dependencies {
     api platform(libs.quarkus.bom)
     api platform(libs.quarkus.amazon.services.bom)
-    api platform("io.grpc:grpc-bom:${libs.versions.grpc.get()}")
+    // gRPC versions: managed exclusively by io.quarkus.platform:quarkus-bom (via import above).
+    // Do not add io.grpc:grpc-bom or strict io.grpc constraints here — they fight Quarkus and
+    // produce split-classpath failures (e.g. grpc-api vs grpc-core mismatch at runtime).
     api platform("com.google.protobuf:protobuf-bom:${libs.versions.protobufVersion.get()}")
     api platform("org.testcontainers:testcontainers-bom:${libs.versions.testcontainersVersion.get()}")
 
@@ -33,10 +35,7 @@ dependencies {
         api libs.password4j
         api libs.quarkus.mcp.server.sse
 
-        // Strict gRPC/Protobuf version alignment
-        api("io.grpc:grpc-protobuf") { version { strictly(libs.versions.grpc.get()) } }
-        api("io.grpc:grpc-stub") { version { strictly(libs.versions.grpc.get()) } }
-        api("io.grpc:grpc-api") { version { strictly(libs.versions.grpc.get()) } }
+        // Protobuf Java alignment for generated stubs / toolchain (gRPC artifacts follow Quarkus BOM).
         api("com.google.protobuf:protobuf-java") { version { strictly(libs.versions.protobufVersion.get()) } }
         api("com.google.protobuf:protobuf-java-util") { version { strictly(libs.versions.protobufVersion.get()) } }
         api("com.google.protobuf:protoc") { version { strictly(libs.versions.protobufVersion.get()) } }
@@ -62,6 +61,9 @@ dependencies {
 
         api project(':pipestream-server')
         api project(':pipestream-server-deployment')
+
+        api project(':pipestream-module-runtime')
+        api project(':pipestream-module-runtime-deployment')
 
         api project(':pipestream-descriptor-api')
         api project(':pipestream-descriptor-apicurio')

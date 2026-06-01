@@ -52,7 +52,21 @@ sourceSets {
 test {
     useJUnitPlatform()
     systemProperty "java.util.logging.manager", "org.jboss.logmanager.LogManager"
-    jvmArgs "--add-opens", "java.base/java.lang=ALL-UNNAMED"
+    // -XX:MaxDirectMemorySize=2g is the production deployment setting
+    // we ship per-service alongside the dynamic-grpc Netty migration:
+    // 10 concurrent 50MB unary calls move ~500MB through Netty's pooled
+    // direct-buffer allocator at peak, so 256MB (typical JVM default)
+    // OOMs the buffer pool. With the Netty-backed dynamic-grpc client
+    // this surfaces as a clean OutOfMemoryError instead of the
+    // pre-migration silent "Half-closed without a request" — but it
+    // still aborts the test, so we give it the same headroom prod has.
+    //
+    // NOTE: LargePayloadConcurrencyTest at 256MB was the bug reproducer;
+    // git log around the migration commit has the full story if you
+    // ever want to flip back temporarily and re-witness the symptom.
+    jvmArgs "--add-opens", "java.base/java.lang=ALL-UNNAMED",
+            "-XX:MaxDirectMemorySize=2g",
+            "-Xmx2g"
     testLogging {
         events "passed", "skipped", "failed"
         showStandardStreams = true

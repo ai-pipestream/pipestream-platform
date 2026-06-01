@@ -150,6 +150,12 @@ public interface RegistrationConfig {
     HttpConfig http();
 
     /**
+     * Inline module catalog metadata (required when {@link #type()} is MODULE).
+     */
+    @WithName("module")
+    ModuleConfig module();
+
+    /**
      * Registration service connection configuration.
      */
     interface RegistrationServiceConfig {
@@ -323,5 +329,39 @@ public interface RegistrationConfig {
          */
         @WithName("schema-artifact-id")
         Optional<String> schemaArtifactId();
+    }
+
+    /**
+     * Inline module registration metadata pushed to platform-registration at
+     * Register() time (replaces GetServiceRegistration callback).
+     */
+    interface ModuleConfig {
+        @WithName("json-config-schema")
+        Optional<String> jsonConfigSchema();
+
+        @WithName("json-config-schema-path")
+        Optional<String> jsonConfigSchemaPath();
+
+        @WithName("display-name")
+        Optional<String> displayName();
+
+        Optional<String> description();
+
+        Optional<String> owner();
+
+        @WithName("documentation-url")
+        Optional<String> documentationUrl();
+
+        Optional<List<String>> dependencies();
+
+        @WithName("health-check-passed")
+        @WithDefault("true")
+        boolean healthCheckPassed();
+
+        @WithName("health-check-message")
+        Optional<String> healthCheckMessage();
+
+        @WithName("expected-max-processing-seconds")
+        Optional<Integer> expectedMaxProcessingSeconds();
     }
 }

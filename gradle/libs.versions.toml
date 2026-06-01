@@ -14,9 +14,7 @@ opensearch-protobufs = "1.5.0"
 httpclient5 = "5.6.1"
 # Caffeine
 caffeine = "3.2.4"
-# gRPC and Protobuf versions - match Quarkus defaults
-
-grpc = "1.81.0"
+# Protobuf version for generated code / BOM alignment (gRPC: use Quarkus BOM only).
 protobufVersion = "4.35.0"
 
 # Quarkiverse extensions
@@ -109,12 +107,13 @@ quarkus-test-common = { module = "io.quarkus:quarkus-test-common" }
 protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "protobufVersion" }
 protoc = { module = "com.google.protobuf:protoc", version.ref = "protobufVersion" }
 protobuf-java-util = { module = "com.google.protobuf:protobuf-java-util", version.ref = "protobufVersion" }
-grpc-protobuf = { module = "io.grpc:grpc-protobuf", version.ref = "grpc" }
-grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
-grpc-services = { module = "io.grpc:grpc-services", version.ref = "grpc" }
-grpc-core = { module = "io.grpc:grpc-core", version.ref = "grpc" }
-grpc-api = { module = "io.grpc:grpc-api", version.ref = "grpc" }
-grpc-netty = { module = "io.grpc:grpc-netty", version.ref = "grpc" }
+# gRPC libraries — no version here; io.quarkus.platform:quarkus-bom is the source of truth.
+grpc-protobuf = { module = "io.grpc:grpc-protobuf" }
+grpc-stub = { module = "io.grpc:grpc-stub" }
+grpc-services = { module = "io.grpc:grpc-services" }
+grpc-core = { module = "io.grpc:grpc-core" }
+grpc-api = { module = "io.grpc:grpc-api" }
+grpc-netty = { module = "io.grpc:grpc-netty" }
 proto-google-common-protos = { module = "com.google.api.grpc:proto-google-common-protos" }
 
 # Google Guava (version managed by Quarkus BOM)

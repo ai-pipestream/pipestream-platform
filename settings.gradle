@@ -68,6 +68,13 @@ project(':pipestream-server').projectDir = file('pipestream-server/runtime')
 include 'pipestream-server-deployment'
 project(':pipestream-server-deployment').projectDir = file('pipestream-server/deployment')
 
+// 5b. Module Runtime (demand-pull worker framework — modules only)
+include 'pipestream-module-runtime'
+project(':pipestream-module-runtime').projectDir = file('pipestream-module-runtime/runtime')
+
+include 'pipestream-module-runtime-deployment'
+project(':pipestream-module-runtime-deployment').projectDir = file('pipestream-module-runtime/deployment')
+
 // 5. Shared Test Support
 include 'pipestream-test-support'
 project(':pipestream-test-support').projectDir = file('pipestream-test-support/runtime')

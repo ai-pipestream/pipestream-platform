@@ -29,3 +29,11 @@ updates:
       gradle-dependencies:
         patterns:
           - "*"
+    ignore:
+      # Published from this monorepo to GitHub Packages — version is bumped on
+      # release, not by Dependabot. Without a valid DEPENDABOT_TOKEN with
+      # packages:read, resolution fails with private_source_authentication_failure
+      # and marks the whole weekly run as failed (see actions/runs/26564101811).
+      - dependency-name: "ai.pipestream:proto-toolchain"
+      - dependency-name: "ai.pipestream:quarkus-buf-grpc-generator"
+      - dependency-name: "ai.pipestream.proto-toolchain"
